@@ -1,5 +1,4 @@
 import type { PublicConfig } from "../../server/public-config.ts";
-import { SessionExpiredError } from "./browser-session.ts";
 import { fetchPublicConfig } from "./public-config.ts";
 import { fetchZeroToken } from "./zero-auth.ts";
 
@@ -28,8 +27,6 @@ async function repairAccountBootstrap(): Promise<void> {
 		method: "POST",
 		credentials: "include",
 	});
-	if (res.status === 401 || res.status === 403)
-		throw new SessionExpiredError(`account bootstrap refused: ${res.status}`);
 	if (!res.ok) throw new Error(`account bootstrap failed: ${res.status}`);
 }
 

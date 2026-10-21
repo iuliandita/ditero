@@ -6,7 +6,7 @@ import {
 	SYNCING_DELAY_MS,
 	type SyncPhase,
 } from "../lib/sync-status.ts";
-import { useOfflineBootstrap, useSyncTracker } from "../lib/zero.tsx";
+import { useSyncTracker } from "../lib/zero.tsx";
 
 function subscribeOnline(onChange: () => void) {
 	window.addEventListener("online", onChange);
@@ -40,7 +40,6 @@ export function useSyncStatus(): {
 	dismissRejection: () => void;
 } {
 	const connection = useConnectionState();
-	const offlineBootstrap = useOfflineBootstrap();
 	const tracker = useSyncTracker();
 	const { pending, rejected, sessionExpired, authRejected } =
 		useSyncExternalStore(tracker.subscribe, tracker.getSnapshot);
@@ -61,19 +60,16 @@ export function useSyncStatus(): {
 	const pendingShown = useHeld(pending > 0, SYNCING_DELAY_MS) ? pending : 0;
 
 	return {
-		phase: offlineBootstrap
-			? "offline"
-			: deriveSyncPhase({
-					connection: connection.name,
-					reason:
-						"reason" in connection ? String(connection.reason) : undefined,
-					tabHidden,
-					pending: pendingShown,
-					rejected,
-					sessionExpired,
-					authRejected,
-					offlineSettled: graceElapsed || !browserOnline,
-				}),
+		phase: deriveSyncPhase({
+			connection: connection.name,
+			reason: "reason" in connection ? String(connection.reason) : undefined,
+			tabHidden,
+			pending: pendingShown,
+			rejected,
+			sessionExpired,
+			authRejected,
+			offlineSettled: graceElapsed || !browserOnline,
+		}),
 		pending: pendingShown,
 		dismissRejection: tracker.dismissRejection,
 	};

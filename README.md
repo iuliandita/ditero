@@ -306,23 +306,8 @@ no other copy. All attachment configuration is documented in [.env.example](.env
 
 Production browser builds include a PWA manifest and a bounded offline public
 app shell. The service worker caches static public files, with no API, auth,
-Zero, or private user responses. After a successful browser sign-in, this origin
-remembers the active user ID, session expiry and a shared invalidation marker.
-Reloading `/` while the browser reports offline can reopen that user's cached Zero data until that expiry,
-with an offline banner. Edits stay local until reconnecting and verifying the session;
-only data already stored on this device is available. No token is stored for this fallback.
-Accepted edits are flushed promptly to device storage, including when the sync server
-is unavailable while the browser reports online. If a local write is still pending
-or storage fails, leaving or reloading shows the browser's unsaved-changes warning.
-That protection remains active if saving during sign-out or account switching fails.
-Stay on the page until storage succeeds; forcing it closed can lose those edits.
-Sign-out in any tab, session refusal and expiry disable cached startup. Delayed session
-responses cannot restore evidence invalidated by another tab. HTTP errors and failed
-requests while the browser reports online never authorize offline restoration.
-If evidence is missing or expired, the loaded shell asks for a connection.
-Plain HTTP LAN origins cannot cache the shell with a service worker: reload requires
-a connection (the browser may show its own offline page). Use HTTPS for offline reload.
-Private synced records remain in Zero's separate account-scoped local storage. Updates
+Zero, or private user responses. Offline shell loading does not replace session
+checks; private synced records remain in Zero's separate local storage. Updates
 show a notice and reload only on user choice, after durable local sync retirement.
 HTTPS and browser-secure loopback origins are supported. Browser qualification
 covered installability, offline shell recovery, and manual update; it did not

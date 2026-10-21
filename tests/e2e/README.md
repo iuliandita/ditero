@@ -200,10 +200,7 @@ executing every candidate case without skips or retry-only passes. Those counts
 and timing requirements applied to that candidate; they are not current suite
 counts or a general acceptance policy for later changes. The shutdown tests
 continue to cover accepted edits, persistence failure, explicit retry, and offline
-cache recovery. The compiled `offline-reload.spec.ts` holds idle persistence, reloads
-without explicitly retiring Zero, and checks queued-edit replay. It also exercises a delayed
-session response during sign-out and bootstrap refusals before a subsequent offline reload.
-Public shell modules must be served from the real cache despite `Vary: Origin`.
+cache recovery.
 
 Current CI runs six browser phases across three shards and requires the aggregate
 `verify` job to pass. Its gates include checks, integration, browser tests, all

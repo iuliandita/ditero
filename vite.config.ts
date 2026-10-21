@@ -105,9 +105,8 @@ export default defineConfig(({ mode }) => ({
 			name: "public-pwa-shell",
 			apply: "build",
 			generateBundle(_options, bundle) {
-				const assets = Object.values(bundle).filter(
-					(item) =>
-						item.type === "chunk" || item.fileName.startsWith("assets/"),
+				const assets = Object.values(bundle).filter((item) =>
+					item.fileName.startsWith("assets/"),
 				);
 				const bytes = assets.reduce(
 					(sum, item) =>

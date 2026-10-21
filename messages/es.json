@@ -1,6 +1,4 @@
 {
-	"browser_cached_session": "Sin conexión: se muestran los datos guardados. Los cambios se quedan en este dispositivo hasta verificar tu sesión en línea.",
-	"browser_connection_required": "Conéctate al servidor para verificar tu sesión y abrir este espacio de trabajo. Recargar sin conexión requiere una sesión verificada que no haya caducado y la app guardada en HTTPS o localhost.",
 	"workspace_read_only": "Tu rol en este espacio solo permite ver el contenido.",
 	"accept_error_email_mismatch": "Esta invitación es para otra dirección de correo. Cierra sesión e inicia sesión con la cuenta a la que se envió.",
 	"accept_switch_account": "Cerrar sesión y cambiar de cuenta",

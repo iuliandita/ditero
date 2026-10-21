@@ -1,6 +1,4 @@
 {
-	"browser_cached_session": "Offline: showing cached data. Edits stay on this device until your session is verified online.",
-	"browser_connection_required": "Connect to the server to verify your session and open this workspace. Offline reload requires a previously verified, unexpired session and a cached app on HTTPS or localhost.",
 	"workspace_read_only": "Your workspace role allows viewing only.",
 	"accept_error_email_mismatch": "This invite is for another email address. Sign out, then sign in with the account it was sent to.",
 	"accept_switch_account": "Sign out and switch account",

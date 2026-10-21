@@ -110,7 +110,7 @@ index 1d08adc9423c0d88577355c6c8d5b604175d4ad5..2930550edee68de6b59863cb07cb27df
  				client: result,
  				server: trackingData.serverPromise
 diff --git a/out/zero-client/src/client/error.js b/out/zero-client/src/client/error.js
-index 3e3090d3fcaee6af14801d1e915b56a9d978f646..617fa83a771ba00084d9a817cf4460190cf3108d 100644
+index 3e3090d3fcaee6af14801d1e915b56a9d978f646..ae777a639f0ad8722ae0ba66e6671a01ef46d5e9 100644
 --- a/out/zero-client/src/client/error.js
 +++ b/out/zero-client/src/client/error.js
 @@ -57,6 +57,24 @@ function getErrorConnectionTransition(ex) {
@@ -138,21 +138,8 @@ index 3e3090d3fcaee6af14801d1e915b56a9d978f646..617fa83a771ba00084d9a817cf446019
  	if (isClientError(ex)) switch (ex.kind) {
  		case AbruptClose:
  		case CleanClose:
-diff --git a/out/zero-client/src/client/zero.d.ts b/out/zero-client/src/client/zero.d.ts
-index 793b7c8da76023fc9480c078b0ce8c70f37362e5..4de57af08b4b287b2bd8cdd35a583faf87110e52 100644
---- a/out/zero-client/src/client/zero.d.ts
-+++ b/out/zero-client/src/client/zero.d.ts
-@@ -281,6 +281,8 @@ export declare class Zero<const S extends BaseDefaultSchema = DefaultSchema, MD
-      * longer query or mutate data with it, and its query views stop updating.
-      */
-     get closed(): boolean;
-+    /** Flush local commits through the existing persistence lock without closing. */
-+    persist(): Promise<void>;
-     /**
-      * Closes this Zero instance.
-      *
 diff --git a/out/zero-client/src/client/zero.js b/out/zero-client/src/client/zero.js
-index c1793b96386c3ba5be6e0b0ff336c2caf495bc6b..cf8523432ee6156b876e72dbf6f421987446140c 100644
+index c1793b96386c3ba5be6e0b0ff336c2caf495bc6b..8f5fc370b3a38c2da36ecca3c519087c9bd4235a 100644
 --- a/out/zero-client/src/client/zero.js
 +++ b/out/zero-client/src/client/zero.js
 @@ -204,6 +204,8 @@ var Zero = class Zero {
@@ -164,17 +151,7 @@ index c1793b96386c3ba5be6e0b0ff336c2caf495bc6b..cf8523432ee6156b876e72dbf6f42198
  	#closeAbortController = new AbortController();
  	#visibilityWatcher;
  	#connectionManager;
-@@ -607,31 +609,46 @@ var Zero = class Zero {
- 	get closed() {
- 		return this.#connectionManager.is(Closed);
- 	}
-+	/** Flush local commits through the existing persistence lock without closing. */
-+	persist() {
-+		return this.#rep.persist();
-+	}
- 	/**
- 	* Closes this Zero instance.
- 	*
+@@ -613,25 +615,36 @@ var Zero = class Zero {
  	* Once a Zero instance has been closed it no longer syncs, you can no
  	* longer query or mutate data with it, and its query views stop updating.
  	*/

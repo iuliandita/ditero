@@ -7,12 +7,7 @@ import { mutators } from "../../zero/mutators.ts";
 import { schema } from "../../zero/schema.gen.ts";
 import { ShellSkeleton } from "../components/shell/AppSkeleton.tsx";
 import { Button } from "../components/ui/button.tsx";
-import {
-	forgetBrowserSession,
-	rejectBrowserSession,
-} from "./browser-session.ts";
 import { createExportBoundary } from "./export-boundary.ts";
-import { protectOfflineEdits } from "./offline-durability.ts";
 import {
 	createSyncTracker,
 	OFFLINE_EDIT_WINDOW_MS,
@@ -38,8 +33,8 @@ import {
 // canonical account ID; only a verified native scope may change Zero's storageKey.
 function createZeroClient(
 	userID: string,
-	token: string | undefined,
-	cacheURL: string | null,
+	token: string,
+	cacheURL: string,
 	storageKey?: string,
 ) {
 	return new Zero({
@@ -54,11 +49,6 @@ function createZeroClient(
 	});
 }
 type ZeroClient = ReturnType<typeof createZeroClient>;
-
-const OfflineBootstrapContext = createContext(false);
-export function useOfflineBootstrap(): boolean {
-	return useContext(OfflineBootstrapContext);
-}
 
 const SyncEndpointContext = createContext<string | null>(null);
 export function useSyncEndpoint(): string | null {
@@ -85,17 +75,15 @@ export function useSyncTracker(): SyncTracker {
 export function AppZeroProvider({
 	userID,
 	runtime = browserZeroRuntime,
-	offline = false,
 	children,
 }: {
 	userID: string;
 	runtime?: ZeroRuntime;
-	offline?: boolean;
 	children: ReactNode;
 }) {
 	const [client, setClient] = useState<{
 		zero: ZeroClient;
-		endpoint: string | null;
+		endpoint: string;
 		tracker: SyncTracker;
 		exportBoundary: ReturnType<typeof createExportBoundary>;
 	} | null>(null);
@@ -132,35 +120,19 @@ export function AppZeroProvider({
 		let cancelled = false;
 		void (async () => {
 			const storageScope = zeroStorageScope(runtime);
-			if (offline && runtime.kind !== "browser")
-				throw new Error("Offline bootstrap is browser-only");
-			if (!offline) await runtime.bootstrap();
-			const checkRefusal = (error: unknown): never => {
-				if (runtime.kind === "browser") rejectBrowserSession(error, userID);
-				throw error;
-			};
-			const [config, token] = offline
-				? [null, undefined]
-				: await Promise.all([
-						runtime.fetchConfig().catch(checkRefusal),
-						runtime.getAuth().catch(checkRefusal),
-					]);
+			await runtime.bootstrap();
+			const [config, token] = await Promise.all([
+				runtime.fetchConfig(),
+				runtime.getAuth(),
+			]);
 			const created = await createAfterZeroRetirement(
 				() => {
 					const instance = createZeroClient(
 						userID,
 						token,
-						config?.zeroURL ?? null,
+						config.zeroURL,
 						storageScope,
 					);
-					if (runtime.kind === "browser") {
-						const stopDurability = protectOfflineEdits(instance);
-						const close = instance.close.bind(instance);
-						instance.close = async (...args) => {
-							await close(...args);
-							stopDurability();
-						};
-					}
 					owner = registerZeroClient(
 						userID,
 						instance,
@@ -206,57 +178,26 @@ export function AppZeroProvider({
 						if (state.name === "connected") tracker.connected();
 						boundary.connectionChanged();
 					});
-					stopAuthRefresh = offline
-						? undefined
-						: watchZeroAuth(
-								instance,
-								() => runtime.getAuth(),
-								(error) => {
-									if (
-										runtime.kind === "browser" &&
-										error instanceof TypeError &&
-										navigator.onLine
-									)
-										forgetBrowserSession(userID);
-									if (runtime.kind === "browser")
-										rejectBrowserSession(error, userID);
-									console.error(error);
-								},
-								{
-									onAuthRefused: () => {
-										if (runtime.kind === "browser")
-											forgetBrowserSession(userID);
-									},
-									onSessionExpired: (expired) => {
-										if (expired && runtime.kind === "browser")
-											rejectBrowserSession({ code: "session-expired" }, userID);
-										tracker.setSessionExpired(expired);
-									},
-									onAuthRejected: (rejected) => {
-										if (rejected && runtime.kind === "browser")
-											rejectBrowserSession({ code: "auth-rejected" }, userID);
-										tracker.setAuthRejected(rejected);
-									},
-								},
-							);
+					stopAuthRefresh = watchZeroAuth(
+						instance,
+						() => runtime.getAuth(),
+						undefined,
+						{
+							onSessionExpired: tracker.setSessionExpired,
+							onAuthRejected: tracker.setAuthRejected,
+						},
+					);
 					return {
 						zero: instance,
 						tracker,
 						exportBoundary: boundary,
-						endpoint: config?.zeroURL ?? null,
+						endpoint: config.zeroURL,
 					};
 				},
 				() => cancelled,
 			);
 			if (created && !cancelled) setClient(created);
 		})().catch(async (error: unknown) => {
-			if (runtime.kind === "browser") rejectBrowserSession(error, userID);
-			if (
-				runtime.kind === "browser" &&
-				error instanceof TypeError &&
-				navigator.onLine
-			)
-				forgetBrowserSession(userID);
 			let saveFailed = error instanceof ZeroRetirementError;
 			if (owner) {
 				try {
@@ -278,7 +219,7 @@ export function AppZeroProvider({
 			});
 			setClient(null);
 		};
-	}, [userID, runtime, offline, startupAttempt]);
+	}, [userID, runtime, startupAttempt]);
 
 	if (startupFailed)
 		return (
@@ -299,9 +240,7 @@ export function AppZeroProvider({
 			<SyncTrackerContext.Provider value={client.tracker}>
 				<ExportBoundaryContext.Provider value={client.exportBoundary}>
 					<SyncEndpointContext.Provider value={client.endpoint}>
-						<OfflineBootstrapContext.Provider value={offline}>
-							{children}
-						</OfflineBootstrapContext.Provider>
+						{children}
 					</SyncEndpointContext.Provider>
 				</ExportBoundaryContext.Provider>
 			</SyncTrackerContext.Provider>

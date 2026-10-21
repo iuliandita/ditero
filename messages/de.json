@@ -1,6 +1,4 @@
 {
-	"browser_cached_session": "Offline: Gespeicherte Daten werden angezeigt. Änderungen bleiben auf diesem Gerät, bis deine Sitzung online bestätigt wurde.",
-	"browser_connection_required": "Verbinde dich mit dem Server, um deine Sitzung zu bestätigen und diesen Arbeitsbereich zu öffnen. Offline neu laden erfordert eine zuvor bestätigte, noch gültige Sitzung und eine gespeicherte App über HTTPS oder localhost.",
 	"workspace_read_only": "Deine Workspace-Rolle erlaubt nur das Ansehen.",
 	"accept_error_email_mismatch": "Diese Einladung ist für eine andere E-Mail-Adresse. Melde dich ab und dann mit dem Konto an, an das sie gesendet wurde.",
 	"accept_switch_account": "Abmelden und Konto wechseln",
