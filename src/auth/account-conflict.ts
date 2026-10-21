@@ -16,7 +16,10 @@ function violatesAccountKey(error: unknown): boolean {
 
 // Two concurrent flows for one provider account both pass Better Auth's
 // owner lookup; the unique index admits one insert. Turn the loser's database
-// error into a coded refusal instead of an opaque 500.
+// error into a coded refusal instead of an opaque 500. A losing first sign-in
+// is redirected to the sign-in page with the code; a losing link-social call
+// gets it as a 409 reply, because Better Auth 1.7.12 redirects link failures
+// only for its own refusals. No Ditero screen starts a link.
 function wrapAdapter<T extends object>(adapter: T): T {
 	return new Proxy(adapter, {
 		get(target, property) {

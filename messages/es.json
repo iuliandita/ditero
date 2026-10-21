@@ -1522,6 +1522,7 @@
 	"auth_error_registration_disabled": "Las cuentas nuevas están desactivadas en esta instancia.",
 	"auth_error_registration_unavailable": "El registro no está disponible por el momento. Inténtalo de nuevo en un momento.",
 	"auth_error_invalid_origin": "El servidor no confía en esta dirección. Pide al operador que la añada a los orígenes de confianza de la instancia.",
+	"auth_error_account_already_linked": "Esta cuenta de inicio de sesión se acaba de vincular en otra ventana. Vuelve a iniciar sesión.",
 	"mutation_failed": "Algo ha salido mal.",
 	"mutation_offline_not_saved": "Estás sin conexión, este cambio no se guardó. Vuelve a conectarte e inténtalo de nuevo.",
 	"sync_synced_title": "Sincronizado",

@@ -41,6 +41,8 @@ per-IP ceiling checked before any email bucket is created; see
 Google appears only when the server has both OAuth credentials configured. A
 registration-policy refusal returns to this page with the localized registration
 message and retains the grant ID; see [sign-in providers](sign-in-providers.md).
+When two first Google sign-ins for one Google account race, the second returns
+here with a localized sign-in-again message (`ACCOUNT_ALREADY_LINKED`).
 Preview exposes only the device label, expiry, and pending or approved status.
 An approved grant is visible only to its approving account while the original
 approving session remains live. Cancel leaves the request unapproved.

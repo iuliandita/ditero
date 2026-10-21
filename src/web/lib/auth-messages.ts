@@ -54,6 +54,8 @@ const AUTH_ERROR_MESSAGES: Record<string, () => string> = {
 	// Same 403 as the gate, wholly different cause: the browser reached the app
 	// on an address the server does not trust (TRUSTED_ORIGINS / BETTER_AUTH_URL).
 	INVALID_ORIGIN: m.auth_error_invalid_origin,
+	// account-conflict.ts: the losing side of two simultaneous first sign-ins.
+	ACCOUNT_ALREADY_LINKED: m.auth_error_account_already_linked,
 };
 
 // Precedence is deliberate. An unmapped code still yields the server's English

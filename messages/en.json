@@ -1493,6 +1493,7 @@
 	"auth_error_registration_disabled": "New accounts are turned off on this instance.",
 	"auth_error_registration_unavailable": "Registration is temporarily unavailable. Try again in a moment.",
 	"auth_error_invalid_origin": "This address is not trusted by the server. Ask the operator to add it to the instance's trusted origins.",
+	"auth_error_account_already_linked": "This sign-in account was just linked in another window. Sign in again.",
 	"mutation_failed": "Something went wrong.",
 	"mutation_offline_not_saved": "You're offline, this change wasn't saved. Reconnect and try again.",
 	"sync_synced_title": "Synced",

@@ -1493,6 +1493,7 @@
 	"auth_error_registration_disabled": "Neue Konten sind auf dieser Instanz deaktiviert.",
 	"auth_error_registration_unavailable": "Die Registrierung ist vorübergehend nicht verfügbar. Versuche es gleich noch einmal.",
 	"auth_error_invalid_origin": "Der Server vertraut dieser Adresse nicht. Bitte den Betreiber, sie zu den vertrauenswürdigen Ursprüngen der Instanz hinzuzufügen.",
+	"auth_error_account_already_linked": "Dieses Anmeldekonto wurde gerade in einem anderen Fenster verknüpft. Melde dich noch einmal an.",
 	"mutation_failed": "Da ist etwas schiefgelaufen.",
 	"mutation_offline_not_saved": "Du bist offline, diese Änderung wurde nicht gespeichert. Verbinde dich neu und versuch es noch einmal.",
 	"sync_synced_title": "Synchronisiert",

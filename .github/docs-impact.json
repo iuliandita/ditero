@@ -33,12 +33,8 @@
 			"note": "Document desktop cold offline activation from complete unexpired evidence in the OS credential store, exact session binding, fail-closed verification and revocation markers, and native token refresh on socket retry. Existing records need one complete online start; downgrades require signing out stored accounts before installing an older build. Retain queued edits, refuse fallback for trust, HTTP, validation or storage failures, and keep platform runtime qualification explicit. Android cached activation policy is unchanged. Every authenticated native request now persists a refusal fence before I/O, including attachment, notification, cleanup and sync-handshake requests. Binary keyring chunks stay within the Windows blob limit, share credential references, and use a bounded recovery journal. Both earlier protected-record formats require fresh online evidence after upgrade; downgrades require OS credential-manager cleanup. The desktop TLS refusal test fixture now carries a fixed non-secret password because macOS refuses empty-password PKCS#12 imports; test-only, no runtime or documented behavior change."
 		},
 		"authentication": {
-			"sourceDigest": "7de977219bb249f714d92d66f2a635fedabde22276f36dc6109ca7f4b4a6581c",
-			"docs": [
-				"docs/runbooks/native-authentication.md",
-				"apps/android/README.md",
-				"apps/desktop/README.md"
-			],
+			"sourceDigest": "c05a67d328cf0e1fbfdf131335c75306c3debfcdf9db380f91746f03d244b134",
+			"docs": ["docs/runbooks/native-authentication.md"],
 			"note": "Upgrade Better Auth and passkey together to 1.7.12. Google keeps its callback URI, PKCE and pending native consent return URL. OAuth callbacks now preserve APIError codes, so remove the message-as-code workaround and retain readable error descriptions; a registration-policy outage returns REGISTRATION_UNAVAILABLE so the callback still redirects. A concurrent duplicate provider link is refused with ACCOUNT_ALREADY_LINKED. A completed password reset now revokes every session of the account, including native sessions and the Zero access issued from them. Document the required additive JWT key migration and the account key check; credential formats, registration policies and trusted origins are unchanged. #1172/#1173: the sign-in page links to an email reset; the mailed link always opens the web /reset-password page, never a client-supplied native target, and the reset creates no session. A completed reset also revokes access tokens, calendar feed links, passkeys and linked provider sign-ins in one real transaction with the token use, session revocation and password write; two-factor, webhooks and channel credentials stay. A database conflict on a raw link-social call still answers 409 JSON."
 		},
 		"compatibility": {
