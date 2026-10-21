@@ -160,6 +160,7 @@ final class NativeZeroTransport {
     private final Handler main = new Handler(Looper.getMainLooper());
     private final SecureRandom random = new SecureRandom();
     private final ExecutorService io = Executors.newFixedThreadPool(2);
+    private static final ExecutorService cleanup = Executors.newSingleThreadExecutor();
     private final OkHttpClient http;
     private final OkHttpClient wsHttp;
     private final SharedPreferences prefs;
@@ -348,7 +349,6 @@ final class NativeZeroTransport {
         pendingPushOpen=null;
         pushPermissionOwner=null;
         ready = false;
-        attachments.cancelAll();
         generation++;
         for (Sock s : new ArrayList<>(socks.values())) s.detach();
         socks.clear();
@@ -361,10 +361,12 @@ final class NativeZeroTransport {
         revoking = null;
         context = null;
         zero = null;
-        attachments.shutdown();
-        io.shutdownNow();
-        http.dispatcher().cancelAll();
-        http.connectionPool().evictAll();
+        cleanup.execute(() -> {
+            attachments.shutdown();
+            io.shutdownNow();
+            http.dispatcher().cancelAll();
+            http.connectionPool().evictAll();
+        });
     }
 
     // ---- listener entry -------------------------------------------------------------
@@ -1817,7 +1819,8 @@ final class NativeZeroTransport {
                 detached = true;
                 terminal = true;
             }
-            if (ws != null) ws.cancel();
+            WebSocket target = ws;
+            if (target != null) cleanup.execute(target::cancel);
         }
 
         void requestClose(int code, String reason) {
