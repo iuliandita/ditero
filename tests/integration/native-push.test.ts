@@ -58,12 +58,19 @@ const users: string[] = [];
 let sessions: Sessions;
 let grants: NativeGrantStore;
 let allow = true;
+// ECDH exports drop leading zero bytes; VAPID needs the 32-byte scalar.
+const vapidPrivateKey = (ecdh: ReturnType<typeof createECDH>) => {
+	const scalar = ecdh.getPrivateKey();
+	return Buffer.concat([Buffer.alloc(32 - scalar.length), scalar]).toString(
+		"base64url",
+	);
+};
 const pair = createECDH("prime256v1");
 pair.generateKeys();
 const configuration: PushConfiguration = {
 	unifiedpush: {
 		publicKey: pair.getPublicKey().toString("base64url"),
-		privateKey: pair.getPrivateKey().toString("base64url"),
+		privateKey: vapidPrivateKey(pair),
 		subject: "mailto:push@example.test",
 	},
 	fcm: {
@@ -371,9 +378,7 @@ test("operator configuration requires matched VAPID identity and a protected mat
 	expect(() =>
 		pushConfiguration({
 			...env,
-			DITERO_NATIVE_PUSH_VAPID_PRIVATE_KEY: other
-				.getPrivateKey()
-				.toString("base64url"),
+			DITERO_NATIVE_PUSH_VAPID_PRIVATE_KEY: vapidPrivateKey(other),
 		}),
 	).toThrow();
 	const directory = mkdtempSync(join(tmpdir(), "ditero-native-push-"));
