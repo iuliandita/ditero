@@ -21,7 +21,7 @@ test("signup and account settings persist a trimmed display name", async ({
 	await page.getByTestId("email").fill(email);
 	await page.getByTestId("password").fill("pw-123456");
 	await page.getByTestId("signup").click();
-	await expect(page.getByRole("status")).toBeVisible();
+	await expect(page.getByTestId("signup-notice")).toBeVisible();
 	await page.getByTestId("password").fill("pw-123456");
 	await page.getByTestId("signin").click();
 	await expect(page.getByTestId("workspace")).toBeVisible();

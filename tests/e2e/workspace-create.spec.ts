@@ -101,7 +101,7 @@ test("a new account creates a shared workspace through the switcher and retains 
 			{ waitUntil: "domcontentloaded" },
 		);
 		await invited.getByTestId("accept-submit").click();
-		await expect(invited.getByRole("status")).toBeVisible();
+		await expect(invited.getByTestId("signup-notice")).toBeVisible();
 		await invited.getByTestId("accept-password").fill("pw-123456");
 		await invited.getByTestId("accept-submit").click();
 		await rootNavigation;

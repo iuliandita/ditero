@@ -70,9 +70,11 @@ mod tests {
 
     #[tokio::test]
     async fn native_tls_refusal_is_not_a_network_failure_even_when_reqwest_says_connect() {
-        // Disposable self-signed localhost identity, never a deployed credential.
+        // Disposable self-signed localhost identity, never a deployed credential. macOS
+        // refuses to import a PKCS#12 with an empty password.
         let identity =
-            native_tls::Identity::from_pkcs12(include_bytes!("../tests/tls.p12"), "").unwrap();
+            native_tls::Identity::from_pkcs12(include_bytes!("../tests/tls.p12"), "fixture")
+                .unwrap();
         let tls = native_tls::TlsAcceptor::new(identity).unwrap();
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let address = listener.local_addr().unwrap();

@@ -578,7 +578,11 @@ function AcceptInvitePage({
 						}}
 					>
 						{notice && (
-							<p role="status" className="text-sm text-muted-foreground">
+							<p
+								data-testid="signup-notice"
+								role="status"
+								className="text-sm text-muted-foreground"
+							>
 								{m.login_signup_continue()}
 							</p>
 						)}

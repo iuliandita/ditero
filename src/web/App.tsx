@@ -30,8 +30,12 @@ export function App() {
 }
 
 function Routes() {
-	const { data: session, isPending } = authClient.useSession();
-	return <SessionRoutes session={session} isPending={isPending} />;
+	const { data: session, isPending, isRefetching } = authClient.useSession();
+	// A signed-out refetch (after any sign-in or sign-up attempt) reports pending
+	// again; only the first fetch may unmount Login and lose its form state.
+	return (
+		<SessionRoutes session={session} isPending={isPending && !isRefetching} />
+	);
 }
 
 function SessionRoutes({

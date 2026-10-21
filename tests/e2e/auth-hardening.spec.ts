@@ -23,7 +23,7 @@ async function signUpThroughForm(
 	await page.getByTestId("signup-mode").click();
 	await page.getByTestId("password").fill("pw-123456");
 	await page.getByTestId("signup").click();
-	await expect(page.getByRole("status")).toBeVisible();
+	await expect(page.getByTestId("signup-notice")).toBeVisible();
 	await page.getByTestId("password").fill("pw-123456");
 	await page.getByTestId("signin").click();
 	await expect(page.getByTestId("workspace")).toBeVisible({

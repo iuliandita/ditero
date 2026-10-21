@@ -288,7 +288,7 @@ for (const scenario of ["cached identity", "grant conflict"] as const) {
 			await recipient.getByTestId("accept-email").fill(email);
 			await recipient.getByTestId("accept-password").fill(PASSWORD);
 			await recipient.getByTestId("accept-submit").click();
-			await expect(recipient.getByRole("status")).toBeVisible();
+			await expect(recipient.getByTestId("signup-notice")).toBeVisible();
 			await recipient.getByTestId("accept-password").fill(PASSWORD);
 			await recipient.getByTestId("accept-submit").click();
 			await enroll(recipient, false);
@@ -445,7 +445,7 @@ test("fragment invite survives reload ordering and retains the async fallback", 
 		await newcomer.getByTestId("accept-email").fill(newcomerEmail);
 		await newcomer.getByTestId("accept-password").fill(PASSWORD);
 		await newcomer.getByTestId("accept-submit").click();
-		await expect(newcomer.getByRole("status")).toBeVisible();
+		await expect(newcomer.getByTestId("signup-notice")).toBeVisible();
 		await newcomer.getByTestId("accept-password").fill(PASSWORD);
 		await newcomer.getByTestId("accept-submit").click();
 		await enroll(newcomer, false);
@@ -516,7 +516,7 @@ test("fragment invite survives reload ordering and retains the async fallback", 
 		await fallback.getByTestId("accept-email").fill(fallbackEmail);
 		await fallback.getByTestId("accept-password").fill(PASSWORD);
 		await fallback.getByTestId("accept-submit").click();
-		await expect(fallback.getByRole("status")).toBeVisible();
+		await expect(fallback.getByTestId("signup-notice")).toBeVisible();
 		await fallback.getByTestId("accept-password").fill(PASSWORD);
 		await fallback.getByTestId("accept-submit").click();
 		await expect(fallback.getByTestId("workspace")).toBeVisible({
