@@ -173,9 +173,10 @@ or ad-hoc label, and expires after seven days. Linux packages include AppStream
 metadata, one visible desktop entry, icons and the MIT license.
 
 The workflow checks the contents and x64 ELF architecture of all Linux formats,
-installs the DEB with dependencies, and launches it plus the extracted RPM and
-AppImage under Xvfb, requiring a Ditero window. RPM-distro installation/dependency
-resolution remains unqualified. Windows silently installs NSIS, verifies the
+installs the DEB with dependencies, and installs/verifies the RPM and linked
+libraries in a pinned Fedora 44 container. It launches the DEB, extracted RPM and
+AppImage under Xvfb on Ubuntu, requiring a Ditero window. Fedora graphical startup
+remains unqualified. Windows silently installs NSIS, verifies the
 installed executable matches the build and has the target PE architecture, and
 requires a Ditero window. macOS mounts the DMG, copies the app, checks its native
 architecture and ad-hoc signature, and checks that it survives startup. Startup

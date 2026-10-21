@@ -76,10 +76,22 @@ case "$platform" in
     linux_contents "$out/deb"
     linux_contents "$out/rpm"
     linux_contents "$out/appimage/squashfs-root"
+    # Resolve RPM dependencies on an RPM distribution, without changing the host.
+    docker run --rm -v "$rpm:/package.rpm:ro" \
+      fedora:44@sha256:43b29f65a41eb9c35e1cd5323e3bdf3b655c2357a9f4f1ff2f9c2798e5045d80 \
+      bash -euo pipefail -c '
+        dnf install -y /package.rpm
+        package=$(rpm -qp --qf "%{NAME}" /package.rpm)
+        rpm -V "$package"
+        test -x /usr/bin/ditero-desktop
+        ldd /usr/bin/ditero-desktop >/tmp/ditero-libraries.txt
+        cat /tmp/ditero-libraries.txt
+        if grep -q "not found" /tmp/ditero-libraries.txt; then exit 1; fi
+      ' 2>&1 | tee "$out/rpm-install-fedora.txt"
     # DEB dependency resolution and installation are checked on the build baseline.
     sudo apt-get install --no-install-recommends -y "$deb"
     linux_launch /usr/bin/ditero-desktop deb
-    # RPM payload runs against Ubuntu libraries; RPM-distro installation is separate.
+    # Graphical RPM startup runs against the Ubuntu build baseline.
     linux_launch "$out/rpm/usr/bin/ditero-desktop" rpm
     linux_launch "$out/appimage/squashfs-root/AppRun" appimage
     ;;
