@@ -2,8 +2,7 @@
 	"workspace_read_only": "Deine Workspace-Rolle erlaubt nur das Ansehen.",
 	"accept_error_email_mismatch": "Diese Einladung ist für eine andere E-Mail-Adresse. Melde dich ab und dann mit dem Konto an, an das sie gesendet wurde.",
 	"accept_switch_account": "Abmelden und Konto wechseln",
-
-	"channel_field_required": "Gib {field} ein.",
+	"channel_field_required": "Füll dieses Feld aus.",
 	"channel_invalid_server_url": "Gib eine vollständige Server-URL mit http:// oder https:// ein.",
 	"channel_invalid_topic": "Verwende 1 bis 64 Buchstaben, Ziffern, Unterstriche oder Bindestriche.",
 	"channel_invalid_credential": "Verwende bis zu 256 sichtbare ASCII-Zeichen ohne Leerzeichen.",

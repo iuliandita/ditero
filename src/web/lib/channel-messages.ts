@@ -125,8 +125,7 @@ export function channelFieldErrorMessage(
 	key: string,
 	error: ChannelFieldError,
 ): string {
-	if (error === "required")
-		return m.channel_field_required({ field: channelFieldLabel(key) });
+	if (error === "required") return m.channel_field_required();
 	switch (key) {
 		case "serverUrl":
 			return m.channel_invalid_server_url();

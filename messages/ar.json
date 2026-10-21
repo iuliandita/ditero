@@ -2,8 +2,7 @@
 	"workspace_read_only": "دورك في مساحة العمل يسمح بالعرض فقط.",
 	"accept_error_email_mismatch": "هذه الدعوة لعنوان بريد إلكتروني آخر. سجّل الخروج، ثم سجّل الدخول بالحساب الذي أُرسلت إليه.",
 	"accept_switch_account": "تسجيل الخروج وتبديل الحساب",
-
-	"channel_field_required": "أدخل {field}.",
+	"channel_field_required": "هذا الحقل مطلوب.",
 	"channel_invalid_server_url": "أدخل عنوان خادم كاملًا يبدأ بـ http:// أو https://.",
 	"channel_invalid_topic": "استخدم من 1 إلى 64 حرفًا لاتينيًا أو رقمًا أو شرطة سفلية أو شرطة.",
 	"channel_invalid_credential": "استخدم حتى 256 محرف ASCII ظاهرًا دون مسافات.",

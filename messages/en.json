@@ -2,8 +2,7 @@
 	"workspace_read_only": "Your workspace role allows viewing only.",
 	"accept_error_email_mismatch": "This invite is for another email address. Sign out, then sign in with the account it was sent to.",
 	"accept_switch_account": "Sign out and switch account",
-
-	"channel_field_required": "Enter {field}.",
+	"channel_field_required": "This field is required.",
 	"channel_invalid_server_url": "Enter a complete http:// or https:// server URL.",
 	"channel_invalid_topic": "Use 1 to 64 letters, numbers, underscores or hyphens.",
 	"channel_invalid_credential": "Use up to 256 visible ASCII characters without spaces.",

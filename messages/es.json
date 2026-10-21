@@ -2,8 +2,7 @@
 	"workspace_read_only": "Tu rol en este espacio solo permite ver el contenido.",
 	"accept_error_email_mismatch": "Esta invitación es para otra dirección de correo. Cierra sesión e inicia sesión con la cuenta a la que se envió.",
 	"accept_switch_account": "Cerrar sesión y cambiar de cuenta",
-
-	"channel_field_required": "Introduce {field}.",
+	"channel_field_required": "Este campo es obligatorio.",
 	"channel_invalid_server_url": "Introduce una URL completa del servidor con http:// o https://.",
 	"channel_invalid_topic": "Usa entre 1 y 64 letras, números, guiones bajos o guiones.",
 	"channel_invalid_credential": "Usa hasta 256 caracteres ASCII visibles sin espacios.",
