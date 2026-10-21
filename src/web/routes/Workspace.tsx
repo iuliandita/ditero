@@ -88,6 +88,7 @@ import {
 	useAccountStorageScope,
 	useNativeAccount,
 } from "../lib/native-account.tsx";
+import { NATIVE_NAVIGATE_BACK } from "../lib/native-back.ts";
 import { viewIcon } from "../lib/nav-icon.tsx";
 import { useNavSections } from "../lib/nav-sections.ts";
 import { recordRecent } from "../lib/recents.ts";
@@ -688,6 +689,20 @@ function NormalWorkspace({
 		contentState.kind === "home" ||
 		contentState.kind === "index" ||
 		(contentState.kind === "view" && contentState.id === "today");
+	useEffect(() => {
+		function back(event: Event) {
+			if (detailTaskId) setDetailTaskId(null);
+			else if (newListFolder) setNewListFolder(null);
+			else if (contentState.kind === "settings")
+				dispatchContent({ kind: settingsReturn.current });
+			else if (!isTabRoot) openIndex();
+			else return;
+			event.preventDefault();
+		}
+		window.addEventListener(NATIVE_NAVIGATE_BACK, back);
+		return () => window.removeEventListener(NATIVE_NAVIGATE_BACK, back);
+	}, [contentState.kind, detailTaskId, isTabRoot, newListFolder, openIndex]);
+
 	function selectTab(tab: MobileTab) {
 		if (tab === "lists") openIndex();
 		else openNavView("today");

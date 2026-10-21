@@ -5,6 +5,7 @@ import android.os.Bundle;
 import android.content.Intent;
 
 import com.getcapacitor.BridgeActivity;
+import androidx.activity.OnBackPressedCallback;
 
 public class MainActivity extends BridgeActivity {
     private NativeZeroTransport zeroTransport;
@@ -25,6 +26,25 @@ public class MainActivity extends BridgeActivity {
         // is parked on about:blank and no native transport is attached.
         // Dedicated message listener only; null means registration failed closed.
         zeroTransport = NativeShellPolicy.install(this) ? NativeZeroTransport.attach(this) : null;
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            private boolean pending;
+
+            @Override
+            public void handleOnBackPressed() {
+                if (pending) return;
+                if (zeroTransport == null || getBridge() == null) {
+                    finish();
+                    return;
+                }
+                pending = true;
+                getBridge().getWebView().evaluateJavascript(
+                        "window.dispatchEvent(new Event('ditero:native-back', {cancelable:true}))",
+                        result -> {
+                            pending = false;
+                            if (!isFinishing() && !isDestroyed() && "true".equals(result)) finish();
+                        });
+            }
+        });
         consumePushIntent(getIntent());
         // A recreated Activity is handed its original launch intent again; only a fresh launch is a link.
         if(savedInstanceState==null) consumeTaskLinkIntent(getIntent());

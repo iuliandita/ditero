@@ -21,6 +21,14 @@ network failures permit this fallback; invalid credentials, trust failures,
 expired evidence, and failed revocation storage stay unavailable. Offline task
 editing and account/server transitions still require broader device qualification.
 
+## Android Back and Activity recreation
+
+Back dismisses the topmost dialog, sheet or menu through its existing close policy,
+then closes task details or the create-list form, and returns from a content screen
+to the Lists tab. It exits only from a top-level tab. Network resources are closed
+in the background after the old page and in-memory session are invalidated, including
+when a font-size change recreates the Activity.
+
 ## Encrypted files
 
 Enable `DITERO_E2E_ENABLED` on the server and enroll the account's encryption keys
