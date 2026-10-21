@@ -56,7 +56,9 @@ to populate this evidence. Older desktop builds cannot read the bounded-record
 format. Before a rollback to an older build, sign out stored accounts, close
 Ditero, and remove its native session records using the OS credential manager;
 sign in online with the older build. Keep the current build if credential cleanup
-fails. The scoped task cache does not need to be cleared.
+fails. The scoped task cache does not need to be cleared. Server backups do not
+include these device credential records; after restoring a server backup, sign in
+online again on each desktop.
 
 Only a network failure permits cached activation, and only before the verified
 session expires. Invalid credentials, failed certificate trust, HTTP refusals,
