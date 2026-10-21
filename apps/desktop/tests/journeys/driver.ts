@@ -187,10 +187,25 @@ export async function desktop(application: string) {
 				const pid = Number(run("pgrep", ["-x", "ditero-desktop"]));
 				if (!Number.isSafeInteger(pid) || pid <= 0)
 					throw new Error("Expected one desktop PID");
-				run("wmctrl", ["-c", "Ditero"]);
+				const windows = run("wmctrl", ["-lp"])
+					.split("\n")
+					.map((line) => line.trim().split(/\s+/))
+					.filter((fields) => Number(fields[2]) === pid);
+				assert.equal(
+					windows.length,
+					1,
+					"Expected one window owned by the installed desktop process",
+				);
+				run("wmctrl", ["-ic", windows[0][0]]);
 				await until(
 					"managed desktop exit",
-					() => spawnSync("kill", ["-0", String(pid)]).status !== 0,
+					() => {
+						const status = spawnSync("ps", ["-p", String(pid), "-o", "stat="], {
+							encoding: "utf8",
+						});
+						// An exited child may await reaping by WebKitWebDriver.
+						return status.status === 1 || status.stdout.trim().startsWith("Z");
+					},
 					30,
 				);
 			}

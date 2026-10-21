@@ -20,10 +20,16 @@ export async function systemBrowser() {
 		"--no-first-run",
 		"--no-default-browser-check",
 	];
-	const browser = background("system-browser", chrome, [
-		...args,
-		"about:blank",
-	]);
+	const browser =
+		process.platform === "darwin"
+			? background("system-browser", "open", [
+					"-a",
+					"/Applications/Google Chrome.app",
+					"--args",
+					...args,
+					"about:blank",
+				])
+			: background("system-browser", chrome, [...args, "about:blank"]);
 	await until(
 		"system browser CDP",
 		async () => (await fetch(`http://127.0.0.1:${port}/json/version`)).ok,
@@ -35,7 +41,7 @@ export async function systemBrowser() {
 		const script = resolve(state, "private/browser-handler.ps1");
 		writeFileSync(
 			script,
-			`$ErrorActionPreference='Stop'\n$command='"${chrome}" ${args.map((arg) => `"${arg}"`).join(" ")} "%1"'\n$choice=Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations\\https\\UserChoice' -ErrorAction SilentlyContinue\n$ids=@('https','http','MSEdgeHTM','ChromeHTML','DiteroJourneyBrowser')\nif ($choice) { $ids += $choice.ProgId }\nforeach($id in $ids) { $key="HKCU:\\Software\\Classes\\$id\\shell\\open\\command"; New-Item $key -Force | Out-Null; Set-Item $key -Value $command }\n`,
+			`$ErrorActionPreference='Stop'\n$command='"${chrome}" ${args.map((arg) => `"${arg}"`).join(" ")} "%1"'\n$choice=Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations\\https\\UserChoice' -ErrorAction SilentlyContinue\n$ids=@('https','http','MSEdgeHTM','ChromeHTML','DiteroJourneyBrowser')\nif ($choice) { $ids += $choice.ProgId }\nforeach($id in $ids) { $key="HKCU:\\Software\\Classes\\$id\\shell\\open\\command"; New-Item $key -Force | Out-Null; Set-Item $key -Value $command; New-ItemProperty $key -Name DelegateExecute -Value '' -PropertyType String -Force | Out-Null }\n`,
 		);
 		run("pwsh", ["-NoProfile", "-File", script]);
 	} else if (process.platform === "darwin") {
@@ -129,7 +135,15 @@ end tell`,
 			}
 			const page = await until(
 				"OS HTTPS handler in controlled browser profile",
-				() => context.pages().find((page) => page.url() === url),
+				() => {
+					const page = context.pages().find((page) => page.url() === url);
+					if (!page)
+						writeFileSync(
+							resolve(evidence, "browser-handler-pages.json"),
+							JSON.stringify(context.pages().map((page) => page.url())),
+						);
+					return page;
+				},
 			);
 			await page.screenshot({ path: resolve(evidence, "browser-handler.png") });
 			await page.close();

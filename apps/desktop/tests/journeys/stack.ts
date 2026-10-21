@@ -28,18 +28,29 @@ export function stage(name: string) {
 	);
 }
 const children: ChildProcess[] = [];
-export function run(command: string, args: string[], env = process.env) {
+export function stopChildren() {
+	for (const child of children.splice(0).reverse()) {
+		if (child.exitCode === null && !child.killed) child.kill();
+	}
+}
+export function run(
+	command: string,
+	args: string[],
+	env = process.env,
+	stdio: "pipe" | "inherit" = "pipe",
+) {
 	const result = spawnSync(command, args, {
 		cwd: root,
 		env,
 		encoding: "utf8",
 		timeout: 120000,
+		stdio,
 	});
-	if (result.status !== 0)
+	if (result.error || result.status !== 0)
 		throw new Error(
 			`${command} failed (${result.status}${result.error ? `, ${result.error.message}` : ""}): ${result.stderr}\n${result.stdout}`,
 		);
-	return result.stdout.trim();
+	return (result.stdout ?? "").trim();
 }
 export function background(
 	name: string,
@@ -215,16 +226,22 @@ export async function stack() {
 		"\nunix_socket_directories = ''\nwal_level = 'logical'\nmax_replication_slots = 20\nmax_wal_senders = 20\n",
 	);
 	stage("starting PostgreSQL");
-	run(exe("pg_ctl"), [
-		"-D",
-		data,
-		"-l",
-		resolve(evidence, "postgres.log"),
-		"-o",
-		`-p ${port} -h 127.0.0.1`,
-		"-w",
-		"start",
-	]);
+	// Windows children can retain captured pipe handles after pg_ctl exits.
+	run(
+		exe("pg_ctl"),
+		[
+			"-D",
+			data,
+			"-l",
+			resolve(evidence, "postgres.log"),
+			"-o",
+			`-p ${port} -h 127.0.0.1`,
+			"-w",
+			"start",
+		],
+		process.env,
+		"inherit",
+	);
 	const admin = new Pool({
 		connectionString: `postgres://postgres@127.0.0.1:${port}/postgres`,
 	});
@@ -238,14 +255,19 @@ export async function stack() {
 		pool: Pool;
 	}[] = [];
 	async function close() {
-		for (const child of children.reverse()) child.kill();
+		stopChildren();
 		for (const instance of instances) {
 			await instance.api.offline();
 			await instance.zero.offline();
 			await instance.pool.end();
 		}
 		await admin.end();
-		run(exe("pg_ctl"), ["-D", data, "-m", "immediate", "-w", "stop"]);
+		run(
+			exe("pg_ctl"),
+			["-D", data, "-m", "immediate", "-w", "stop"],
+			process.env,
+			"inherit",
+		);
 	}
 	try {
 		for (const name of ["journey_a", "journey_b"]) {

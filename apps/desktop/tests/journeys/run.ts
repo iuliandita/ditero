@@ -11,6 +11,7 @@ import {
 	stack,
 	stage,
 	state,
+	stopChildren,
 	until,
 	untrustedFixture,
 } from "./stack.ts";
@@ -82,6 +83,45 @@ function vault() {
 	};
 }
 try {
+	const installed = JSON.parse(
+		readFileSync(resolve(state, "installed.json"), "utf8"),
+	) as { application: string };
+	await journey("installed first launch", async () => {
+		stage("launching installed desktop application");
+		app = await desktop(installed.application);
+		await until("server selector", () =>
+			app?.evaluate("!!document.querySelector('#native-server')"),
+		);
+		await app.screenshot("first-launch");
+	});
+	assert(app);
+	const native = app;
+	let desktopTaskId = "";
+	await journey("untrusted HTTPS certificate is refused", async () => {
+		const rejected = await untrustedFixture();
+		try {
+			await native.fill("#native-server", rejected.origin);
+			await native.click('button[type="submit"]');
+			await until("certificate refusal", () =>
+				native.evaluate("!!document.querySelector('[role=alert]')"),
+			);
+			assert.equal(
+				rejected.requests(),
+				0,
+				"Untrusted TLS must fail before HTTP",
+			);
+			assert.equal(
+				await native.evaluate(
+					"globalThis.__journeyProtocol.filter(e=>e.direction==='reply' && e.op==='grant').at(-1)?.code",
+				),
+				"transport-refused",
+				"The negative control must reach the native TLS request",
+			);
+			await native.screenshot("untrusted-certificate-refused");
+		} finally {
+			await rejected.close();
+		}
+	});
 	stage("starting PostgreSQL, Bun and Zero");
 	servers = await stack();
 	stage("starting and configuring the system browser");
@@ -123,45 +163,6 @@ try {
 		);
 	}
 	await browser.context.clearCookies();
-	const installed = JSON.parse(
-		readFileSync(resolve(state, "installed.json"), "utf8"),
-	) as { application: string };
-	await journey("installed first launch", async () => {
-		stage("launching installed desktop application");
-		app = await desktop(installed.application);
-		await until("server selector", () =>
-			app?.evaluate("!!document.querySelector('#native-server')"),
-		);
-		await app.screenshot("first-launch");
-	});
-	assert(app);
-	const native = app;
-	let desktopTaskId = "";
-	await journey("untrusted HTTPS certificate is refused", async () => {
-		const rejected = await untrustedFixture();
-		try {
-			await native.fill("#native-server", rejected.origin);
-			await native.click('button[type="submit"]');
-			await until("certificate refusal", () =>
-				native.evaluate("!!document.querySelector('[role=alert]')"),
-			);
-			assert.equal(
-				rejected.requests(),
-				0,
-				"Untrusted TLS must fail before HTTP",
-			);
-			assert.equal(
-				await native.evaluate(
-					"globalThis.__journeyProtocol.filter(e=>e.direction==='reply' && e.op==='grant').at(-1)?.code",
-				),
-				"transport-refused",
-				"The negative control must reach the native TLS request",
-			);
-			await native.screenshot("untrusted-certificate-refused");
-		} finally {
-			await rejected.close();
-		}
-	});
 	async function signIn(origin: string) {
 		await native.fill("#native-server", origin);
 		await native.click('button[type="submit"]');
@@ -519,6 +520,24 @@ try {
 		process.exitCode = 1;
 } catch (error) {
 	console.error(error);
+	if (process.platform === "darwin") {
+		try {
+			run("screencapture", ["-x", resolve(evidence, "failure-desktop.png")]);
+		} catch (diagnostic) {
+			console.error(`OS screenshot failed: ${diagnostic}`);
+		}
+	}
+	if (process.platform === "win32") {
+		try {
+			run("pwsh", [
+				"-NoProfile",
+				"-File",
+				resolve(root, "apps/desktop/tests/journeys/capture.ps1"),
+			]);
+		} catch (diagnostic) {
+			console.error(`OS screenshot failed: ${diagnostic}`);
+		}
+	}
 	writeFileSync(
 		resolve(evidence, "failure.json"),
 		JSON.stringify({ error: String(error) }, null, 2),
@@ -536,6 +555,7 @@ try {
 	await app?.stop();
 	await browser?.close();
 	await servers?.close();
+	stopChildren();
 	const summary = results
 		.map(
 			(result) =>
