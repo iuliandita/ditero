@@ -29,13 +29,13 @@
 			"note": "Document retryable browser token lookup failures while retaining authoritative session verification and 401 for missing, expired or revoked sessions."
 		},
 		"compatibility": {
-			"sourceDigest": "2768c3515ffb1e7cedd1a01e1f906d4aefedaa61be0fe2fb25a4692ea3278d67",
+			"sourceDigest": "3d8524a7a1b355e851b1a0b2bf9eb05e30355bb0f13eb2bfb3ea92ab7667a304",
 			"docs": ["docs/runbooks/database-roles.md"],
-			"note": "Document the Zero 1.9 outage recovery patch, retained durable-close behavior and automatic queued-mutation replay without bypassing authentication.",
-			"upgrade": "Upgrade the application and reload open clients to load the corrected client bundle; no database migration or storage format change is required.",
-			"backup": "Take the existing database and attachment backup before upgrading, and retain browser storage until queued edits have reached the server.",
-			"rollback": "Rolling back restores the older client outage defect; reload clients after rollback and verify that queued edits reach the server.",
-			"clientVersions": "Already open older clients need a reload to gain recovery; the patch preserves persisted formats and leaves invalid sessions requiring sign-in."
+			"note": "Document restricted-role membership removal without TEMP and uniform 404 attachment denials, with unchanged persisted formats.",
+			"upgrade": "Deploy the application update without schema, blob or key conversion; runtime TEMP grants are unnecessary.",
+			"backup": "Keep the existing coordinated database and blob backups; ciphertext and key envelopes are unchanged.",
+			"rollback": "The previous application remains data-compatible but restores the TEMP dependency and foreign attachment 403 response.",
+			"clientVersions": "Existing web, Android and desktop clients use unchanged attachment formats and interpret unauthorized downloads as unavailable."
 		}
 	}
 }

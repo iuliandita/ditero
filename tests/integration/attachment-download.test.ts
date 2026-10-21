@@ -270,13 +270,20 @@ describe("attachment download", () => {
 		expect((await download("att-viewer", "download-viewer")).status).toBe(200);
 	});
 
-	test("returns 403 and no blob bytes to a non-member", async () => {
+	test("returns the same 404 for foreign and missing content or thumbnails", async () => {
 		await seedAttachment("att-outsider", "committed");
 
-		const response = await download("att-outsider", "download-outsider");
-
-		expect(response.status).toBe(403);
-		expect(await response.text()).toBe("Forbidden");
+		for (const action of ["download", "thumbnail"]) {
+			for (const id of ["att-outsider", "missing"]) {
+				const response = await app.handle(
+					new Request(`http://localhost/api/attachments/${id}/${action}`, {
+						headers: { "x-test-user": "download-outsider" },
+					}),
+				);
+				expect(response.status).toBe(404);
+				expect(await response.text()).toBe("Not Found");
+			}
+		}
 	});
 
 	test("forces hostile declared types to a download-only octet stream", async () => {
@@ -313,8 +320,8 @@ describe("attachment download", () => {
 
 		const response = await download("att-revoked");
 
-		expect(response.status).toBe(403);
-		expect(await response.text()).toBe("Forbidden");
+		expect(response.status).toBe(404);
+		expect(await response.text()).toBe("Not Found");
 	});
 
 	test("stays hidden while end-to-end encryption is disabled", async () => {
