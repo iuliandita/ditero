@@ -81,8 +81,9 @@ the last verified expiry bounds this access, matching Android's policy.
 Unit tests cover the host decision matrix, protected evidence persistence, failed
 refusal cleanup, concurrent request fences, bounded multi-account keyring records,
 legacy migration, real TLS refusal classification, and the shared client startup
-path. Cold offline activation still needs packaged runtime qualification on each
-platform. To check it manually:
+path. Installed Linux development-package journeys also cover cold offline
+activation and reconnect; Windows and macOS still need that runtime evidence.
+To check it manually:
 
 1. Sign in to an existing account online and wait for lists to synchronize.
 2. Disconnect the network, edit a task, and close Ditero normally.
@@ -337,16 +338,21 @@ webview against a trusted HTTPS server:
   read/write permissions on the saved file.
 
 These checks cover the Linux core journey and webview key-storage primitives.
-They do not qualify full encryption enrollment/recovery or prove durable close
-with queued offline edits. Focused tests separately cover protocol, credential
-cleanup, vault retry, and bounded socket writes.
+They do not qualify full encryption enrollment/recovery. The hosted Linux
+development-package journey additionally passes offline task edit/create, normal
+close, cold offline restore from verified OS-keystore evidence, reconnect with
+server-confirmed persistence, two-server isolation, and selected/final credential
+removal from Secret Service. Its real notification popup is shown and clicked to
+open the task without completing it. Focused tests separately cover protocol,
+credential cleanup, vault retry, and bounded socket writes.
 
 Theme radio controls and reading-preference controls have been corrected. An actual
 WebKitGTK CSS check covered dark, light, system, Large text, and high contrast
 settings; it does not qualify a new installer or a complete platform journey.
 
-Windows and macOS have successful development builds only; actual sign-in,
-credential-store access, offline behavior, and notification clicks remain unqualified.
+Installed Windows x64 and macOS Apple Silicon/Intel development packages pass
+first launch and refusal of an untrusted HTTPS certificate. Sign-in, credential-store
+access, offline behavior, and notification clicks remain unqualified on those platforms.
 The branch-scoped Desktop runtime journeys workflow installs development packages
 on hosted Windows, Apple Silicon macOS, Intel macOS, and Linux runners. Its
 per-journey artifacts distinguish completed checks from unavailable features.
@@ -358,8 +364,9 @@ These disposable runner accounts do not qualify download trust, trusted signing,
 notarization, upgrades, or physical devices. Windows/macOS system notifications
 remain unavailable in the product. Existing client data, backups, and rollback
 procedures are unchanged by this test harness.
-Offline recovery, account/server changes, revoke/restore failures, reload behavior,
-worker execution, OPFS/locks, and installer execution still require platform checks.
+Windows/macOS offline recovery, account/server changes, reload behavior, worker
+execution, and OPFS/locks still require runtime checks. Revocation/recovery failure
+journeys and upgrades remain unqualified on every platform.
 The desktop uses each platform's native TLS trust; server certificates must also
 be trusted by the user's system browser. No certificate bypass is supported.
 

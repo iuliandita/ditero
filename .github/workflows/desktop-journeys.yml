@@ -68,7 +68,7 @@ jobs:
         run: |
           set -euo pipefail
           brew install postgresql@18
-          osacompile -o "$RUNNER_TEMP/chrome-confirmation.scpt" apps/desktop/tests/journeys/macos-browser.applescript
+          swiftc apps/desktop/tests/journeys/macos-browser.swift -o "$RUNNER_TEMP/journey-browser"
       - name: Select Rust and native driver
         run: |
           set -euo pipefail

@@ -175,7 +175,7 @@ export async function proxy(upstream: number) {
 		);
 	}
 	await online();
-	return { origin: `https://localhost:${port}`, offline, online };
+	return { origin: `https://127.0.0.1:${port}`, offline, online };
 }
 export async function untrustedFixture() {
 	let requests = 0;
@@ -195,7 +195,7 @@ export async function untrustedFixture() {
 	if (!address || typeof address === "string")
 		throw new Error("Missing TLS address");
 	return {
-		origin: `https://localhost:${address.port}`,
+		origin: `https://127.0.0.1:${address.port}`,
 		requests: () => requests,
 		async close() {
 			await new Promise<void>((done, fail) =>

@@ -1,15 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { chromium } from "@playwright/test";
-import {
-	background,
-	evidence,
-	freePort,
-	root,
-	run,
-	state,
-	until,
-} from "./stack.ts";
+import { background, evidence, freePort, run, state, until } from "./stack.ts";
 
 const shellQuote = (value: string) => `'${value.replaceAll("'", "'\"'\"'")}'`;
 
@@ -27,7 +19,6 @@ export async function systemBrowser() {
 		`--user-data-dir=${profile}`,
 		"--no-first-run",
 		"--no-default-browser-check",
-		"--host-resolver-rules=MAP localhost 127.0.0.1",
 	];
 	const browser =
 		process.platform === "darwin"
@@ -42,9 +33,7 @@ export async function systemBrowser() {
 	if (process.platform === "darwin") {
 		writeFileSync(
 			resolve(evidence, "browser-first-open.txt"),
-			run("osascript", [
-				resolve(root, "apps/desktop/tests/journeys/macos-browser.applescript"),
-			]),
+			run(resolve(process.env.RUNNER_TEMP ?? "", "journey-browser"), []),
 		);
 	}
 

@@ -13,7 +13,7 @@ openssl x509 -req -in "$out/server.csr" -CA "$out/ca.crt" -CAkey "$out/ca.key" \
   -CAcreateserial -out "$out/server.crt" -days 2 -extfile "$out/server.ext" 2> "$out/private/sign.log"
 chmod 600 "$out"/*.key
 openssl req -x509 -newkey rsa:2048 -nodes -keyout "$out/untrusted.key" -out "$out/untrusted.crt" \
-  -days 2 -subj '/CN=localhost' -addext 'subjectAltName=DNS:localhost' 2> "$out/private/untrusted.log"
+  -days 2 -subj '/CN=localhost' -addext 'subjectAltName=DNS:localhost,IP:127.0.0.1' 2> "$out/private/untrusted.log"
 chmod 600 "$out/untrusted.key"
 if [[ "$RUNNER_OS" == Linux ]]; then
   sudo cp "$out/ca.crt" /usr/local/share/ca-certificates/ditero-journey.crt
