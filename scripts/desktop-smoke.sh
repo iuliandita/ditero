@@ -67,10 +67,7 @@ case "$platform" in
     image=$(one_package appimage AppImage)
     mkdir "$out/deb" "$out/rpm" "$out/appimage"
     dpkg-deb -x "$deb" "$out/deb"
-    # cpio can close a pipe at TRAILER before rpm2cpio finishes writing padding.
-    rpm2cpio "$rpm" >"$out/rpm.cpio"
-    (cd "$out/rpm" && cpio -idm --quiet <"$out/rpm.cpio")
-    rm "$out/rpm.cpio"
+    bsdtar -xf "$rpm" -C "$out/rpm"
     chmod +x "$image"
     (cd "$out/appimage" && "$image" --appimage-extract >"$out/appimage-contents.txt")
     linux_contents "$out/deb"

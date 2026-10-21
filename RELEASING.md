@@ -34,7 +34,8 @@ Linux packages include AppStream metadata, a desktop
 entry and the MIT license. They require a compatible system WebKitGTK 4.1/GTK 3;
 the Ubuntu 24.04 build baseline is not a promise of compatibility with older Linux.
 
-Installer smoke checks verify Linux payload contents and x64 architecture, install
+Installer smoke checks extract Linux payloads with package tools (libarchive for
+RPM), verify contents and x64 architecture, install
 the DEB with dependency resolution, and install/verify the RPM in a pinned Fedora
 44 container, checking linked libraries. DEB, extracted RPM and AppImage payloads
 launch under Xvfb on Ubuntu; Fedora graphical startup remains unqualified.

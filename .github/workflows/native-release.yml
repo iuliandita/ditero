@@ -94,7 +94,7 @@ jobs:
           sudo apt-get install --no-install-recommends -y \
             libwebkit2gtk-4.1-dev build-essential curl wget file \
             libxdo-dev libssl-dev libdbus-1-dev libayatana-appindicator3-dev librsvg2-dev \
-            rpm cpio patchelf libfuse2t64 appstream xvfb x11-utils
+            libarchive-tools patchelf libfuse2t64 appstream xvfb x11-utils
       - name: Select Rust toolchain
         run: |
           set -euo pipefail
