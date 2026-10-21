@@ -32,25 +32,19 @@ export function App() {
 }
 
 function Routes() {
-	const {
-		data: session,
-		isPending,
-		isRefetching,
-		error,
-		refetch,
-	} = authClient.useSession();
+	const { data: session, isPending, error, refetch } = authClient.useSession();
 	const [retryingConnection, setRetryingConnection] = useState(false);
+	const [settled, setSettled] = useState(false);
 	const networkFailed = !session && isConnectionFailure(error);
 	useEffect(() => {
 		if (!isPending) setRetryingConnection(networkFailed);
+		if (!isPending) setSettled(true);
 	}, [isPending, networkFailed]);
 	if (networkFailed || (!session && isPending && retryingConnection))
 		return <ConnectionRequired onRetry={refetch} />;
 	// A signed-out refetch (after any sign-in or sign-up attempt) reports pending
-	// again; only the first fetch may unmount Login and lose its form state.
-	return (
-		<SessionRoutes session={session} isPending={isPending && !isRefetching} />
-	);
+	// again, and so does the first fetch; only the first may unmount Login.
+	return <SessionRoutes session={session} isPending={isPending && !settled} />;
 }
 
 function SessionRoutes({

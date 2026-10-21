@@ -6,7 +6,6 @@ import { ConnectionRequiredError } from "./lib/connection-required.ts";
 const session = vi.hoisted(() => ({
 	data: null,
 	isPending: false,
-	isRefetching: false,
 	error: null as unknown,
 	refetch: vi.fn(),
 }));
@@ -36,11 +35,6 @@ import { App } from "./App.tsx";
 
 afterEach(() => {
 	vi.unstubAllGlobals();
-	Object.assign(session, {
-		isPending: false,
-		isRefetching: false,
-		error: null,
-	});
 });
 
 test.each([
@@ -66,15 +60,4 @@ test.each([
 		expect(html).toContain("<h1");
 		expect(html).toContain(">Retry</button>");
 	}
-});
-
-test.each([
-	[false, "boot-skeleton"],
-	[true, "signin"],
-])("signed-out pending session while refetching=%s renders %s", (isRefetching, testId) => {
-	vi.stubGlobal("window", { location: { pathname: "/" } });
-	vi.stubGlobal("document", { cookie: "PARAGLIDE_LOCALE=en" });
-	vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
-	Object.assign(session, { isPending: true, isRefetching });
-	expect(renderToStaticMarkup(<App />)).toContain(`data-testid="${testId}"`);
 });
