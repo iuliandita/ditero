@@ -245,6 +245,13 @@ jobs:
       - run: tests/container/zero-shard.sh
       - run: bun run tests/cnpg/bootstrap.ts
       - run: bun run tests/container/postgres-init-secrets.ts
+      - name: Smoke-test default runtime image
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          docker build --file deploy/docker/Dockerfile \
+            --build-arg DITERO_GIT_SHA="$SOURCE_SHA" --tag ditero-smoke .
+          tests/container/smoke.sh ditero-smoke alpine "$SOURCE_SHA"
 
   push-relay:
     runs-on: ubuntu-24.04
