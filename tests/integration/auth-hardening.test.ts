@@ -136,7 +136,7 @@ describe("authentication hardening schema", () => {
 		expect(statuses.at(-1)).toBe(429);
 		const rows = await db.select().from(tables.rateLimit);
 		expect(rows).toHaveLength(1);
-		expect(rows[0].count).toBe(5);
+		expect(rows[0].count).toBe(6);
 		const buckets = await db
 			.select()
 			.from(tables.rateBucket)
@@ -149,6 +149,7 @@ describe("authentication hardening schema", () => {
 		email: string,
 		password = "wrong-password",
 		suffix = "",
+		peerAddress: string | null = "198.51.100.24",
 	) {
 		return handleAuthRequest(
 			new Request(`http://localhost:3000/api/auth/sign-in/email${suffix}`, {
@@ -161,7 +162,7 @@ describe("authentication hardening schema", () => {
 				},
 				body: JSON.stringify({ email, password }),
 			}),
-			"198.51.100.24",
+			peerAddress ?? undefined,
 		);
 	}
 
@@ -188,12 +189,41 @@ describe("authentication hardening schema", () => {
 		);
 	}, 60_000);
 
-	test("the production per-IP ceiling still stops attempts across different emails", async () => {
+	test.each([
+		"198.51.100.24",
+		null,
+	])("the production per-IP ceiling bounds buckets across emails for %s", async (peerAddress) => {
 		for (let attempt = 0; attempt < 30; attempt++)
-			expect((await signIn(`missing-${attempt}@test.invalid`)).status).toBe(
-				401,
-			);
-		expect((await signIn("one-more@test.invalid")).status).toBe(429);
+			expect(
+				(
+					await signIn(
+						`missing-${attempt}@test.invalid`,
+						"wrong-password",
+						"",
+						peerAddress,
+					)
+				).status,
+			).toBe(401);
+		expect(
+			(await signIn("one-more@test.invalid", "wrong-password", "", peerAddress))
+				.status,
+		).toBe(429);
+		for (let attempt = 0; attempt < 40; attempt++)
+			expect(
+				(
+					await signIn(
+						`rejected-${attempt}@test.invalid`,
+						"wrong-password",
+						"",
+						peerAddress,
+					)
+				).status,
+			).toBe(429);
+		const buckets = await db
+			.select()
+			.from(tables.rateBucket)
+			.where(like(tables.rateBucket.key, "auth:sign-in:%"));
+		expect(buckets).toHaveLength(30);
 		const rows = await db.select().from(tables.rateLimit);
 		expect(rows).toHaveLength(1);
 		expect(rows[0].count).toBe(30);

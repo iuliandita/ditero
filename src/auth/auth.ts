@@ -140,6 +140,47 @@ export const auth = betterAuth({
 	// jwt plugin exposes /api/auth/token and JWKS at /api/auth/jwks; the Zero
 	// token lifetime, issuer and audience are pinned in zero-auth.ts.
 	plugins: [
+		{
+			id: "sign-in-identity-rate-limit",
+			async onRequest(request: Request) {
+				if (
+					request.method === "POST" &&
+					new URL(request.url).pathname.replace(/\/+$/, "") ===
+						"/api/auth/sign-in/email"
+				) {
+					const email = await readSignInEmail(request);
+					if (email === null)
+						return {
+							response: Response.json(
+								{ message: "Invalid sign-in request", code: "INVALID_BODY" },
+								{ status: 400 },
+							),
+						};
+					// No account lookup: existing and unknown addresses consume identical buckets.
+					if (
+						!(await takeRateToken(
+							db,
+							signInRateKey(
+								request.headers.get("x-ditero-client-ip") ?? UNKNOWN_CLIENT_IP,
+								email,
+							),
+							SIGN_IN_RATE_CAPACITY,
+							SIGN_IN_RATE_REFILL_PER_SEC,
+						))
+					) {
+						return {
+							response: Response.json(
+								{
+									message: "Too many requests. Please try again later.",
+									code: "TOO_MANY_REQUESTS",
+								},
+								{ status: 429, headers: { "retry-after": "12" } },
+							),
+						};
+					}
+				}
+			},
+		},
 		passkey(
 			passkeyOptions({
 				BETTER_AUTH_URL: process.env.BETTER_AUTH_URL,
@@ -185,38 +226,6 @@ export async function handleAuthRequest(
 
 	const unavailable = mailUnavailableResponse(request);
 	if (unavailable) return unavailable;
-	if (
-		request.method === "POST" &&
-		new URL(request.url).pathname.replace(/\/+$/, "") ===
-			"/api/auth/sign-in/email"
-	) {
-		const email = await readSignInEmail(request);
-		if (email === null)
-			return Response.json(
-				{ message: "Invalid sign-in request", code: "INVALID_BODY" },
-				{ status: 400 },
-			);
-		// No account lookup: existing and unknown addresses consume identical buckets.
-		if (
-			!(await takeRateToken(
-				db,
-				signInRateKey(
-					request.headers.get("x-ditero-client-ip") ?? UNKNOWN_CLIENT_IP,
-					email,
-				),
-				SIGN_IN_RATE_CAPACITY,
-				SIGN_IN_RATE_REFILL_PER_SEC,
-			))
-		) {
-			return Response.json(
-				{
-					message: "Too many requests. Please try again later.",
-					code: "TOO_MANY_REQUESTS",
-				},
-				{ status: 429, headers: { "retry-after": "12" } },
-			);
-		}
-	}
 
 	if (registrationMode !== "bootstrap" || (await registeredUserCount()) > 0) {
 		return auth.handler(request);
