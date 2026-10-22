@@ -347,15 +347,6 @@
 	"security_error_sign_out": "Could not finish signing out. Try again.",
 	"security_passkeys_heading": "Passkeys",
 	"security_passkeys_empty": "Sign in with your fingerprint, face, or device PIN instead of a password.",
-	"security_sso_heading": "Single sign-on",
-	"security_sso_description": "Link your organization's identity provider to this account. Signing in with single sign-on never grants access to a workspace by itself.",
-	"security_sso_linked": "linked",
-	"security_sso_not_linked": "not linked",
-	"security_sso_link": "Link",
-	"security_sso_unlink": "Unlink",
-	"security_sso_error_load": "Could not load your linked sign-ins.",
-	"security_sso_error_link": "Could not start linking single sign-on.",
-	"security_sso_error_unlink": "Could not unlink single sign-on.",
 	"security_add_passkey": "Add passkey",
 	"security_passkey_unnamed": "Passkey",
 	"security_passkey_remove": "Remove",
@@ -395,10 +386,13 @@
 	"due_tomorrow": "Tomorrow",
 	"list_completed_count": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
 				"countPlural=one": "{countNum} item completed",
 				"countPlural=other": "{countNum} items completed"
 			}
@@ -406,10 +400,15 @@
 	],
 	"list_in_cart_count": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} item in cart",
+				"countPlural=other": "{countNum} items in cart"
 			}
 		}
 	],
@@ -547,12 +546,15 @@
 	"task_open_details": "Open details",
 	"task_subtask_progress_aria": [
 		{
+			"declarations": [
 				"input done",
 				"input total",
 				"local doneNum = done: number",
 				"local totalNum = total: number",
 				"local totalPlural = total: plural"
 			],
+			"selectors": ["totalPlural"],
+			"match": {
 				"totalPlural=one": "{doneNum} of {totalNum} subtask done",
 				"totalPlural=other": "{doneNum} of {totalNum} subtasks done"
 			}
@@ -560,11 +562,14 @@
 	],
 	"task_subtask_progress": [
 		{
+			"declarations": [
 				"input done",
 				"input total",
 				"local doneNum = done: number",
 				"local totalNum = total: number"
 			],
+			"selectors": [],
+			"match": {
 				"*": "{doneNum}/{totalNum}"
 			}
 		}
@@ -625,60 +630,100 @@
 	"recurrence_invalid": "Invalid recurrence.",
 	"recurrence_unit_daily": [
 		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "day",
+				"countPlural=other": "days"
 			}
 		}
 	],
 	"recurrence_unit_weekly": [
 		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "week",
+				"countPlural=other": "weeks"
 			}
 		}
 	],
 	"recurrence_unit_monthly": [
 		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "month",
+				"countPlural=other": "months"
 			}
 		}
 	],
 	"recurrence_unit_yearly": [
 		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "year",
+				"countPlural=other": "years"
 			}
 		}
 	],
 	"recurrence_summary_daily": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Every day",
+				"countPlural=other": "Every {countNum} days"
 			}
 		}
 	],
 	"recurrence_summary_weekly": [
 		{
+			"declarations": [
 				"input count",
 				"input days",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Every week on {days}",
+				"countPlural=other": "Every {countNum} weeks on {days}"
 			}
 		}
 	],
 	"recurrence_summary_monthly": [
 		{
+			"declarations": [
 				"input count",
 				"input monthday",
 				"local countNum = count: number",
 				"local countPlural = count: plural",
 				"local monthdayNum = monthday: number"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Every month on day {monthdayNum}",
+				"countPlural=other": "Every {countNum} months on day {monthdayNum}"
 			}
 		}
 	],
 	"recurrence_summary_yearly": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Every year",
+				"countPlural=other": "Every {countNum} years"
 			}
 		}
 	],
@@ -689,10 +734,14 @@
 	"reminder_until_quiet_hours_end": "quiet hours end",
 	"reminder_escalating": [
 		{
+			"declarations": [
 				"input count",
 				"input max",
 				"local countNum = count: number"
 			],
+			"selectors": [],
+			"match": {
+				"*": "Escalating ({countNum} of {max})"
 			}
 		}
 	],
@@ -808,19 +857,29 @@
 	"calendar_day_today": "{date}, today",
 	"filter_multi_selected": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} selected",
+				"countPlural=other": "{countNum} selected"
 			}
 		}
 	],
 	"board_column_count": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} item",
+				"countPlural=other": "{countNum} items"
 			}
 		}
 	],
@@ -843,10 +902,15 @@
 	"panel_replace_view": "Replace view",
 	"panel_label_habits": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} habit",
+				"countPlural=other": "{countNum} habits"
 			}
 		}
 	],
@@ -883,11 +947,15 @@
 	"panel_no_views": "No saved views yet.",
 	"panel_habits_legend": [
 		{
+			"declarations": [
 				"input max",
 				"input min",
 				"local maxNum = max: number",
 				"local minNum = min: number"
 			],
+			"selectors": [],
+			"match": {
+				"*": "Habits (pick {minNum}-{maxNum})"
 			}
 		}
 	],
@@ -904,11 +972,15 @@
 	"panel_field_size": "Size",
 	"panel_field_limit": [
 		{
+			"declarations": [
 				"input max",
 				"input min",
 				"local maxNum = max: number",
 				"local minNum = min: number"
 			],
+			"selectors": [],
+			"match": {
+				"*": "Limit ({minNum}-{maxNum})"
 			}
 		}
 	],
@@ -919,30 +991,44 @@
 	"panel_all_done": "Nothing open here",
 	"panel_show_all": [
 		{
+			"declarations": ["input count", "local countNum = count: number"],
+			"selectors": [],
+			"match": {
+				"*": "Show all ({countNum})"
 			}
 		}
 	],
 	"panel_expand_title": [
 		{
+			"declarations": [
 				"input count",
 				"input label",
 				"local countNum = count: number"
 			],
+			"selectors": [],
+			"match": {
+				"*": "{label} ({countNum})"
 			}
 		}
 	],
 	"panel_counter_aria": [
 		{
+			"declarations": [
 				"input count",
 				"input label",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{label}: {countNum} matching task. Show them",
+				"countPlural=other": "{label}: {countNum} matching tasks. Show them"
 			}
 		}
 	],
 	"panel_streak_row_aria": [
 		{
+			"declarations": [
 				"input title",
 				"input count",
 				"input pct",
@@ -950,16 +1036,25 @@
 				"local countPlural = count: plural",
 				"local pctNum = pct: number"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{title}: {countNum} day streak, {pctNum}% on track. Open task",
+				"countPlural=other": "{title}: {countNum} day streak, {pctNum}% on track. Open task"
 			}
 		}
 	],
 	"panel_streak_row_new_aria": [
 		{
+			"declarations": [
 				"input title",
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{title}: {countNum} day streak. Open task",
+				"countPlural=other": "{title}: {countNum} day streak. Open task"
 			}
 		}
 	],
@@ -968,15 +1063,23 @@
 	"panel_streak_missing": "Habit missing (deleted or not shared with you)",
 	"panel_focus_sessions_unit": [
 		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "focus session",
+				"countPlural=other": "focus sessions"
 			}
 		}
 	],
 	"panel_focus_minutes": [
 		{
+			"declarations": [
 				"input minutes",
 				"local minutesNum = minutes: number",
 				"local minutesPlural = minutes: plural"
 			],
+			"selectors": ["minutesPlural"],
+			"match": {
 				"minutesPlural=one": "{minutesNum} min focused",
 				"minutesPlural=other": "{minutesNum} min focused"
 			}
@@ -989,15 +1092,24 @@
 	"habit_done_action": "Done today",
 	"habit_streak_days": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} day",
+				"countPlural=other": "{countNum} days"
 			}
 		}
 	],
 	"habit_adherence": [
 		{
+			"declarations": ["input pct", "local pctNum = pct: number"],
+			"selectors": [],
+			"match": {
+				"*": "{pctNum}% on track"
 			}
 		}
 	],
@@ -1011,11 +1123,15 @@
 	"focus_phase_long_break": "Long break",
 	"focus_round_of": [
 		{
+			"declarations": [
 				"input round",
 				"input total",
 				"local roundNum = round: number",
 				"local totalNum = total: number"
 			],
+			"selectors": [],
+			"match": {
+				"*": "Round {roundNum} of {totalNum}"
 			}
 		}
 	],
@@ -1030,10 +1146,13 @@
 	"focus_log_failed": "This interval couldn't be saved. It won't be retried.",
 	"focus_duration_seconds": [
 		{
+			"declarations": [
 				"input seconds",
 				"local secondsNum = seconds: number",
 				"local secondsPlural = seconds: plural"
 			],
+			"selectors": ["secondsPlural"],
+			"match": {
 				"secondsPlural=one": "{secondsNum}s focused",
 				"secondsPlural=other": "{secondsNum}s focused"
 			}
@@ -1041,20 +1160,28 @@
 	],
 	"focus_duration_minutes": [
 		{
+			"declarations": [
 				"input minutes",
 				"local minutesNum = minutes: number",
 				"local minutesPlural = minutes: plural"
 			],
+			"selectors": ["minutesPlural"],
+			"match": {
+				"minutesPlural=one": "{minutesNum}m focused",
+				"minutesPlural=other": "{minutesNum}m focused"
 			}
 		}
 	],
 	"focus_duration_hours_minutes": [
 		{
+			"declarations": [
 				"input hours",
 				"input minutes",
 				"local hoursNum = hours: number",
 				"local hoursPlural = hours: plural"
 			],
+			"selectors": ["hoursPlural"],
+			"match": {
 				"hoursPlural=one": "{hoursNum}h {minutes}m focused",
 				"hoursPlural=other": "{hoursNum}h {minutes}m focused"
 			}
@@ -1066,12 +1193,15 @@
 	"karma_vacation_panel_note_until": "Vacation pauses streak breaks and goal penalties until {date}. It is a pause, not a cheat -- points are still only earned by real completions.",
 	"karma_level_maxed_aria": [
 		{
+			"declarations": [
 				"input level",
 				"input points",
 				"local levelNum = level: number",
 				"local pointsNum = points: number",
 				"local pointsPlural = points: plural"
 			],
+			"selectors": ["pointsPlural"],
+			"match": {
 				"pointsPlural=one": "Level {levelNum}, max level reached, {pointsNum} point",
 				"pointsPlural=other": "Level {levelNum}, max level reached, {pointsNum} points"
 			}
@@ -1079,6 +1209,7 @@
 	],
 	"karma_level_progress_aria": [
 		{
+			"declarations": [
 				"input into",
 				"input level",
 				"input next",
@@ -1089,6 +1220,8 @@
 				"local spanNum = span: number",
 				"local spanPlural = span: plural"
 			],
+			"selectors": ["spanPlural"],
+			"match": {
 				"spanPlural=one": "Level {levelNum}, {intoNum} of {spanNum} point toward level {nextNum}",
 				"spanPlural=other": "Level {levelNum}, {intoNum} of {spanNum} points toward level {nextNum}"
 			}
@@ -1096,16 +1229,25 @@
 	],
 	"karma_points_short": [
 		{
+			"declarations": [
 				"input points",
 				"local pointsNum = points: number",
 				"local pointsPlural = points: plural"
 			],
+			"selectors": ["pointsPlural"],
+			"match": {
+				"pointsPlural=one": "{pointsNum} pts",
+				"pointsPlural=other": "{pointsNum} pts"
 			}
 		}
 	],
 	"karma_level_max": "Max level",
 	"karma_level_next": [
 		{
+			"declarations": ["input points", "local pointsNum = points: number"],
+			"selectors": [],
+			"match": {
+				"*": "Next: {pointsNum}"
 			}
 		}
 	],
@@ -1115,41 +1257,57 @@
 	"karma_goal_weekly_unset_aria": "Weekly goal not set",
 	"karma_goal_daily_aria": [
 		{
+			"declarations": [
 				"input done",
 				"input goal",
 				"local doneNum = done: number",
 				"local goalNum = goal: number"
 			],
+			"selectors": [],
+			"match": {
+				"*": "Daily goal {doneNum} of {goalNum}"
 			}
 		}
 	],
 	"karma_goal_weekly_aria": [
 		{
+			"declarations": [
 				"input done",
 				"input goal",
 				"local doneNum = done: number",
 				"local goalNum = goal: number"
 			],
+			"selectors": [],
+			"match": {
+				"*": "Weekly goal {doneNum} of {goalNum}"
 			}
 		}
 	],
 	"karma_goal_daily_met_aria": [
 		{
+			"declarations": [
 				"input done",
 				"input goal",
 				"local doneNum = done: number",
 				"local goalNum = goal: number"
 			],
+			"selectors": [],
+			"match": {
+				"*": "Daily goal {doneNum} of {goalNum}, met"
 			}
 		}
 	],
 	"karma_goal_weekly_met_aria": [
 		{
+			"declarations": [
 				"input done",
 				"input goal",
 				"local doneNum = done: number",
 				"local goalNum = goal: number"
 			],
+			"selectors": [],
+			"match": {
+				"*": "Weekly goal {doneNum} of {goalNum}, met"
 			}
 		}
 	],
@@ -1232,10 +1390,15 @@
 	"assignee_open": "Assign",
 	"assignee_open_count": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Assignees ({countNum})",
+				"countPlural=other": "Assignees ({countNum})"
 			}
 		}
 	],
@@ -1272,6 +1435,11 @@
 	"mention_invite_done": "Done",
 	"mention_invite_created": [
 		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Invite created. Share the link; each person joins on accept.",
+				"countPlural=other": "Invites created. Share the links; each person joins on accept."
 			}
 		}
 	],
@@ -1365,6 +1533,10 @@
 	"sync_earlier_edits_incomplete_detail": "Some earlier offline data could not be checked. Keep Ditero's data and do not uninstall it. If you may have unsynced edits from an earlier version, close Ditero and ask your server operator how to recover them.",
 	"sync_retirement_blocked": [
 		{
+			"declarations": ["input count", "local countNum = count: number"],
+			"selectors": [],
+			"match": {
+				"*": "Unsynced edits: {countNum}. This device cannot save them. Keep this app open until the server confirms them, then retry."
 			}
 		}
 	],
@@ -1377,10 +1549,15 @@
 	"sync_reauth_action": "Sign in again",
 	"sync_pending_count": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} recent change not synced yet",
+				"countPlural=other": "{countNum} recent changes not synced yet"
 			}
 		}
 	],
@@ -1395,110 +1572,170 @@
 	"snackbar_task_move_failed": "Could not move: {title}",
 	"selection_count": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} task selected",
+				"countPlural=other": "{countNum} tasks selected"
 			}
 		}
 	],
 	"snackbar_bulk_checked": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Checked {countNum} item.",
+				"countPlural=other": "Checked {countNum} items."
 			}
 		}
 	],
 	"snackbar_bulk_completed": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Completed {countNum} task.",
+				"countPlural=other": "Completed {countNum} tasks."
 			}
 		}
 	],
 	"snackbar_bulk_undo_skips_recurring": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Undo skips {countNum} recurring task.",
+				"countPlural=other": "Undo skips {countNum} recurring tasks."
 			}
 		}
 	],
 	"snackbar_bulk_recurring_advanced": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} recurring task moved to its next date.",
+				"countPlural=other": "{countNum} recurring tasks moved to their next date."
 			}
 		}
 	],
 	"snackbar_bulk_complete_failed": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Could not complete {countNum} task",
+				"countPlural=other": "Could not complete {countNum} tasks"
 			}
 		}
 	],
 	"snackbar_bulk_moved": [
 		{
+			"declarations": [
 				"input count",
 				"input list",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Moved {countNum} task to {list}",
+				"countPlural=other": "Moved {countNum} tasks to {list}"
 			}
 		}
 	],
 	"snackbar_bulk_move_failed": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Could not move {countNum} task",
+				"countPlural=other": "Could not move {countNum} tasks"
 			}
 		}
 	],
 	"snackbar_bulk_update_failed": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Could not update {countNum} task",
+				"countPlural=other": "Could not update {countNum} tasks"
 			}
 		}
 	],
 	"snackbar_bulk_delete_failed": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Could not delete {countNum} task",
+				"countPlural=other": "Could not delete {countNum} tasks"
 			}
 		}
 	],
 	"bulk_delete_title": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Delete {countNum} task?",
+				"countPlural=other": "Delete {countNum} tasks?"
 			}
 		}
 	],
 	"bulk_delete_confirm": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "This deletes {countNum} task and its subtasks. This cannot be undone.",
+				"countPlural=other": "This deletes {countNum} tasks and their subtasks. This cannot be undone."
 			}
 		}
 	],
@@ -1556,11 +1793,16 @@
 	"list_delete_title": "Delete list?",
 	"list_delete_confirm": [
 		{
+			"declarations": [
 				"input count",
 				"input title",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Delete “{title}” and its {countNum} item? This cannot be undone.",
+				"countPlural=other": "Delete “{title}” and its {countNum} items? This cannot be undone."
 			}
 		}
 	],
@@ -1578,11 +1820,16 @@
 	"task_delete_confirm": "Delete “{title}”? This cannot be undone.",
 	"task_delete_confirm_subtasks": [
 		{
+			"declarations": [
 				"input count",
 				"input title",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Delete “{title}”? This also deletes {countNum} subtask. This cannot be undone.",
+				"countPlural=other": "Delete “{title}”? This also deletes {countNum} subtasks. This cannot be undone."
 			}
 		}
 	],
@@ -1692,10 +1939,15 @@
 	"e2e_rewrap_failed": "That could not be saved. Try again.",
 	"e2e_grant_who_overflow": [
 		{
+			"declarations": [
 				"input count",
 				"local countPlural = count: plural",
 				"local countNum = count: number"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "and {countNum} other",
+				"countPlural=other": "and {countNum} others"
 			}
 		}
 	],
@@ -1716,10 +1968,15 @@
 	"attachment_add_to_comment": "Attach a file",
 	"attachment_count_label": [
 		{
+			"declarations": [
 				"input count",
 				"local countPlural = count: plural",
 				"local countNum = count: number"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} file",
+				"countPlural=other": "{countNum} files"
 			}
 		}
 	],
@@ -2194,10 +2451,15 @@
 	"tui_order_key": "Order key: {key}",
 	"tui_order_children_stay": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} subtask stays attached",
+				"countPlural=other": "{countNum} subtasks stay attached"
 			}
 		}
 	],
@@ -2337,10 +2599,15 @@
 	"archive_export_download_requested": "{file}: Download requested.",
 	"archive_export_selected_count": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} file selected",
+				"countPlural=other": "{countNum} files selected"
 			}
 		}
 	],
@@ -2456,10 +2723,15 @@
 	"setup_managed": "A managed account cannot add starter content. Ask your guardian to organize your shared lists.",
 	"setup_task_count": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} task",
+				"countPlural=other": "{countNum} tasks"
 			}
 		}
 	],

@@ -351,15 +351,6 @@
 	"security_error_sign_out": "تعذّر إكمال تسجيل الخروج. حاول مرة أخرى.",
 	"security_passkeys_heading": "مفاتيح المرور",
 	"security_passkeys_empty": "سجّل الدخول ببصمتك أو وجهك أو رمز الجهاز بدلًا من كلمة المرور.",
-	"security_sso_heading": "تسجيل الدخول الموحّد",
-	"security_sso_description": "اربط مزوّد الهوية الخاص بمؤسستك بهذا الحساب. تسجيل الدخول الموحّد لا يمنح وحده أي وصول إلى مساحة عمل.",
-	"security_sso_linked": "مرتبط",
-	"security_sso_not_linked": "غير مرتبط",
-	"security_sso_link": "ربط",
-	"security_sso_unlink": "إلغاء الربط",
-	"security_sso_error_load": "تعذّر تحميل عمليات تسجيل الدخول المرتبطة بحسابك.",
-	"security_sso_error_link": "تعذّر بدء ربط تسجيل الدخول الموحّد.",
-	"security_sso_error_unlink": "تعذّر إلغاء ربط تسجيل الدخول الموحّد.",
 	"security_add_passkey": "إضافة مفتاح مرور",
 	"security_passkey_unnamed": "مفتاح مرور",
 	"security_passkey_remove": "إزالة",
@@ -399,10 +390,13 @@
 	"due_tomorrow": "غدًا",
 	"list_completed_count": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
 				"countPlural=zero": "لا عناصر مكتملة",
 				"countPlural=one": "عنصر واحد مكتمل",
 				"countPlural=two": "عنصران مكتملان",
@@ -414,10 +408,19 @@
 	],
 	"list_in_cart_count": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لا شيء في السلة",
+				"countPlural=one": "عنصر واحد في السلة",
+				"countPlural=two": "عنصران في السلة",
+				"countPlural=few": "{countNum} عناصر في السلة",
+				"countPlural=many": "{countNum} عنصرًا في السلة",
+				"countPlural=other": "{countNum} عنصر في السلة"
 			}
 		}
 	],
@@ -555,12 +558,15 @@
 	"task_open_details": "فتح التفاصيل",
 	"task_subtask_progress_aria": [
 		{
+			"declarations": [
 				"input done",
 				"input total",
 				"local doneNum = done: number",
 				"local totalNum = total: number",
 				"local totalPlural = total: plural"
 			],
+			"selectors": ["totalPlural"],
+			"match": {
 				"totalPlural=zero": "المهام الفرعية المكتملة: {doneNum} من {totalNum}",
 				"totalPlural=one": "المهام الفرعية المكتملة: {doneNum} من {totalNum}",
 				"totalPlural=two": "المهام الفرعية المكتملة: {doneNum} من {totalNum}",
@@ -572,11 +578,14 @@
 	],
 	"task_subtask_progress": [
 		{
+			"declarations": [
 				"input done",
 				"input total",
 				"local doneNum = done: number",
 				"local totalNum = total: number"
 			],
+			"selectors": [],
+			"match": {
 				"*": "{doneNum}/{totalNum}"
 			}
 		}
@@ -637,60 +646,132 @@
 	"recurrence_invalid": "تكرار غير صالح.",
 	"recurrence_unit_daily": [
 		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "أيام",
+				"countPlural=one": "يوم",
+				"countPlural=two": "يومان",
+				"countPlural=few": "أيام",
+				"countPlural=many": "يومًا",
+				"countPlural=other": "يوم"
 			}
 		}
 	],
 	"recurrence_unit_weekly": [
 		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "أسابيع",
+				"countPlural=one": "أسبوع",
+				"countPlural=two": "أسبوعان",
+				"countPlural=few": "أسابيع",
+				"countPlural=many": "أسبوعًا",
+				"countPlural=other": "أسبوع"
 			}
 		}
 	],
 	"recurrence_unit_monthly": [
 		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "أشهر",
+				"countPlural=one": "شهر",
+				"countPlural=two": "شهران",
+				"countPlural=few": "أشهر",
+				"countPlural=many": "شهرًا",
+				"countPlural=other": "شهر"
 			}
 		}
 	],
 	"recurrence_unit_yearly": [
 		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "سنوات",
+				"countPlural=one": "سنة",
+				"countPlural=two": "سنتان",
+				"countPlural=few": "سنوات",
+				"countPlural=many": "سنة",
+				"countPlural=other": "سنة"
 			}
 		}
 	],
 	"recurrence_summary_daily": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لا يتكرر",
+				"countPlural=one": "كل يوم",
+				"countPlural=two": "كل يومين",
+				"countPlural=few": "كل {countNum} أيام",
+				"countPlural=many": "كل {countNum} يومًا",
+				"countPlural=other": "كل {countNum} يوم"
 			}
 		}
 	],
 	"recurrence_summary_weekly": [
 		{
+			"declarations": [
 				"input count",
 				"input days",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لا يتكرر",
+				"countPlural=one": "كل أسبوع في {days}",
+				"countPlural=two": "كل أسبوعين في {days}",
+				"countPlural=few": "كل {countNum} أسابيع في {days}",
+				"countPlural=many": "كل {countNum} أسبوعًا في {days}",
+				"countPlural=other": "كل {countNum} أسبوع في {days}"
 			}
 		}
 	],
 	"recurrence_summary_monthly": [
 		{
+			"declarations": [
 				"input count",
 				"input monthday",
 				"local countNum = count: number",
 				"local countPlural = count: plural",
 				"local monthdayNum = monthday: number"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لا يتكرر",
+				"countPlural=one": "كل شهر في اليوم {monthdayNum}",
+				"countPlural=two": "كل شهرين في اليوم {monthdayNum}",
+				"countPlural=few": "كل {countNum} أشهر في اليوم {monthdayNum}",
+				"countPlural=many": "كل {countNum} شهرًا في اليوم {monthdayNum}",
+				"countPlural=other": "كل {countNum} شهر في اليوم {monthdayNum}"
 			}
 		}
 	],
 	"recurrence_summary_yearly": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لا يتكرر",
+				"countPlural=one": "كل سنة",
+				"countPlural=two": "كل سنتين",
+				"countPlural=few": "كل {countNum} سنوات",
+				"countPlural=many": "كل {countNum} سنة",
+				"countPlural=other": "كل {countNum} سنة"
 			}
 		}
 	],
@@ -701,10 +782,14 @@
 	"reminder_until_quiet_hours_end": "نهاية ساعات الهدوء",
 	"reminder_escalating": [
 		{
+			"declarations": [
 				"input count",
 				"input max",
 				"local countNum = count: number"
 			],
+			"selectors": [],
+			"match": {
+				"*": "تصعيد ({countNum} من {max})"
 			}
 		}
 	],
@@ -820,19 +905,37 @@
 	"calendar_day_today": "{date}، اليوم",
 	"filter_multi_selected": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لا عناصر محددة",
+				"countPlural=one": "عنصر واحد محدد",
+				"countPlural=two": "عنصران محددان",
+				"countPlural=few": "{countNum} عناصر محددة",
+				"countPlural=many": "{countNum} عنصرًا محددًا",
+				"countPlural=other": "{countNum} عنصر محدد"
 			}
 		}
 	],
 	"board_column_count": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لا عناصر",
+				"countPlural=one": "عنصر واحد",
+				"countPlural=two": "عنصران",
+				"countPlural=few": "{countNum} عناصر",
+				"countPlural=many": "{countNum} عنصرًا",
+				"countPlural=other": "{countNum} عنصر"
 			}
 		}
 	],
@@ -855,10 +958,19 @@
 	"panel_replace_view": "استبدال طريقة العرض",
 	"panel_label_habits": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لا عادات",
+				"countPlural=one": "عادة واحدة",
+				"countPlural=two": "عادتان",
+				"countPlural=few": "{countNum} عادات",
+				"countPlural=many": "{countNum} عادة",
+				"countPlural=other": "{countNum} عادة"
 			}
 		}
 	],
@@ -895,11 +1007,15 @@
 	"panel_no_views": "لا توجد طرق عرض محفوظة بعد.",
 	"panel_habits_legend": [
 		{
+			"declarations": [
 				"input max",
 				"input min",
 				"local maxNum = max: number",
 				"local minNum = min: number"
 			],
+			"selectors": [],
+			"match": {
+				"*": "العادات (اختر من {minNum} إلى {maxNum})"
 			}
 		}
 	],
@@ -916,11 +1032,15 @@
 	"panel_field_size": "الحجم",
 	"panel_field_limit": [
 		{
+			"declarations": [
 				"input max",
 				"input min",
 				"local maxNum = max: number",
 				"local minNum = min: number"
 			],
+			"selectors": [],
+			"match": {
+				"*": "الحد ({minNum}-{maxNum})"
 			}
 		}
 	],
@@ -931,30 +1051,48 @@
 	"panel_all_done": "لا شيء مفتوح هنا",
 	"panel_show_all": [
 		{
+			"declarations": ["input count", "local countNum = count: number"],
+			"selectors": [],
+			"match": {
+				"*": "عرض الكل ({countNum})"
 			}
 		}
 	],
 	"panel_expand_title": [
 		{
+			"declarations": [
 				"input count",
 				"input label",
 				"local countNum = count: number"
 			],
+			"selectors": [],
+			"match": {
+				"*": "{label} ({countNum})"
 			}
 		}
 	],
 	"panel_counter_aria": [
 		{
+			"declarations": [
 				"input count",
 				"input label",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "{label}: لا مهام مطابقة. عرضها",
+				"countPlural=one": "{label}: مهمة واحدة مطابقة. عرضها",
+				"countPlural=two": "{label}: مهمتان مطابقتان. عرضهما",
+				"countPlural=few": "{label}: {countNum} مهام مطابقة. عرضها",
+				"countPlural=many": "{label}: {countNum} مهمة مطابقة. عرضها",
+				"countPlural=other": "{label}: {countNum} مهمة مطابقة. عرضها"
 			}
 		}
 	],
 	"panel_streak_row_aria": [
 		{
+			"declarations": [
 				"input title",
 				"input count",
 				"input pct",
@@ -962,16 +1100,33 @@
 				"local countPlural = count: plural",
 				"local pctNum = pct: number"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "{title}: لا سلسلة، {pctNum}% على المسار. فتح المهمة",
+				"countPlural=one": "{title}: سلسلة يوم واحد، {pctNum}% على المسار. فتح المهمة",
+				"countPlural=two": "{title}: سلسلة يومين، {pctNum}% على المسار. فتح المهمة",
+				"countPlural=few": "{title}: سلسلة {countNum} أيام، {pctNum}% على المسار. فتح المهمة",
+				"countPlural=many": "{title}: سلسلة {countNum} يومًا، {pctNum}% على المسار. فتح المهمة",
+				"countPlural=other": "{title}: سلسلة {countNum} يوم، {pctNum}% على المسار. فتح المهمة"
 			}
 		}
 	],
 	"panel_streak_row_new_aria": [
 		{
+			"declarations": [
 				"input title",
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "{title}: لا سلسلة. فتح المهمة",
+				"countPlural=one": "{title}: سلسلة يوم واحد. فتح المهمة",
+				"countPlural=two": "{title}: سلسلة يومين. فتح المهمة",
+				"countPlural=few": "{title}: سلسلة {countNum} أيام. فتح المهمة",
+				"countPlural=many": "{title}: سلسلة {countNum} يومًا. فتح المهمة",
+				"countPlural=other": "{title}: سلسلة {countNum} يوم. فتح المهمة"
 			}
 		}
 	],
@@ -980,15 +1135,27 @@
 	"panel_streak_missing": "عادة مفقودة (محذوفة أو غير مشتركة معك)",
 	"panel_focus_sessions_unit": [
 		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "جلسات تركيز",
+				"countPlural=one": "جلسة تركيز",
+				"countPlural=two": "جلستا تركيز",
+				"countPlural=few": "جلسات تركيز",
+				"countPlural=many": "جلسة تركيز",
+				"countPlural=other": "جلسة تركيز"
 			}
 		}
 	],
 	"panel_focus_minutes": [
 		{
+			"declarations": [
 				"input minutes",
 				"local minutesNum = minutes: number",
 				"local minutesPlural = minutes: plural"
 			],
+			"selectors": ["minutesPlural"],
+			"match": {
 				"minutesPlural=zero": "لا دقائق تركيز",
 				"minutesPlural=one": "دقيقة تركيز واحدة",
 				"minutesPlural=two": "دقيقتا تركيز",
@@ -1005,15 +1172,28 @@
 	"habit_done_action": "أنجزتها اليوم",
 	"habit_streak_days": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لا أيام",
+				"countPlural=one": "يوم واحد",
+				"countPlural=two": "يومان",
+				"countPlural=few": "{countNum} أيام",
+				"countPlural=many": "{countNum} يومًا",
+				"countPlural=other": "{countNum} يوم"
 			}
 		}
 	],
 	"habit_adherence": [
 		{
+			"declarations": ["input pct", "local pctNum = pct: number"],
+			"selectors": [],
+			"match": {
+				"*": "{pctNum}% على المسار"
 			}
 		}
 	],
@@ -1027,11 +1207,15 @@
 	"focus_phase_long_break": "استراحة طويلة",
 	"focus_round_of": [
 		{
+			"declarations": [
 				"input round",
 				"input total",
 				"local roundNum = round: number",
 				"local totalNum = total: number"
 			],
+			"selectors": [],
+			"match": {
+				"*": "الجولة {roundNum} من {totalNum}"
 			}
 		}
 	],
@@ -1046,10 +1230,13 @@
 	"focus_log_failed": "تعذر حفظ هذه الفترة. لن تتكرر محاولة حفظها.",
 	"focus_duration_seconds": [
 		{
+			"declarations": [
 				"input seconds",
 				"local secondsNum = seconds: number",
 				"local secondsPlural = seconds: plural"
 			],
+			"selectors": ["secondsPlural"],
+			"match": {
 				"secondsPlural=zero": "لا ثوانٍ تركيز",
 				"secondsPlural=one": "ثانية تركيز واحدة",
 				"secondsPlural=two": "ثانيتا تركيز",
@@ -1061,20 +1248,32 @@
 	],
 	"focus_duration_minutes": [
 		{
+			"declarations": [
 				"input minutes",
 				"local minutesNum = minutes: number",
 				"local minutesPlural = minutes: plural"
 			],
+			"selectors": ["minutesPlural"],
+			"match": {
+				"minutesPlural=zero": "لا دقائق تركيز",
+				"minutesPlural=one": "دقيقة تركيز واحدة",
+				"minutesPlural=two": "دقيقتا تركيز",
+				"minutesPlural=few": "{minutesNum} دقائق تركيز",
+				"minutesPlural=many": "{minutesNum} دقيقة تركيز",
+				"minutesPlural=other": "{minutesNum} دقيقة تركيز"
 			}
 		}
 	],
 	"focus_duration_hours_minutes": [
 		{
+			"declarations": [
 				"input hours",
 				"input minutes",
 				"local hoursNum = hours: number",
 				"local hoursPlural = hours: plural"
 			],
+			"selectors": ["hoursPlural"],
+			"match": {
 				"hoursPlural=zero": "{hoursNum} ساعة و{minutes} دقيقة تركيز",
 				"hoursPlural=one": "ساعة و{minutes} دقيقة تركيز",
 				"hoursPlural=two": "ساعتان و{minutes} دقيقة تركيز",
@@ -1090,12 +1289,15 @@
 	"karma_vacation_panel_note_until": "توقف الإجازة انقطاع السلاسل وخصومات الأهداف حتى {date}. هي إيقاف مؤقت وليست التفافًا - ما زالت النقاط تُكتسب بالإنجازات الحقيقية فقط.",
 	"karma_level_maxed_aria": [
 		{
+			"declarations": [
 				"input level",
 				"input points",
 				"local levelNum = level: number",
 				"local pointsNum = points: number",
 				"local pointsPlural = points: plural"
 			],
+			"selectors": ["pointsPlural"],
+			"match": {
 				"pointsPlural=zero": "المستوى {levelNum}، بلغت أعلى مستوى، لا نقاط",
 				"pointsPlural=one": "المستوى {levelNum}، بلغت أعلى مستوى، نقطة واحدة",
 				"pointsPlural=two": "المستوى {levelNum}، بلغت أعلى مستوى، نقطتان",
@@ -1107,6 +1309,7 @@
 	],
 	"karma_level_progress_aria": [
 		{
+			"declarations": [
 				"input into",
 				"input level",
 				"input next",
@@ -1117,6 +1320,8 @@
 				"local spanNum = span: number",
 				"local spanPlural = span: plural"
 			],
+			"selectors": ["spanPlural"],
+			"match": {
 				"spanPlural=zero": "المستوى {levelNum}، {intoNum} من {spanNum} نقطة نحو المستوى {nextNum}",
 				"spanPlural=one": "المستوى {levelNum}، {intoNum} من نقطة واحدة نحو المستوى {nextNum}",
 				"spanPlural=two": "المستوى {levelNum}، {intoNum} من نقطتين نحو المستوى {nextNum}",
@@ -1128,16 +1333,29 @@
 	],
 	"karma_points_short": [
 		{
+			"declarations": [
 				"input points",
 				"local pointsNum = points: number",
 				"local pointsPlural = points: plural"
 			],
+			"selectors": ["pointsPlural"],
+			"match": {
+				"pointsPlural=zero": "لا نقاط",
+				"pointsPlural=one": "نقطة واحدة",
+				"pointsPlural=two": "نقطتان",
+				"pointsPlural=few": "{pointsNum} نقاط",
+				"pointsPlural=many": "{pointsNum} نقطة",
+				"pointsPlural=other": "{pointsNum} نقطة"
 			}
 		}
 	],
 	"karma_level_max": "أعلى مستوى",
 	"karma_level_next": [
 		{
+			"declarations": ["input points", "local pointsNum = points: number"],
+			"selectors": [],
+			"match": {
+				"*": "التالي: {pointsNum}"
 			}
 		}
 	],
@@ -1147,41 +1365,57 @@
 	"karma_goal_weekly_unset_aria": "الهدف الأسبوعي غير محدد",
 	"karma_goal_daily_aria": [
 		{
+			"declarations": [
 				"input done",
 				"input goal",
 				"local doneNum = done: number",
 				"local goalNum = goal: number"
 			],
+			"selectors": [],
+			"match": {
+				"*": "الهدف اليومي {doneNum} من {goalNum}"
 			}
 		}
 	],
 	"karma_goal_weekly_aria": [
 		{
+			"declarations": [
 				"input done",
 				"input goal",
 				"local doneNum = done: number",
 				"local goalNum = goal: number"
 			],
+			"selectors": [],
+			"match": {
+				"*": "الهدف الأسبوعي {doneNum} من {goalNum}"
 			}
 		}
 	],
 	"karma_goal_daily_met_aria": [
 		{
+			"declarations": [
 				"input done",
 				"input goal",
 				"local doneNum = done: number",
 				"local goalNum = goal: number"
 			],
+			"selectors": [],
+			"match": {
+				"*": "الهدف اليومي {doneNum} من {goalNum}، تحقق"
 			}
 		}
 	],
 	"karma_goal_weekly_met_aria": [
 		{
+			"declarations": [
 				"input done",
 				"input goal",
 				"local doneNum = done: number",
 				"local goalNum = goal: number"
 			],
+			"selectors": [],
+			"match": {
+				"*": "الهدف الأسبوعي {doneNum} من {goalNum}، تحقق"
 			}
 		}
 	],
@@ -1264,10 +1498,19 @@
 	"assignee_open": "إسناد",
 	"assignee_open_count": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "المكلَّفون ({countNum})",
+				"countPlural=one": "المكلَّفون ({countNum})",
+				"countPlural=two": "المكلَّفون ({countNum})",
+				"countPlural=few": "المكلَّفون ({countNum})",
+				"countPlural=many": "المكلَّفون ({countNum})",
+				"countPlural=other": "المكلَّفون ({countNum})"
 			}
 		}
 	],
@@ -1304,6 +1547,15 @@
 	"mention_invite_done": "تم",
 	"mention_invite_created": [
 		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لم تُنشأ أي دعوة.",
+				"countPlural=one": "أُنشئت الدعوة. شارك الرابط؛ ينضم الشخص عند القبول.",
+				"countPlural=two": "أُنشئت الدعوتان. شارك الرابطين؛ ينضم كل شخص عند القبول.",
+				"countPlural=few": "أُنشئت الدعوات. شارك الروابط؛ ينضم كل شخص عند القبول.",
+				"countPlural=many": "أُنشئت الدعوات. شارك الروابط؛ ينضم كل شخص عند القبول.",
+				"countPlural=other": "أُنشئت الدعوات. شارك الروابط؛ ينضم كل شخص عند القبول."
 			}
 		}
 	],
@@ -1397,6 +1649,10 @@
 	"sync_earlier_edits_incomplete_detail": "تعذّر التحقق من بعض البيانات السابقة دون اتصال. احتفظ ببيانات Ditero ولا تُلغِ تثبيته. إذا كان لديك تعديلات غير مُزامَنة من إصدار سابق، فأغلق Ditero واسأل من يدير خادمك عن كيفية استعادتها.",
 	"sync_retirement_blocked": [
 		{
+			"declarations": ["input count", "local countNum = count: number"],
+			"selectors": [],
+			"match": {
+				"*": "التعديلات غير المُزامَنة: {countNum}. لا يستطيع هذا الجهاز حفظها. أبقِ التطبيق مفتوحًا حتى يؤكدها الخادم، ثم حاول مجددًا."
 			}
 		}
 	],
@@ -1409,10 +1665,19 @@
 	"sync_reauth_action": "سجّل الدخول مرة أخرى",
 	"sync_pending_count": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لا تغييرات حديثة غير مُزامَنة",
+				"countPlural=one": "تغيير حديث واحد لم يُزامَن بعد",
+				"countPlural=two": "تغييران حديثان لم يُزامَنا بعد",
+				"countPlural=few": "{countNum} تغييرات حديثة لم تُزامَن بعد",
+				"countPlural=many": "{countNum} تغييرًا حديثًا لم يُزامَن بعد",
+				"countPlural=other": "{countNum} تغيير حديث لم يُزامَن بعد"
 			}
 		}
 	],
@@ -1427,110 +1692,218 @@
 	"snackbar_task_move_failed": "تعذر نقل: {title}",
 	"selection_count": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لا مهام محددة",
+				"countPlural=one": "مهمة واحدة محددة",
+				"countPlural=two": "مهمتان محددتان",
+				"countPlural=few": "{countNum} مهام محددة",
+				"countPlural=many": "{countNum} مهمة محددة",
+				"countPlural=other": "{countNum} مهمة محددة"
 			}
 		}
 	],
 	"snackbar_bulk_checked": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لم يُؤشَّر أي عنصر.",
+				"countPlural=one": "أُشِّر عنصر واحد.",
+				"countPlural=two": "أُشِّر عنصران.",
+				"countPlural=few": "أُشِّرت {countNum} عناصر.",
+				"countPlural=many": "أُشِّر {countNum} عنصرًا.",
+				"countPlural=other": "أُشِّر {countNum} عنصر."
 			}
 		}
 	],
 	"snackbar_bulk_completed": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لم تكتمل أي مهمة.",
+				"countPlural=one": "اكتملت مهمة واحدة.",
+				"countPlural=two": "اكتملت مهمتان.",
+				"countPlural=few": "اكتملت {countNum} مهام.",
+				"countPlural=many": "اكتملت {countNum} مهمة.",
+				"countPlural=other": "اكتملت {countNum} مهمة."
 			}
 		}
 	],
 	"snackbar_bulk_undo_skips_recurring": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "التراجع يشمل كل المهام.",
+				"countPlural=one": "التراجع لا يشمل المهمة المتكررة.",
+				"countPlural=two": "التراجع لا يشمل المهمتين المتكررتين.",
+				"countPlural=few": "التراجع لا يشمل {countNum} مهام متكررة.",
+				"countPlural=many": "التراجع لا يشمل {countNum} مهمة متكررة.",
+				"countPlural=other": "التراجع لا يشمل {countNum} مهمة متكررة."
 			}
 		}
 	],
 	"snackbar_bulk_recurring_advanced": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لم تنتقل أي مهمة متكررة.",
+				"countPlural=one": "انتقلت مهمة متكررة واحدة إلى موعدها التالي.",
+				"countPlural=two": "انتقلت مهمتان متكررتان إلى موعدهما التالي.",
+				"countPlural=few": "انتقلت {countNum} مهام متكررة إلى مواعيدها التالية.",
+				"countPlural=many": "انتقلت {countNum} مهمة متكررة إلى مواعيدها التالية.",
+				"countPlural=other": "انتقلت {countNum} مهمة متكررة إلى مواعيدها التالية."
 			}
 		}
 	],
 	"snackbar_bulk_complete_failed": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "تعذّر إكمال المهام",
+				"countPlural=one": "تعذّر إكمال مهمة واحدة",
+				"countPlural=two": "تعذّر إكمال مهمتين",
+				"countPlural=few": "تعذّر إكمال {countNum} مهام",
+				"countPlural=many": "تعذّر إكمال {countNum} مهمة",
+				"countPlural=other": "تعذّر إكمال {countNum} مهمة"
 			}
 		}
 	],
 	"snackbar_bulk_moved": [
 		{
+			"declarations": [
 				"input count",
 				"input list",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لم تُنقل أي مهمة إلى {list}",
+				"countPlural=one": "نُقلت مهمة واحدة إلى {list}",
+				"countPlural=two": "نُقلت مهمتان إلى {list}",
+				"countPlural=few": "نُقلت {countNum} مهام إلى {list}",
+				"countPlural=many": "نُقلت {countNum} مهمة إلى {list}",
+				"countPlural=other": "نُقلت {countNum} مهمة إلى {list}"
 			}
 		}
 	],
 	"snackbar_bulk_move_failed": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "تعذّر نقل المهام",
+				"countPlural=one": "تعذّر نقل مهمة واحدة",
+				"countPlural=two": "تعذّر نقل مهمتين",
+				"countPlural=few": "تعذّر نقل {countNum} مهام",
+				"countPlural=many": "تعذّر نقل {countNum} مهمة",
+				"countPlural=other": "تعذّر نقل {countNum} مهمة"
 			}
 		}
 	],
 	"snackbar_bulk_update_failed": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "تعذّر تحديث المهام",
+				"countPlural=one": "تعذّر تحديث مهمة واحدة",
+				"countPlural=two": "تعذّر تحديث مهمتين",
+				"countPlural=few": "تعذّر تحديث {countNum} مهام",
+				"countPlural=many": "تعذّر تحديث {countNum} مهمة",
+				"countPlural=other": "تعذّر تحديث {countNum} مهمة"
 			}
 		}
 	],
 	"snackbar_bulk_delete_failed": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "تعذّر حذف المهام",
+				"countPlural=one": "تعذّر حذف مهمة واحدة",
+				"countPlural=two": "تعذّر حذف مهمتين",
+				"countPlural=few": "تعذّر حذف {countNum} مهام",
+				"countPlural=many": "تعذّر حذف {countNum} مهمة",
+				"countPlural=other": "تعذّر حذف {countNum} مهمة"
 			}
 		}
 	],
 	"bulk_delete_title": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "حذف المهام؟",
+				"countPlural=one": "حذف مهمة واحدة؟",
+				"countPlural=two": "حذف مهمتين؟",
+				"countPlural=few": "حذف {countNum} مهام؟",
+				"countPlural=many": "حذف {countNum} مهمة؟",
+				"countPlural=other": "حذف {countNum} مهمة؟"
 			}
 		}
 	],
 	"bulk_delete_confirm": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لن تُحذف أي مهمة.",
+				"countPlural=one": "سيُحذف مهمة واحدة مع مهامها الفرعية. لا يمكن التراجع عن هذا.",
+				"countPlural=two": "ستُحذف مهمتان مع مهامهما الفرعية. لا يمكن التراجع عن هذا.",
+				"countPlural=few": "ستُحذف {countNum} مهام مع مهامها الفرعية. لا يمكن التراجع عن هذا.",
+				"countPlural=many": "ستُحذف {countNum} مهمة مع مهامها الفرعية. لا يمكن التراجع عن هذا.",
+				"countPlural=other": "ستُحذف {countNum} مهمة مع مهامها الفرعية. لا يمكن التراجع عن هذا."
 			}
 		}
 	],
@@ -1588,11 +1961,20 @@
 	"list_delete_title": "حذف القائمة؟",
 	"list_delete_confirm": [
 		{
+			"declarations": [
 				"input count",
 				"input title",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "حذف «{title}» وهي بلا عناصر؟ لا يمكن التراجع عن هذا.",
+				"countPlural=one": "حذف «{title}» وعنصر واحد بداخلها؟ لا يمكن التراجع عن هذا.",
+				"countPlural=two": "حذف «{title}» وعنصرين بداخلها؟ لا يمكن التراجع عن هذا.",
+				"countPlural=few": "حذف «{title}» و{countNum} عناصر بداخلها؟ لا يمكن التراجع عن هذا.",
+				"countPlural=many": "حذف «{title}» و{countNum} عنصرًا بداخلها؟ لا يمكن التراجع عن هذا.",
+				"countPlural=other": "حذف «{title}» و{countNum} عنصر بداخلها؟ لا يمكن التراجع عن هذا."
 			}
 		}
 	],
@@ -1610,11 +1992,20 @@
 	"task_delete_confirm": "حذف «{title}»؟ لا يمكن التراجع عن هذا.",
 	"task_delete_confirm_subtasks": [
 		{
+			"declarations": [
 				"input count",
 				"input title",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "حذف «{title}»؟ لا يمكن التراجع عن هذا.",
+				"countPlural=one": "حذف «{title}»؟ ستُحذف معها مهمة فرعية واحدة. لا يمكن التراجع عن هذا.",
+				"countPlural=two": "حذف «{title}»؟ ستُحذف معها مهمتان فرعيتان. لا يمكن التراجع عن هذا.",
+				"countPlural=few": "حذف «{title}»؟ ستُحذف معها {countNum} مهام فرعية. لا يمكن التراجع عن هذا.",
+				"countPlural=many": "حذف «{title}»؟ ستُحذف معها {countNum} مهمة فرعية. لا يمكن التراجع عن هذا.",
+				"countPlural=other": "حذف «{title}»؟ ستُحذف معها {countNum} مهمة فرعية. لا يمكن التراجع عن هذا."
 			}
 		}
 	],
@@ -1724,10 +2115,19 @@
 	"e2e_rewrap_failed": "تعذّر الحفظ. حاول مرة أخرى.",
 	"e2e_grant_who_overflow": [
 		{
+			"declarations": [
 				"input count",
 				"local countPlural = count: plural",
 				"local countNum = count: number"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "ولا أشخاص آخرون",
+				"countPlural=one": "وشخص آخر",
+				"countPlural=two": "وشخصان آخران",
+				"countPlural=few": "و{countNum} أشخاص آخرين",
+				"countPlural=many": "و{countNum} شخصًا آخر",
+				"countPlural=other": "و{countNum} شخص آخر"
 			}
 		}
 	],
@@ -1748,10 +2148,19 @@
 	"attachment_add_to_comment": "إرفاق ملف",
 	"attachment_count_label": [
 		{
+			"declarations": [
 				"input count",
 				"local countPlural = count: plural",
 				"local countNum = count: number"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لا ملفات",
+				"countPlural=one": "ملف واحد",
+				"countPlural=two": "ملفان",
+				"countPlural=few": "{countNum} ملفات",
+				"countPlural=many": "{countNum} ملفًا",
+				"countPlural=other": "{countNum} ملف"
 			}
 		}
 	],
@@ -2226,10 +2635,19 @@
 	"tui_order_key": "مفتاح الترتيب: {key}",
 	"tui_order_children_stay": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لا مهام فرعية مرتبطة",
+				"countPlural=one": "تبقى مهمة فرعية واحدة مرتبطة",
+				"countPlural=two": "تبقى مهمتان فرعيتان مرتبطتين",
+				"countPlural=few": "تبقى {countNum} مهام فرعية مرتبطة",
+				"countPlural=many": "تبقى {countNum} مهمة فرعية مرتبطة",
+				"countPlural=other": "تبقى {countNum} مهمة فرعية مرتبطة"
 			}
 		}
 	],
@@ -2369,10 +2787,19 @@
 	"archive_export_download_requested": "{file}: طُلب التنزيل.",
 	"archive_export_selected_count": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لم يُحدد أي ملف ({countNum})",
+				"countPlural=one": "حُدد ملف واحد ({countNum})",
+				"countPlural=two": "حُدد ملفان ({countNum})",
+				"countPlural=few": "حُددت {countNum} ملفات",
+				"countPlural=many": "حُدد {countNum} ملفًا",
+				"countPlural=other": "حُدد {countNum} ملف"
 			}
 		}
 	],
@@ -2488,10 +2915,19 @@
 	"setup_managed": "لا يمكن للحساب المُدار إضافة محتوى البداية. اطلب من ولي أمرك تنظيم قوائمك المشتركة.",
 	"setup_task_count": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "{countNum} مهمة",
+				"countPlural=one": "{countNum} مهمة",
+				"countPlural=two": "{countNum} مهمتان",
+				"countPlural=few": "{countNum} مهام",
+				"countPlural=many": "{countNum} مهمة",
+				"countPlural=other": "{countNum} مهمة"
 			}
 		}
 	],

@@ -348,15 +348,6 @@
 	"security_error_sign_out": "Deconectarea nu s-a putut finaliza. Încearcă din nou.",
 	"security_passkeys_heading": "Passkey-uri",
 	"security_passkeys_empty": "Conectează-te cu amprenta, fața sau PIN-ul dispozitivului în loc de parolă.",
-	"security_sso_heading": "Autentificare unică (SSO)",
-	"security_sso_description": "Asociază furnizorul de identitate al organizației tale cu acest cont. Conectarea prin SSO nu dă, singură, acces la un spațiu.",
-	"security_sso_linked": "asociat",
-	"security_sso_not_linked": "neasociat",
-	"security_sso_link": "Asociază",
-	"security_sso_unlink": "Dezasociază",
-	"security_sso_error_load": "Conectările tale asociate nu au putut fi încărcate.",
-	"security_sso_error_link": "Asocierea autentificării unice nu a putut fi pornită.",
-	"security_sso_error_unlink": "Autentificarea unică nu a putut fi dezasociată.",
 	"security_add_passkey": "Adaugă un passkey",
 	"security_passkey_unnamed": "Passkey",
 	"security_passkey_remove": "Elimină",
@@ -396,10 +387,13 @@
 	"due_tomorrow": "Mâine",
 	"list_completed_count": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
 				"countPlural=one": "{countNum} element finalizat",
 				"countPlural=few": "{countNum} elemente finalizate",
 				"countPlural=other": "{countNum} de elemente finalizate"
@@ -408,10 +402,16 @@
 	],
 	"list_in_cart_count": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} produs în coș",
+				"countPlural=few": "{countNum} produse în coș",
+				"countPlural=other": "{countNum} de produse în coș"
 			}
 		}
 	],
@@ -549,12 +549,15 @@
 	"task_open_details": "Deschide detaliile",
 	"task_subtask_progress_aria": [
 		{
+			"declarations": [
 				"input done",
 				"input total",
 				"local doneNum = done: number",
 				"local totalNum = total: number",
 				"local totalPlural = total: plural"
 			],
+			"selectors": ["totalPlural"],
+			"match": {
 				"totalPlural=one": "{doneNum} din {totalNum} subsarcină finalizată",
 				"totalPlural=few": "{doneNum} din {totalNum} subsarcini finalizate",
 				"totalPlural=other": "{doneNum} din {totalNum} de subsarcini finalizate"
@@ -563,11 +566,14 @@
 	],
 	"task_subtask_progress": [
 		{
+			"declarations": [
 				"input done",
 				"input total",
 				"local doneNum = done: number",
 				"local totalNum = total: number"
 			],
+			"selectors": [],
+			"match": {
 				"*": "{doneNum}/{totalNum}"
 			}
 		}
@@ -628,60 +634,108 @@
 	"recurrence_invalid": "Recurență invalidă.",
 	"recurrence_unit_daily": [
 		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "zi",
+				"countPlural=few": "zile",
+				"countPlural=other": "de zile"
 			}
 		}
 	],
 	"recurrence_unit_weekly": [
 		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "săptămână",
+				"countPlural=few": "săptămâni",
+				"countPlural=other": "de săptămâni"
 			}
 		}
 	],
 	"recurrence_unit_monthly": [
 		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "lună",
+				"countPlural=few": "luni",
+				"countPlural=other": "de luni"
 			}
 		}
 	],
 	"recurrence_unit_yearly": [
 		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "an",
+				"countPlural=few": "ani",
+				"countPlural=other": "de ani"
 			}
 		}
 	],
 	"recurrence_summary_daily": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "În fiecare zi",
+				"countPlural=few": "La fiecare {countNum} zile",
+				"countPlural=other": "La fiecare {countNum} de zile"
 			}
 		}
 	],
 	"recurrence_summary_weekly": [
 		{
+			"declarations": [
 				"input count",
 				"input days",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "În fiecare săptămână, {days}",
+				"countPlural=few": "La fiecare {countNum} săptămâni, {days}",
+				"countPlural=other": "La fiecare {countNum} de săptămâni, {days}"
 			}
 		}
 	],
 	"recurrence_summary_monthly": [
 		{
+			"declarations": [
 				"input count",
 				"input monthday",
 				"local countNum = count: number",
 				"local countPlural = count: plural",
 				"local monthdayNum = monthday: number"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "În fiecare lună, în ziua {monthdayNum}",
+				"countPlural=few": "La fiecare {countNum} luni, în ziua {monthdayNum}",
+				"countPlural=other": "La fiecare {countNum} de luni, în ziua {monthdayNum}"
 			}
 		}
 	],
 	"recurrence_summary_yearly": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "În fiecare an",
+				"countPlural=few": "La fiecare {countNum} ani",
+				"countPlural=other": "La fiecare {countNum} de ani"
 			}
 		}
 	],
@@ -692,10 +746,14 @@
 	"reminder_until_quiet_hours_end": "sfârșitul orelor de liniște",
 	"reminder_escalating": [
 		{
+			"declarations": [
 				"input count",
 				"input max",
 				"local countNum = count: number"
 			],
+			"selectors": [],
+			"match": {
+				"*": "Escaladare ({countNum} din {max})"
 			}
 		}
 	],
@@ -811,19 +869,31 @@
 	"calendar_day_today": "{date}, azi",
 	"filter_multi_selected": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} selectat",
+				"countPlural=few": "{countNum} selectate",
+				"countPlural=other": "{countNum} de selectate"
 			}
 		}
 	],
 	"board_column_count": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} element",
+				"countPlural=few": "{countNum} elemente",
+				"countPlural=other": "{countNum} de elemente"
 			}
 		}
 	],
@@ -846,10 +916,16 @@
 	"panel_replace_view": "Înlocuiește vizualizarea",
 	"panel_label_habits": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} obicei",
+				"countPlural=few": "{countNum} obiceiuri",
+				"countPlural=other": "{countNum} de obiceiuri"
 			}
 		}
 	],
@@ -886,11 +962,15 @@
 	"panel_no_views": "Nicio vizualizare salvată încă.",
 	"panel_habits_legend": [
 		{
+			"declarations": [
 				"input max",
 				"input min",
 				"local maxNum = max: number",
 				"local minNum = min: number"
 			],
+			"selectors": [],
+			"match": {
+				"*": "Obiceiuri (alege {minNum}-{maxNum})"
 			}
 		}
 	],
@@ -907,11 +987,15 @@
 	"panel_field_size": "Dimensiune",
 	"panel_field_limit": [
 		{
+			"declarations": [
 				"input max",
 				"input min",
 				"local maxNum = max: number",
 				"local minNum = min: number"
 			],
+			"selectors": [],
+			"match": {
+				"*": "Limită ({minNum}-{maxNum})"
 			}
 		}
 	],
@@ -922,30 +1006,45 @@
 	"panel_all_done": "Nimic deschis aici",
 	"panel_show_all": [
 		{
+			"declarations": ["input count", "local countNum = count: number"],
+			"selectors": [],
+			"match": {
+				"*": "Arată tot ({countNum})"
 			}
 		}
 	],
 	"panel_expand_title": [
 		{
+			"declarations": [
 				"input count",
 				"input label",
 				"local countNum = count: number"
 			],
+			"selectors": [],
+			"match": {
+				"*": "{label} ({countNum})"
 			}
 		}
 	],
 	"panel_counter_aria": [
 		{
+			"declarations": [
 				"input count",
 				"input label",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{label}: {countNum} sarcină potrivită. Afișează-le",
+				"countPlural=few": "{label}: {countNum} sarcini potrivite. Afișează-le",
+				"countPlural=other": "{label}: {countNum} de sarcini potrivite. Afișează-le"
 			}
 		}
 	],
 	"panel_streak_row_aria": [
 		{
+			"declarations": [
 				"input title",
 				"input count",
 				"input pct",
@@ -953,16 +1052,27 @@
 				"local countPlural = count: plural",
 				"local pctNum = pct: number"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{title}: serie de {countNum} zi, {pctNum}% respectat. Deschide sarcina",
+				"countPlural=few": "{title}: serie de {countNum} zile, {pctNum}% respectat. Deschide sarcina",
+				"countPlural=other": "{title}: serie de {countNum} de zile, {pctNum}% respectat. Deschide sarcina"
 			}
 		}
 	],
 	"panel_streak_row_new_aria": [
 		{
+			"declarations": [
 				"input title",
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{title}: serie de {countNum} zi. Deschide sarcina",
+				"countPlural=few": "{title}: serie de {countNum} zile. Deschide sarcina",
+				"countPlural=other": "{title}: serie de {countNum} de zile. Deschide sarcina"
 			}
 		}
 	],
@@ -971,15 +1081,24 @@
 	"panel_streak_missing": "Obicei lipsă (șters sau nepartajat cu tine)",
 	"panel_focus_sessions_unit": [
 		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "sesiune de concentrare",
+				"countPlural=few": "sesiuni de concentrare",
+				"countPlural=other": "de sesiuni de concentrare"
 			}
 		}
 	],
 	"panel_focus_minutes": [
 		{
+			"declarations": [
 				"input minutes",
 				"local minutesNum = minutes: number",
 				"local minutesPlural = minutes: plural"
 			],
+			"selectors": ["minutesPlural"],
+			"match": {
 				"minutesPlural=one": "{minutesNum} min de concentrare",
 				"minutesPlural=few": "{minutesNum} min de concentrare",
 				"minutesPlural=other": "{minutesNum} min de concentrare"
@@ -993,15 +1112,25 @@
 	"habit_done_action": "Făcut azi",
 	"habit_streak_days": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} zi",
+				"countPlural=few": "{countNum} zile",
+				"countPlural=other": "{countNum} de zile"
 			}
 		}
 	],
 	"habit_adherence": [
 		{
+			"declarations": ["input pct", "local pctNum = pct: number"],
+			"selectors": [],
+			"match": {
+				"*": "{pctNum}% respectat"
 			}
 		}
 	],
@@ -1015,11 +1144,15 @@
 	"focus_phase_long_break": "Pauză lungă",
 	"focus_round_of": [
 		{
+			"declarations": [
 				"input round",
 				"input total",
 				"local roundNum = round: number",
 				"local totalNum = total: number"
 			],
+			"selectors": [],
+			"match": {
+				"*": "Runda {roundNum} din {totalNum}"
 			}
 		}
 	],
@@ -1034,10 +1167,13 @@
 	"focus_log_failed": "Intervalul nu a putut fi salvat. Nu se va reîncerca.",
 	"focus_duration_seconds": [
 		{
+			"declarations": [
 				"input seconds",
 				"local secondsNum = seconds: number",
 				"local secondsPlural = seconds: plural"
 			],
+			"selectors": ["secondsPlural"],
+			"match": {
 				"secondsPlural=one": "{secondsNum}s de concentrare",
 				"secondsPlural=few": "{secondsNum}s de concentrare",
 				"secondsPlural=other": "{secondsNum}s de concentrare"
@@ -1046,20 +1182,29 @@
 	],
 	"focus_duration_minutes": [
 		{
+			"declarations": [
 				"input minutes",
 				"local minutesNum = minutes: number",
 				"local minutesPlural = minutes: plural"
 			],
+			"selectors": ["minutesPlural"],
+			"match": {
+				"minutesPlural=one": "{minutesNum}m de concentrare",
+				"minutesPlural=few": "{minutesNum}m de concentrare",
+				"minutesPlural=other": "{minutesNum}m de concentrare"
 			}
 		}
 	],
 	"focus_duration_hours_minutes": [
 		{
+			"declarations": [
 				"input hours",
 				"input minutes",
 				"local hoursNum = hours: number",
 				"local hoursPlural = hours: plural"
 			],
+			"selectors": ["hoursPlural"],
+			"match": {
 				"hoursPlural=one": "{hoursNum}h {minutes}m de concentrare",
 				"hoursPlural=few": "{hoursNum}h {minutes}m de concentrare",
 				"hoursPlural=other": "{hoursNum}h {minutes}m de concentrare"
@@ -1072,12 +1217,15 @@
 	"karma_vacation_panel_note_until": "Vacanța oprește pierderea seriilor și penalizările de obiectiv până la {date}. E o pauză, nu o portiță -- punctele se câștigă tot doar prin finalizări reale.",
 	"karma_level_maxed_aria": [
 		{
+			"declarations": [
 				"input level",
 				"input points",
 				"local levelNum = level: number",
 				"local pointsNum = points: number",
 				"local pointsPlural = points: plural"
 			],
+			"selectors": ["pointsPlural"],
+			"match": {
 				"pointsPlural=one": "Nivelul {levelNum}, nivel maxim atins, {pointsNum} punct",
 				"pointsPlural=few": "Nivelul {levelNum}, nivel maxim atins, {pointsNum} puncte",
 				"pointsPlural=other": "Nivelul {levelNum}, nivel maxim atins, {pointsNum} de puncte"
@@ -1086,6 +1234,7 @@
 	],
 	"karma_level_progress_aria": [
 		{
+			"declarations": [
 				"input into",
 				"input level",
 				"input next",
@@ -1096,6 +1245,8 @@
 				"local spanNum = span: number",
 				"local spanPlural = span: plural"
 			],
+			"selectors": ["spanPlural"],
+			"match": {
 				"spanPlural=one": "Nivelul {levelNum}, {intoNum} din {spanNum} punct până la nivelul {nextNum}",
 				"spanPlural=few": "Nivelul {levelNum}, {intoNum} din {spanNum} puncte până la nivelul {nextNum}",
 				"spanPlural=other": "Nivelul {levelNum}, {intoNum} din {spanNum} de puncte până la nivelul {nextNum}"
@@ -1104,16 +1255,26 @@
 	],
 	"karma_points_short": [
 		{
+			"declarations": [
 				"input points",
 				"local pointsNum = points: number",
 				"local pointsPlural = points: plural"
 			],
+			"selectors": ["pointsPlural"],
+			"match": {
+				"pointsPlural=one": "{pointsNum} pct",
+				"pointsPlural=few": "{pointsNum} pct",
+				"pointsPlural=other": "{pointsNum} de pct"
 			}
 		}
 	],
 	"karma_level_max": "Nivel maxim",
 	"karma_level_next": [
 		{
+			"declarations": ["input points", "local pointsNum = points: number"],
+			"selectors": [],
+			"match": {
+				"*": "Următorul: {pointsNum}"
 			}
 		}
 	],
@@ -1123,41 +1284,57 @@
 	"karma_goal_weekly_unset_aria": "Obiectivul săptămânal nu este setat",
 	"karma_goal_daily_aria": [
 		{
+			"declarations": [
 				"input done",
 				"input goal",
 				"local doneNum = done: number",
 				"local goalNum = goal: number"
 			],
+			"selectors": [],
+			"match": {
+				"*": "Obiectiv zilnic: {doneNum} din {goalNum}"
 			}
 		}
 	],
 	"karma_goal_weekly_aria": [
 		{
+			"declarations": [
 				"input done",
 				"input goal",
 				"local doneNum = done: number",
 				"local goalNum = goal: number"
 			],
+			"selectors": [],
+			"match": {
+				"*": "Obiectiv săptămânal: {doneNum} din {goalNum}"
 			}
 		}
 	],
 	"karma_goal_daily_met_aria": [
 		{
+			"declarations": [
 				"input done",
 				"input goal",
 				"local doneNum = done: number",
 				"local goalNum = goal: number"
 			],
+			"selectors": [],
+			"match": {
+				"*": "Obiectiv zilnic: {doneNum} din {goalNum}, atins"
 			}
 		}
 	],
 	"karma_goal_weekly_met_aria": [
 		{
+			"declarations": [
 				"input done",
 				"input goal",
 				"local doneNum = done: number",
 				"local goalNum = goal: number"
 			],
+			"selectors": [],
+			"match": {
+				"*": "Obiectiv săptămânal: {doneNum} din {goalNum}, atins"
 			}
 		}
 	],
@@ -1240,10 +1417,16 @@
 	"assignee_open": "Atribuie",
 	"assignee_open_count": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Responsabili ({countNum})",
+				"countPlural=few": "Responsabili ({countNum})",
+				"countPlural=other": "Responsabili ({countNum})"
 			}
 		}
 	],
@@ -1280,6 +1463,12 @@
 	"mention_invite_done": "Gata",
 	"mention_invite_created": [
 		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Invitație creată. Distribuie linkul; fiecare persoană se alătură când acceptă.",
+				"countPlural=few": "Invitații create. Distribuie linkurile; fiecare persoană se alătură când acceptă.",
+				"countPlural=other": "Invitații create. Distribuie linkurile; fiecare persoană se alătură când acceptă."
 			}
 		}
 	],
@@ -1373,6 +1562,10 @@
 	"sync_earlier_edits_incomplete_detail": "Unele date offline anterioare nu au putut fi verificate. Păstrează datele Ditero și nu dezinstala aplicația. Dacă ai putea avea modificări nesincronizate dintr-o versiune anterioară, închide Ditero și întreabă persoana care administrează serverul tău cum le recuperezi.",
 	"sync_retirement_blocked": [
 		{
+			"declarations": ["input count", "local countNum = count: number"],
+			"selectors": [],
+			"match": {
+				"*": "Modificări nesincronizate: {countNum}. Acest dispozitiv nu le poate salva. Ține aplicația deschisă până când serverul le confirmă, apoi încearcă din nou."
 			}
 		}
 	],
@@ -1385,10 +1578,16 @@
 	"sync_reauth_action": "Autentifică-te din nou",
 	"sync_pending_count": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} modificare recentă nesincronizată încă",
+				"countPlural=few": "{countNum} modificări recente nesincronizate încă",
+				"countPlural=other": "{countNum} de modificări recente nesincronizate încă"
 			}
 		}
 	],
@@ -1403,110 +1602,182 @@
 	"snackbar_task_move_failed": "Nu s-a putut muta: {title}",
 	"selection_count": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} sarcină selectată",
+				"countPlural=few": "{countNum} sarcini selectate",
+				"countPlural=other": "{countNum} de sarcini selectate"
 			}
 		}
 	],
 	"snackbar_bulk_checked": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} articol bifat.",
+				"countPlural=few": "{countNum} articole bifate.",
+				"countPlural=other": "{countNum} de articole bifate."
 			}
 		}
 	],
 	"snackbar_bulk_completed": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} sarcină finalizată.",
+				"countPlural=few": "{countNum} sarcini finalizate.",
+				"countPlural=other": "{countNum} de sarcini finalizate."
 			}
 		}
 	],
 	"snackbar_bulk_undo_skips_recurring": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Anularea omite {countNum} sarcină recurentă.",
+				"countPlural=few": "Anularea omite {countNum} sarcini recurente.",
+				"countPlural=other": "Anularea omite {countNum} de sarcini recurente."
 			}
 		}
 	],
 	"snackbar_bulk_recurring_advanced": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} sarcină recurentă a trecut la următoarea dată.",
+				"countPlural=few": "{countNum} sarcini recurente au trecut la următoarea dată.",
+				"countPlural=other": "{countNum} de sarcini recurente au trecut la următoarea dată."
 			}
 		}
 	],
 	"snackbar_bulk_complete_failed": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Nu s-a putut finaliza {countNum} sarcină",
+				"countPlural=few": "Nu s-au putut finaliza {countNum} sarcini",
+				"countPlural=other": "Nu s-au putut finaliza {countNum} de sarcini"
 			}
 		}
 	],
 	"snackbar_bulk_moved": [
 		{
+			"declarations": [
 				"input count",
 				"input list",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} sarcină mutată în {list}",
+				"countPlural=few": "{countNum} sarcini mutate în {list}",
+				"countPlural=other": "{countNum} de sarcini mutate în {list}"
 			}
 		}
 	],
 	"snackbar_bulk_move_failed": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Nu s-a putut muta {countNum} sarcină",
+				"countPlural=few": "Nu s-au putut muta {countNum} sarcini",
+				"countPlural=other": "Nu s-au putut muta {countNum} de sarcini"
 			}
 		}
 	],
 	"snackbar_bulk_update_failed": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Nu s-a putut actualiza {countNum} sarcină",
+				"countPlural=few": "Nu s-au putut actualiza {countNum} sarcini",
+				"countPlural=other": "Nu s-au putut actualiza {countNum} de sarcini"
 			}
 		}
 	],
 	"snackbar_bulk_delete_failed": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Nu s-a putut șterge {countNum} sarcină",
+				"countPlural=few": "Nu s-au putut șterge {countNum} sarcini",
+				"countPlural=other": "Nu s-au putut șterge {countNum} de sarcini"
 			}
 		}
 	],
 	"bulk_delete_title": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Ștergi {countNum} sarcină?",
+				"countPlural=few": "Ștergi {countNum} sarcini?",
+				"countPlural=other": "Ștergi {countNum} de sarcini?"
 			}
 		}
 	],
 	"bulk_delete_confirm": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Se șterge {countNum} sarcină împreună cu subsarcinile ei. Această acțiune nu poate fi anulată.",
+				"countPlural=few": "Se șterg {countNum} sarcini împreună cu subsarcinile lor. Această acțiune nu poate fi anulată.",
+				"countPlural=other": "Se șterg {countNum} de sarcini împreună cu subsarcinile lor. Această acțiune nu poate fi anulată."
 			}
 		}
 	],
@@ -1564,11 +1835,17 @@
 	"list_delete_title": "Ștergi lista?",
 	"list_delete_confirm": [
 		{
+			"declarations": [
 				"input count",
 				"input title",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Ștergi „{title}” și {countNum} element? Această acțiune nu poate fi anulată.",
+				"countPlural=few": "Ștergi „{title}” și {countNum} elemente? Această acțiune nu poate fi anulată.",
+				"countPlural=other": "Ștergi „{title}” și {countNum} de elemente? Această acțiune nu poate fi anulată."
 			}
 		}
 	],
@@ -1586,11 +1863,17 @@
 	"task_delete_confirm": "Ștergi „{title}”? Această acțiune nu poate fi anulată.",
 	"task_delete_confirm_subtasks": [
 		{
+			"declarations": [
 				"input count",
 				"input title",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Ștergi „{title}”? Se șterge și {countNum} subsarcină. Această acțiune nu poate fi anulată.",
+				"countPlural=few": "Ștergi „{title}”? Se șterg și {countNum} subsarcini. Această acțiune nu poate fi anulată.",
+				"countPlural=other": "Ștergi „{title}”? Se șterg și {countNum} de subsarcini. Această acțiune nu poate fi anulată."
 			}
 		}
 	],
@@ -1700,10 +1983,16 @@
 	"e2e_rewrap_failed": "Nu s-a putut salva. Încearcă din nou.",
 	"e2e_grant_who_overflow": [
 		{
+			"declarations": [
 				"input count",
 				"local countPlural = count: plural",
 				"local countNum = count: number"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "și încă {countNum} persoană",
+				"countPlural=few": "și încă {countNum} persoane",
+				"countPlural=other": "și încă {countNum} de persoane"
 			}
 		}
 	],
@@ -1724,10 +2013,16 @@
 	"attachment_add_to_comment": "Atașează un fișier",
 	"attachment_count_label": [
 		{
+			"declarations": [
 				"input count",
 				"local countPlural = count: plural",
 				"local countNum = count: number"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} fișier",
+				"countPlural=few": "{countNum} fișiere",
+				"countPlural=other": "{countNum} de fișiere"
 			}
 		}
 	],
@@ -2202,10 +2497,16 @@
 	"tui_order_key": "Cheie de ordine: {key}",
 	"tui_order_children_stay": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} subsarcină rămâne atașată",
+				"countPlural=few": "{countNum} subsarcini rămân atașate",
+				"countPlural=other": "{countNum} de subsarcini rămân atașate"
 			}
 		}
 	],
@@ -2345,10 +2646,16 @@
 	"archive_export_download_requested": "{file}: Descărcare solicitată.",
 	"archive_export_selected_count": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} fișier selectat",
+				"countPlural=few": "{countNum} fișiere selectate",
+				"countPlural=other": "{countNum} de fișiere selectate"
 			}
 		}
 	],
@@ -2464,10 +2771,16 @@
 	"setup_managed": "Un cont gestionat nu poate adăuga conținut de pornire. Cere tutorelui sau tutoarei tale să organizeze listele tale partajate.",
 	"setup_task_count": [
 		{
+			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} sarcină",
+				"countPlural=few": "{countNum} sarcini",
+				"countPlural=other": "{countNum} de sarcini"
 			}
 		}
 	],
