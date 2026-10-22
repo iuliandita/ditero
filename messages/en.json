@@ -1507,6 +1507,24 @@
 	"sync_rejected_title": "A change wasn't saved",
 	"sync_rejected_detail": "The server refused a change, so it was undone. Check the item and try again.",
 	"sync_rejected_dismiss": "Dismiss",
+	"sync_storage_failed_title": "Not saved on this device",
+	"sync_storage_failed_detail": "This device can't store your changes right now. An edit is kept only once it reaches the server, so keep this app open until nothing is waiting to sync. Free up storage space, then restart the app.",
+	"sync_storage_offline_title": "Offline, can't save on this device",
+	"sync_storage_offline_detail": "Can't reach the server, and this device can't store your changes. New edits are paused until the connection is back. Keep this app open: edits that haven't synced yet are lost if it closes.",
+	"sync_storage_reauth_detail": "Your sign-in expired, and this device cannot save your edits. Keep this app open. Sign in to Ditero in another tab or window, then return here so pending edits can sync. Closing this app before the server confirms them loses those edits.",
+	"sync_earlier_edits_incomplete_title": "Could not check all earlier offline data",
+	"sync_earlier_edits_incomplete_detail": "Some earlier offline data could not be checked. Keep Ditero's data and do not uninstall it. If you may have unsynced edits from an earlier version, close Ditero and ask your server operator how to recover them.",
+	"sync_retirement_blocked": [
+		{
+			"declarations": ["input count", "local countNum = count: number"],
+			"selectors": [],
+			"match": {
+				"*": "Unsynced edits: {countNum}. This device cannot save them. Keep this app open until the server confirms them, then retry."
+			}
+		}
+	],
+	"sync_earlier_edits_title": "Unsynced edits from an earlier version",
+	"sync_earlier_edits_detail": "This device still holds edits made with an earlier version of Ditero that never reached the server. This version can't send them, and a few minutes after it starts it deletes that earlier copy once it has gone unused for two days. To keep them, close Ditero now, don't clear its data or uninstall it, and ask whoever runs your server how to recover them with the earlier version.",
 	"sync_auth_rejected_title": "Sync sign-in refused",
 	"sync_auth_rejected_detail": "The server is not accepting your sign-in. Trying again less often. Your changes remain saved on this device.",
 	"sync_reauth_title": "Sign in to sync",

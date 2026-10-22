@@ -37,11 +37,12 @@ function useHeld(active: boolean, delayMs: number): boolean {
 export function useSyncStatus(): {
 	phase: SyncPhase;
 	pending: number;
+	sessionExpired: boolean;
 	dismissRejection: () => void;
 } {
 	const connection = useConnectionState();
 	const tracker = useSyncTracker();
-	const { pending, rejected, sessionExpired, authRejected } =
+	const { pending, rejected, sessionExpired, authRejected, storageFailed } =
 		useSyncExternalStore(tracker.subscribe, tracker.getSnapshot);
 	const browserOnline = useSyncExternalStore(
 		subscribeOnline,
@@ -69,8 +70,10 @@ export function useSyncStatus(): {
 			sessionExpired,
 			authRejected,
 			offlineSettled: graceElapsed || !browserOnline,
+			storageFailed,
 		}),
 		pending: pendingShown,
+		sessionExpired,
 		dismissRejection: tracker.dismissRejection,
 	};
 }

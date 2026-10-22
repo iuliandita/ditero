@@ -13,6 +13,18 @@ The first beta is a `0.x` prerelease, not a stable release. Native device/platfo
 qualification, trusted Windows/macOS signing, deep links and automatic updates
 remain incomplete in [#346](https://github.com/iuliandita/ditero/issues/346).
 
+- **Sync every device before upgrading from an alpha.** Sync moves to Zero 1.11.1,
+  which starts a new local database on every browser, Android and desktop client.
+  Edits made offline with an alpha that have not reached the server stay in the
+  old local database and this version cannot send them. Bring each client online
+  and wait until its sync indicator shows Synced before updating, especially
+  Android and desktop apps used offline. If such edits are found, the beta warns on
+  start; close it and follow the
+  [Zero upgrade guide](docs/runbooks/database-roles.md#zero-111-upgrade-and-rollback).
+- When this device cannot store changes, for example because storage is full or
+  unavailable, the sync indicator says so. Edits are then kept only once they
+  reach the server, and edits made while offline are refused instead of appearing
+  saved.
 - Task rows use icons for personal and shared workspaces while keeping workspace
   names, translated tooltips and screen-reader descriptions.
 - Google sign-in setup is documented for self-hosters. Compose now passes the

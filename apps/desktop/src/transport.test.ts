@@ -28,6 +28,7 @@ vi.mock("@tauri-apps/api/window", () => ({
 }));
 vi.mock("../../../src/web/lib/zero-lifecycle.ts", () => ({
 	retireZeroClients: state.retire,
+	retirementErrorMessage: () => "Pending changes could not be saved.",
 }));
 
 vi.mock("../../../src/paraglide/messages.js", () => ({

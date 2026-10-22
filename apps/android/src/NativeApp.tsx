@@ -24,7 +24,11 @@ import {
 	type NativeTaskLinkNavigation,
 } from "../../../src/web/lib/native-account.tsx";
 import { AppZeroProvider } from "../../../src/web/lib/zero.tsx";
-import { retireZeroClients } from "../../../src/web/lib/zero-lifecycle.ts";
+import {
+	retirementErrorMessage,
+	retireZeroClients,
+	ZeroRetirementError,
+} from "../../../src/web/lib/zero-lifecycle.ts";
 import { Workspace } from "../../../src/web/routes/Workspace.tsx";
 import {
 	bridgeState,
@@ -138,7 +142,11 @@ function NativeAppRoutes({
 			throw new Error("native account changed during startup");
 		const runtime = createNativeRuntime(context, {
 			retireZero: () => retireZeroClients(),
-			onSessionEndFailed() {
+			onSessionEndFailed(error) {
+				if (error instanceof ZeroRetirementError) {
+					show({ message: retirementErrorMessage(error) });
+					return;
+				}
 				show({ message: m.security_error_sign_out() });
 				const current = bridgeState();
 				if (
@@ -254,11 +262,17 @@ function NativeAppRoutes({
 		setError(null);
 		setPending(false);
 		try {
+			await retireZeroClients();
 			const result = await completeOnce();
 			if (result === "pending" || result === "finishing") setPending(true);
 			else await activate(owner);
-		} catch {
-			if (owner === epoch.current) setError(m.native_signin_failed());
+		} catch (error) {
+			if (owner === epoch.current)
+				setError(
+					error instanceof ZeroRetirementError
+						? retirementErrorMessage(error)
+						: m.native_signin_failed(),
+				);
 		} finally {
 			if (owner === epoch.current) setBusy(false);
 		}
@@ -273,7 +287,13 @@ function NativeAppRoutes({
 			await links?.retire();
 			if (owner !== epoch.current) return;
 		} catch (error) {
-			if (owner === epoch.current) show({ message: m.native_connect_failed() });
+			if (owner === epoch.current)
+				show({
+					message:
+						error instanceof ZeroRetirementError
+							? retirementErrorMessage(error)
+							: m.native_connect_failed(),
+				});
 			throw error;
 		}
 		epoch.current++;

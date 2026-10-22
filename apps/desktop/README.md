@@ -27,6 +27,13 @@ journal tracks interrupted writes so retries reclaim uncommitted chunks. Local U
 and sync persistence retain server/account scopes. Closing waits for durable local sync retirement before
 native sockets are drained and the window is destroyed; a failure keeps it open.
 
+When device storage fails, sign-out and account/server changes wait for the
+actual pending sync queue to be acknowledged by the server. A localized warning
+gives the unsynced count; keep the app open, reconnect, and retry after it drains.
+Blocked retirement retains the running sync client and credentials. Shared-client
+and unit checks cover this policy; packaged device behavior still needs runtime
+qualification. See [database recovery](../../docs/runbooks/database-roles.md#recovering-from-a-database-outage).
+
 Recovery-code downloads use the native system save dialog and account-bound write
 operations. Cancelling leaves the code visible; a failed save shows a retryable error.
 

@@ -23,6 +23,13 @@ network failures permit this fallback; invalid credentials, trust failures,
 expired evidence, and failed revocation storage stay unavailable. Offline task
 editing and account/server transitions still require broader device qualification.
 
+When device storage fails, sign-out and account/server changes wait for the
+actual pending sync queue to be acknowledged by the server. A localized warning
+gives the unsynced count; keep the app open, reconnect, and retry after it drains.
+Blocked retirement retains the running sync client and credentials. Shared-client
+and unit checks cover this policy; packaged device behavior still needs runtime
+qualification. See [database recovery](../../docs/runbooks/database-roles.md#recovering-from-a-database-outage).
+
 ## Android Back and Activity recreation
 
 Back dismisses the topmost dialog, sheet or menu through its existing close policy,

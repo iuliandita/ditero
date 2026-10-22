@@ -20,7 +20,7 @@ async function call<A>(
 			tx: Parameters<Parameters<typeof zdb.transaction>[0]>[0];
 			ctx: { id: string };
 			args: A;
-		}) => Promise<void>;
+		}) => Promise<unknown>;
 	},
 	actor: string,
 	args: A,

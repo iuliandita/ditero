@@ -242,7 +242,7 @@ export type NativeRuntimeHooks = {
 	retireZero(): Promise<void>;
 	/** Called asynchronously after native session metadata changed to signed out. */
 	onSessionEnded(): void;
-	onSessionEndFailed?(): void;
+	onSessionEndFailed?(error?: unknown): void;
 };
 
 export type NativeRuntimes = {
@@ -301,8 +301,9 @@ export function createNativeRuntime(
 						if (current.gen === context.gen && !current.session)
 							hooks.onSessionEnded();
 					})
-					.catch(() => {
-						if (bridgeState().gen === context.gen) hooks.onSessionEndFailed?.();
+					.catch((error: unknown) => {
+						if (bridgeState().gen === context.gen)
+							hooks.onSessionEndFailed?.(error);
 					});
 			});
 			try {
@@ -350,9 +351,9 @@ export function createNativeRuntime(
 		// Confirmed replies prove durable cleanup. A snapshot can only prove absent
 		// authority; that outcome leaves the account UI with an explicit failure notice.
 		async signOut() {
+			assertCurrent(context);
+			await hooks.retireZero();
 			try {
-				assertCurrent(context);
-				await hooks.retireZero();
 				assertCurrent(context);
 				const result = await revokeSession();
 				if (result.remote === "unknown") hooks.onSessionEndFailed?.();

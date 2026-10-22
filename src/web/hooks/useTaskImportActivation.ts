@@ -16,7 +16,7 @@ export type TaskImportActivationStatus =
 
 export function resolveTaskImportActivation(
 	rows: readonly Pick<TaskNotificationActivation, "taskId" | "status">[],
-	queryType: "unknown" | "complete" | "error",
+	queryType: "unknown" | "cached" | "complete" | "error",
 	taskId: string | null | undefined,
 	hasImportActivation?: unknown,
 ): TaskImportActivationStatus {
@@ -32,7 +32,7 @@ export function resolveTaskImportActivation(
 
 export function resolveCachedTaskImportActivation(
 	rows: readonly Pick<TaskNotificationActivation, "taskId" | "status">[],
-	queryType: "unknown" | "complete" | "error",
+	queryType: "unknown" | "cached" | "complete" | "error",
 	taskId: string,
 	byTask: ReadonlyMap<string, unknown>,
 ): TaskImportActivationStatus {

@@ -1,4 +1,3 @@
-import { Zero } from "@rocicorp/zero";
 import { ZeroProvider } from "@rocicorp/zero/react";
 import type { ReactNode } from "react";
 import {
@@ -10,23 +9,25 @@ import {
 	useState,
 } from "react";
 import { m } from "../../paraglide/messages.js";
-import { mutators } from "../../zero/mutators.ts";
-import { schema } from "../../zero/schema.gen.ts";
 import { ConnectionRequired } from "../components/ConnectionRequired.tsx";
 import { ShellSkeleton } from "../components/shell/AppSkeleton.tsx";
+import { EarlierEditsNotice } from "../components/shell/EarlierEditsNotice.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { ConnectionRequiredError } from "./connection-required.ts";
+import { scanEarlierUnsyncedEdits } from "./earlier-edits.ts";
 import { createExportBoundary } from "./export-boundary.ts";
 import {
 	createSyncTracker,
-	OFFLINE_EDIT_WINDOW_MS,
+	refuseUnsavedOfflineEdits,
 	type SyncTracker,
 	trackMutations,
 } from "./sync-status.ts";
 import { watchZeroAuth } from "./zero-auth.ts";
+import { createZeroClient, type ZeroClient } from "./zero-client.ts";
 import {
 	createAfterZeroRetirement,
 	registerZeroClient,
+	retirementErrorMessage,
 	retireZeroClients,
 	ZeroRetirementError,
 } from "./zero-lifecycle.ts";
@@ -35,29 +36,6 @@ import {
 	type ZeroRuntime,
 	zeroStorageScope,
 } from "./zero-runtime.ts";
-
-// Client-side context ({ id }) is passed for optimistic synced-query evaluation;
-// the server re-derives the authoritative ctx from the JWT. Let TS infer the full
-// Zero generic from the constructor rather than restating it. userID stays the
-// canonical account ID; only a verified native scope may change Zero's storageKey.
-function createZeroClient(
-	userID: string,
-	token: string,
-	cacheURL: string,
-	storageKey?: string,
-) {
-	return new Zero({
-		cacheURL,
-		userID,
-		storageKey,
-		schema,
-		mutators,
-		auth: token,
-		context: { id: userID },
-		disconnectTimeoutMs: OFFLINE_EDIT_WINDOW_MS,
-	});
-}
-type ZeroClient = ReturnType<typeof createZeroClient>;
 
 const SyncEndpointContext = createContext<string | null>(null);
 export function useSyncEndpoint(): string | null {
@@ -96,10 +74,16 @@ export function AppZeroProvider({
 		tracker: SyncTracker;
 		exportBoundary: ReturnType<typeof createExportBoundary>;
 	} | null>(null);
+	const [earlierEdits, setEarlierEdits] = useState<{
+		zero: ZeroClient;
+		found: string[];
+		incomplete: boolean;
+	} | null>(null);
 	const [startupFailed, setStartupFailed] = useState(false);
 	const [connectionFailed, setConnectionFailed] = useState(false);
 	const initializing = useRef(false);
 	const [startupSaveFailed, setStartupSaveFailed] = useState(false);
+	const [retirementError, setRetirementError] = useState<unknown>(null);
 	const [startupAttempt, setStartupAttempt] = useState(0);
 	const [retrying, setRetrying] = useState(false);
 	const retryPending = useRef(false);
@@ -112,7 +96,8 @@ export function AppZeroProvider({
 			await retireZeroClients();
 			if (!connectionFailed) setStartupFailed(false);
 			setStartupAttempt((n) => n + 1);
-		} catch {
+		} catch (error) {
+			setRetirementError(error);
 			setStartupFailed(true);
 			setStartupSaveFailed(true);
 			setConnectionFailed(false);
@@ -140,12 +125,17 @@ export function AppZeroProvider({
 			]);
 			const created = await createAfterZeroRetirement(
 				() => {
-					const instance = createZeroClient(
+					const tracker = createSyncTracker();
+					const instance = createZeroClient({
 						userID,
 						token,
-						config.zeroURL,
-						storageScope,
-					);
+						cacheURL: config.zeroURL,
+						storageKey: storageScope,
+						onStorageFailure: (failure) => {
+							console.error("Zero local storage failed", failure);
+							tracker.setStorageFailed();
+						},
+					});
 					owner = registerZeroClient(
 						userID,
 						instance,
@@ -156,8 +146,11 @@ export function AppZeroProvider({
 							exportBoundary?.dispose();
 						},
 						() => cancelled,
+						{
+							storageFailed: () => tracker.getSnapshot().storageFailed,
+							pendingMutations: () => instance.pendingMutations(),
+						},
 					);
-					const tracker = createSyncTracker();
 					trackMutations(instance, tracker);
 					const boundary = createExportBoundary({
 						userID,
@@ -177,6 +170,13 @@ export function AppZeroProvider({
 						boundary.wrapMutation(() => mutate(...args));
 					Object.assign(guarded, mutate);
 					Object.defineProperty(instance, "mutate", { value: guarded });
+					refuseUnsavedOfflineEdits(
+						instance,
+						tracker,
+						() =>
+							navigator.onLine &&
+							instance.connection.state.current.name === "connected",
+					);
 					const refreshExport = () => {
 						boundary.refreshJournal();
 						boundary.connectionChanged();
@@ -213,21 +213,29 @@ export function AppZeroProvider({
 				setStartupFailed(false);
 				setConnectionFailed(false);
 				setClient(created);
+				void scanEarlierUnsyncedEdits(created.zero.idbName, (snapshot) => {
+					if (!cancelled) setEarlierEdits({ zero: created.zero, ...snapshot });
+				}).catch((error: unknown) => {
+					console.error("Checking earlier unsynced edits failed", error);
+				});
 			}
 		})()
 			.catch(async (error: unknown) => {
 				let saveFailed = error instanceof ZeroRetirementError;
+				let saveError = error;
 				if (owner) {
 					try {
 						await owner.retire();
-					} catch {
+					} catch (retirementError) {
 						saveFailed = true;
+						saveError = retirementError;
 					}
 				}
 				if (!cancelled) {
 					console.error("Zero startup failed", error);
 					setStartupFailed(true);
 					setStartupSaveFailed(saveFailed);
+					setRetirementError(saveError);
 					setConnectionFailed(
 						!saveFailed && error instanceof ConnectionRequiredError,
 					);
@@ -252,7 +260,7 @@ export function AppZeroProvider({
 			<main className="flex min-h-dvh flex-col items-center justify-center gap-4 px-6">
 				<p role="alert">
 					{startupSaveFailed
-						? m.sync_save_pending_failed()
+						? retirementErrorMessage(retirementError)
 						: m.mutation_failed()}
 				</p>
 				<Button disabled={retrying} onClick={() => void retryStartup()}>
@@ -263,6 +271,14 @@ export function AppZeroProvider({
 	if (!client) return <ShellSkeleton />;
 	return (
 		<ZeroProvider zero={client.zero}>
+			{earlierEdits?.zero === client.zero &&
+				(earlierEdits.found.length > 0 || earlierEdits.incomplete) && (
+					<EarlierEditsNotice
+						found={earlierEdits.found.length > 0}
+						incomplete={earlierEdits.incomplete}
+						onDismiss={() => setEarlierEdits(null)}
+					/>
+				)}
 			<SyncTrackerContext.Provider value={client.tracker}>
 				<ExportBoundaryContext.Provider value={client.exportBoundary}>
 					<SyncEndpointContext.Provider value={client.endpoint}>

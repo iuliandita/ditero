@@ -1536,6 +1536,24 @@
 	"sync_rejected_title": "Un cambio no se guardó",
 	"sync_rejected_detail": "El servidor rechazó un cambio, así que se deshizo. Revisa el elemento e inténtalo de nuevo.",
 	"sync_rejected_dismiss": "Cerrar",
+	"sync_storage_failed_title": "No se guarda en este dispositivo",
+	"sync_storage_failed_detail": "Este dispositivo no puede guardar tus cambios ahora mismo. Un cambio solo se conserva cuando llega al servidor, así que mantén la app abierta hasta que no quede nada por sincronizar. Libera espacio de almacenamiento y luego reinicia la app.",
+	"sync_storage_offline_title": "Sin conexión, no se puede guardar en este dispositivo",
+	"sync_storage_offline_detail": "No se puede contactar con el servidor y este dispositivo no puede guardar tus cambios. Los cambios nuevos quedan en pausa hasta que vuelva la conexión. Mantén la app abierta: los cambios que aún no se han sincronizado se pierden si se cierra.",
+	"sync_storage_reauth_detail": "Tu sesión ha caducado y este dispositivo no puede guardar tus cambios. Mantén la app abierta. Inicia sesión en Ditero en otra pestaña o ventana y vuelve aquí para sincronizar los cambios pendientes. Si cierras la app antes de que el servidor los confirme, se perderán.",
+	"sync_earlier_edits_incomplete_title": "No se pudieron comprobar todos los datos anteriores sin conexión",
+	"sync_earlier_edits_incomplete_detail": "No se pudieron comprobar algunos datos anteriores sin conexión. Conserva los datos de Ditero y no lo desinstales. Si puedes tener cambios sin sincronizar de una versión anterior, cierra Ditero y pregunta a quien administra tu servidor cómo recuperarlos.",
+	"sync_retirement_blocked": [
+		{
+			"declarations": ["input count", "local countNum = count: number"],
+			"selectors": [],
+			"match": {
+				"*": "Cambios sin sincronizar: {countNum}. Este dispositivo no puede guardarlos. Mantén la app abierta hasta que el servidor los confirme y vuelve a intentarlo."
+			}
+		}
+	],
+	"sync_earlier_edits_title": "Cambios sin sincronizar de una versión anterior",
+	"sync_earlier_edits_detail": "Este dispositivo aún guarda cambios hechos con una versión anterior de Ditero que nunca llegaron al servidor. Esta versión no puede enviarlos y, unos minutos después de iniciarse, borra esa copia anterior si lleva dos días sin usarse. Para conservarlos, cierra Ditero ahora, no borres sus datos ni lo desinstales y pregunta a quien administra tu servidor cómo recuperarlos con la versión anterior.",
 	"sync_auth_rejected_title": "Inicio de sesión para sincronizar rechazado",
 	"sync_auth_rejected_detail": "El servidor no acepta tu inicio de sesión. Se volverá a intentar con menos frecuencia. Tus cambios siguen guardados en este dispositivo.",
 	"sync_reauth_title": "Inicia sesión para sincronizar",

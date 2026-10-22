@@ -1,7 +1,10 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { m } from "../../../src/paraglide/messages.js";
-import { retireZeroClients } from "../../../src/web/lib/zero-lifecycle.ts";
+import {
+	retirementErrorMessage,
+	retireZeroClients,
+} from "../../../src/web/lib/zero-lifecycle.ts";
 
 export function startupErrorMessage(error: unknown): string {
 	return error === "vault-unavailable"
@@ -54,9 +57,9 @@ export async function installTransport(): Promise<void> {
 			await retireZeroClients();
 			await invoke("native_drain", { page });
 			await getCurrentWindow().destroy();
-		} catch {
+		} catch (error) {
 			closing = false;
-			window.alert(m.sync_save_pending_failed());
+			window.alert(retirementErrorMessage(error));
 		}
 	});
 }

@@ -1,4 +1,5 @@
 import { randomId } from "../../domain/random-id.ts";
+import { mutationSucceeded } from "./pref-mutation.ts";
 
 export type ExportSnapshot = {
 	pending: number;
@@ -14,8 +15,7 @@ type Outcome = "success" | "refusal" | "unknown";
 function outcome(value: unknown): Outcome {
 	if (typeof value !== "object" || value === null) return "unknown";
 	const result = value as { type?: unknown; error?: unknown };
-	if (result.type === "success" && Object.keys(value).length === 1)
-		return "success";
+	if (mutationSucceeded(value)) return "success";
 	if (
 		result.type !== "error" ||
 		typeof result.error !== "object" ||

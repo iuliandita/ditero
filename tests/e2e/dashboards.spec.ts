@@ -626,7 +626,7 @@ async function sharingQueryHashes(
 	);
 	if (
 		JSON.parse(readFileSync(join(root, "../../../package.json"), "utf8"))
-			.version !== "1.9.0"
+			.version !== "1.11.1"
 	)
 		throw new Error("Zero version mismatch");
 	// The test-only hash must match the pinned cache's server-mapped AST contract.

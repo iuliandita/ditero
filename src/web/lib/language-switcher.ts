@@ -41,8 +41,8 @@ type LocaleChangeActionDeps = ChangeLocaleDeps & {
 	isChildMounted: () => boolean;
 	onPending: (pending: boolean) => void;
 	onApplied: (locale: Locale) => void;
-	onInlineError: () => void;
-	onGlobalError: (retry: () => void) => void;
+	onInlineError: (error: unknown) => void;
+	onGlobalError: (retry: () => void, error: unknown) => void;
 };
 
 export function createLocaleChangeAction(
@@ -70,10 +70,10 @@ export function createLocaleChangeAction(
 						: undefined,
 			});
 			if (applied && deps.isChildMounted()) deps.onApplied(locale);
-		} catch {
+		} catch (error) {
 			if (deps.isOwnerActive()) {
-				if (deps.isChildMounted()) deps.onInlineError();
-				else deps.onGlobalError(() => void run());
+				if (deps.isChildMounted()) deps.onInlineError(error);
+				else deps.onGlobalError(() => void run(), error);
 			}
 		} finally {
 			pending = false;

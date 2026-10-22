@@ -1,10 +1,16 @@
 import { m } from "../../../src/paraglide/messages.js";
+import {
+	retirementErrorMessage,
+	ZeroRetirementError,
+} from "../../../src/web/lib/zero-lifecycle.ts";
 import { NativeError } from "./bridge.ts";
 
 export function connectErrorMessage(
 	error: unknown,
 	desktopRestore = false,
 ): string {
+	if (error instanceof ZeroRetirementError)
+		return retirementErrorMessage(error);
 	if (error instanceof NativeError) {
 		if (desktopRestore && error.code === "network")
 			return m.native_desktop_online_start_required();

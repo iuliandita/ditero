@@ -9,6 +9,11 @@ import { m } from "../../../paraglide/messages.js";
 import { authClient } from "../../lib/auth-client.ts";
 import { useKeyring } from "../../lib/e2e/KeyringProvider.tsx";
 import { useNativeAccount } from "../../lib/native-account.tsx";
+import {
+	retirementErrorMessage,
+	runAfterZeroRetirement,
+	ZeroRetirementError,
+} from "../../lib/zero-lifecycle.ts";
 import { Input } from "../ui/input.tsx";
 
 export function AccountPanel() {
@@ -44,9 +49,13 @@ function AccountContent({
 		setSigningOut(true);
 		setError(null);
 		try {
-			await signOut();
-		} catch {
-			setError(m.security_error_sign_out());
+			await runAfterZeroRetirement(signOut);
+		} catch (error) {
+			setError(
+				error instanceof ZeroRetirementError
+					? retirementErrorMessage(error)
+					: m.security_error_sign_out(),
+			);
 		} finally {
 			setSigningOut(false);
 		}
@@ -93,7 +102,13 @@ function AccountContent({
 							setError(null);
 							void native
 								.changeServer()
-								.catch(() => setError(m.security_error_sign_out()))
+								.catch((error: unknown) =>
+									setError(
+										error instanceof ZeroRetirementError
+											? retirementErrorMessage(error)
+											: m.security_error_sign_out(),
+									),
+								)
 								.finally(() => setSigningOut(false));
 						}}
 					>

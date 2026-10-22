@@ -3,8 +3,10 @@ import {
 	CloudCheck,
 	CloudOff,
 	CloudUpload,
+	HardDrive,
 	LogIn,
 	type LucideIcon,
+	ServerOff,
 	Unplug,
 } from "lucide-react";
 import { type PointerEvent, useEffect, useRef, useState } from "react";
@@ -23,7 +25,10 @@ import { useSyncStatus } from "../../hooks/useSyncStatus.ts";
 import { syncEndpointDetail } from "../../lib/sync-endpoint.ts";
 import type { SyncPhase } from "../../lib/sync-status.ts";
 import { useSyncEndpoint } from "../../lib/zero.tsx";
-import { retireZeroClients } from "../../lib/zero-lifecycle.ts";
+import {
+	retirementErrorMessage,
+	retireZeroClients,
+} from "../../lib/zero-lifecycle.ts";
 
 // Distinct shapes per state so color is never the only carrier.
 const PHASE: Record<
@@ -85,6 +90,27 @@ const PHASE: Record<
 		detail: m.sync_rejected_detail,
 		announce: true,
 	},
+	"storage-failed": {
+		icon: HardDrive,
+		tone: "text-warning",
+		title: m.sync_storage_failed_title,
+		detail: m.sync_storage_failed_detail,
+		announce: true,
+	},
+	"storage-reauth": {
+		icon: LogIn,
+		tone: "text-destructive",
+		title: m.sync_reauth_title,
+		detail: m.sync_storage_reauth_detail,
+		announce: true,
+	},
+	"storage-offline": {
+		icon: ServerOff,
+		tone: "text-destructive",
+		title: m.sync_storage_offline_title,
+		detail: m.sync_storage_offline_detail,
+		announce: true,
+	},
 };
 
 const HOVER_CLOSE_DELAY_MS = 150;
@@ -97,7 +123,7 @@ export function SyncIndicator({
 }: {
 	placement: "sidebar" | "header";
 }) {
-	const { phase, pending, dismissRejection } = useSyncStatus();
+	const { phase, pending, sessionExpired, dismissRejection } = useSyncStatus();
 	const endpoint = useSyncEndpoint();
 	const endpointDetail = endpoint
 		? syncEndpointDetail(endpoint, window.location.href)
@@ -105,7 +131,7 @@ export function SyncIndicator({
 	const [open, setOpen] = useState(false);
 	const [pinned, setPinned] = useState(false);
 	const [signingIn, setSigningIn] = useState(false);
-	const [saveFailed, setSaveFailed] = useState(false);
+	const [saveFailed, setSaveFailed] = useState<string | null>(null);
 	const signInPending = useRef(false);
 	const closeTimer = useRef<number | undefined>(undefined);
 	const state = PHASE[phase];
@@ -131,12 +157,12 @@ export function SyncIndicator({
 		if (signInPending.current) return;
 		signInPending.current = true;
 		setSigningIn(true);
-		setSaveFailed(false);
+		setSaveFailed(null);
 		try {
 			await retireZeroClients();
 			window.location.reload();
-		} catch {
-			setSaveFailed(true);
+		} catch (error) {
+			setSaveFailed(retirementErrorMessage(error));
 		} finally {
 			signInPending.current = false;
 			setSigningIn(false);
@@ -228,7 +254,10 @@ export function SyncIndicator({
 							{m.sync_pending_count({ count: pending })}
 						</p>
 					)}
-					{(phase === "reauth" || saveFailed || signingIn) && (
+					{(phase === "reauth" ||
+						(phase === "storage-offline" && sessionExpired) ||
+						saveFailed ||
+						signingIn) && (
 						<Button
 							size="sm"
 							className="self-start"
@@ -239,7 +268,7 @@ export function SyncIndicator({
 							{m.sync_reauth_action()}
 						</Button>
 					)}
-					{saveFailed && <p role="alert">{m.sync_save_pending_failed()}</p>}
+					{saveFailed && <p role="alert">{saveFailed}</p>}
 					{phase === "rejected" && (
 						<Button
 							variant="outline"
