@@ -12,3 +12,9 @@ $installed = Join-Path $destination 'ditero-desktop.exe'
 $built = "apps/desktop/src-tauri/target/$env:DESKTOP_TARGET/debug/ditero-desktop.exe"
 if ((Get-FileHash $installed).Hash -ne (Get-FileHash $built).Hash) { throw 'Installed bytes differ' }
 @{application=$installed; installer=$installer[0].Name} | ConvertTo-Json | Set-Content (Join-Path $out 'installed.json')
+$os = Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber
+$hosts = @(Get-Process | Where-Object {$_.ProcessName -match 'Shell|explorer|Notification'} | Select-Object ProcessName, SessionId)
+$packages = @(Get-AppxPackage -Name '*ShellExperienceHost*' | Select-Object Name, Status, InstallLocation)
+$settingsPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings'
+$settings = if (Test-Path $settingsPath) { Get-ItemProperty $settingsPath | Select-Object NOC_GLOBAL_SETTING_TOASTS_ENABLED, NOC_GLOBAL_SETTING_ALLOW_TOASTS_ABOVE_LOCK } else { $null }
+@{os=$os; hosts=$hosts; packages=$packages; settings=$settings} | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $out 'evidence/notification-platform.json')

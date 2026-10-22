@@ -18,12 +18,14 @@ while ([DateTime]::UtcNow -lt $deadline) {
     $windows = $root.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)
     foreach ($window in $windows) {
         $process = Get-Process -Id $window.Current.ProcessId -ErrorAction SilentlyContinue
-        if ($null -eq $process -or $process.ProcessName -notin @('ShellExperienceHost', 'ShellHost')) { continue }
+        if ($null -eq $process) { continue }
+        $snapshot.Add("Window: $($process.ProcessName) | $($window.Current.ClassName) | $($window.Current.Name)")
+        if ($process.ProcessName -in @('ditero-desktop', 'msedge', 'chrome', 'pwsh', 'powershell')) { continue }
         $elements = $window.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)
         foreach ($element in $elements) {
             $name = $element.Current.Name
             $snapshot.Add("$($element.Current.ClassName) | $($element.Current.AutomationId) | $name")
-            if ($name -notlike '*Open Ditero to view your notification.*') { continue }
+            if ($name -notlike '*Open Ditero to view your notification.*' -or $element.Current.IsOffscreen) { continue }
             $snapshot | Set-Content (Join-Path $evidence 'notification-popup-uia.txt')
             $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
             $bitmap = [System.Drawing.Bitmap]::new($bounds.Width, $bounds.Height)
@@ -45,4 +47,11 @@ while ([DateTime]::UtcNow -lt $deadline) {
     Set-Content -Path (Join-Path $evidence 'notification-last-uia.txt') -Value ($snapshot -join "`n")
     Start-Sleep -Milliseconds 200
 }
+$bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+$bitmap = [System.Drawing.Bitmap]::new($bounds.Width, $bounds.Height)
+$graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+try {
+    $graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+    $bitmap.Save((Join-Path $evidence 'notification-desktop-failure.png'))
+} finally { $graphics.Dispose(); $bitmap.Dispose() }
 throw 'No visible Ditero toast with the expected generic body'
