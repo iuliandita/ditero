@@ -22,7 +22,7 @@
 			"note": "Retain first-beta 0.1.0-beta.1/Android code 13 preparation, signing certificate, documentation epoch, remaining prerelease/native limits and prerelease publication wording. Add ditero-VERSION-clients.tar.gz with CLI/MCP/TUI JavaScript bundles, notices, per-file checksums, BUILDINFO and provenance attestation verified with a read-only attestations token. Packaging qualifies current and minimum Bun. Reject missing bundles/checksums/notices/attestation, bundled packages absent from notices, home/build paths, private-looking hosts/addresses, environment content, common secret shapes and build identity without building Bun. Standalone executables remain deferred; existing assets/signing/stable promotion rules remain. Packaging validates the Kustomize example as exactly two tag-matched image overrides."
 		},
 		"configuration": {
-			"sourceDigest": "43bbe2cd8970d15b10f95fbc93762fa024419431ed3934d41a66766ceb9095a0",
+			"sourceDigest": "c362a86af637892724278cfa28231b01e7afa49ac9687e20a6d535a3715ff2d5",
 			"docs": [
 				"deploy/helm/ditero/README.md",
 				"deploy/kustomize/README.md",
@@ -33,7 +33,7 @@
 			"note": "Align Zero client/cache at 1.11.1, upstream Litestream configurations/forks and V5 backup defaults; retain app IDs, publications, slots and restricted roles, and document connection budgets and upgrade order. Add optional GOOGLE_, MICROSOFT_, GITHUB_, DISCORD_, FACEBOOK_, APPLE_, DITERO_OIDC_ and DITERO_SAML_* settings with _FILE forms, defaults and failure behavior; providers are off by default. Retain the explicit Compose Zero tag override and release suffix default. Kustomize gates Zero on the app build through commit comparison against app health, replacing the manual zero-replica hold. Missing/empty commits fail closed; local images need the same build commit. Overrides require exactly two tag-matched image names/replacement tags without extra fields. Document Kubernetes logical restore with original credentials, ciphertext and fresh Zero cache. Existing Helm values and stored formats remain unchanged; revert manifests for rollback. Focus clocks live in migration-owned server_private with runtime USAGE and SELECT/INSERT/UPDATE only, outside default and explicit public Zero publications. Retain runtime/migrator shard grants."
 		},
 		"deployment": {
-			"sourceDigest": "f42634dbf65abbab0dc7dfdad28851ee31c999784bbb2b46b03c8f7e4b5afa3f",
+			"sourceDigest": "052bc3ee9cc1a1fb1ed44ed4a873c5d7a8ce1bce84f11c242bfbf64499713bde",
 			"docs": [
 				"deploy/helm/ditero/README.md",
 				"deploy/kustomize/README.md",
