@@ -30,6 +30,115 @@ function client() {
 }
 
 describe("Zero retirement", () => {
+	it.each([
+		true,
+		false,
+	])("keeps sync active for accepted edits when storage failed before retirement: %s", async (initialFailure) => {
+		const local = deferred<{ type: string }>();
+		const zero = client();
+		let connection = "connected";
+		zero.close.mockImplementation(async () => {
+			connection = "closed";
+		});
+		zero.mutate.mockReturnValueOnce({
+			client: local.promise,
+			server: new Promise<unknown>(() => {}),
+		});
+		let storageFailed = initialFailure;
+		let queued = 0;
+		const pendingMutations = vi.fn(async () => queued);
+		const stop = vi.fn();
+		lifecycle.registerZeroClient("a", zero, stop, () => false, {
+			storageFailed: () => storageFailed,
+			pendingMutations,
+		});
+		zero.mutate();
+		const retirement = lifecycle.retireZeroClients();
+		const refused = expect(retirement).rejects.toMatchObject({ count: 1 });
+		await expect(zero.mutate().client).resolves.toMatchObject({
+			type: "error",
+		});
+		expect(pendingMutations).not.toHaveBeenCalled();
+		expect(stop).not.toHaveBeenCalled();
+		storageFailed = true;
+		queued = 1;
+		local.resolve({ type: "success" });
+		await refused;
+		expect(connection).toBe("connected");
+		expect(zero.close).not.toHaveBeenCalled();
+		expect(stop).not.toHaveBeenCalled();
+		await expect(zero.mutate().client).resolves.toMatchObject({
+			type: "success",
+		});
+	});
+
+	it("retries navigation after the server drains a queue despite sticky storage failure", async () => {
+		const zero = client();
+		let pending = 3;
+		const stop = vi.fn();
+		lifecycle.registerZeroClient("a", zero, stop, () => false, {
+			storageFailed: () => true,
+			pendingMutations: async () => pending,
+		});
+		const navigate = vi.fn(async () => "navigated");
+		await expect(
+			lifecycle.runAfterZeroRetirement(navigate),
+		).rejects.toMatchObject({ cause: { count: 3 } });
+		expect(navigate).not.toHaveBeenCalled();
+		const create = vi.fn(client);
+		await expect(
+			lifecycle.createAfterZeroRetirement(create, () => false),
+		).rejects.toMatchObject({ cause: { count: 3 } });
+		expect(create).not.toHaveBeenCalled();
+		pending = 0;
+		await expect(lifecycle.runAfterZeroRetirement(navigate)).resolves.toBe(
+			"navigated",
+		);
+		expect(zero.close).toHaveBeenCalledOnce();
+		expect(stop).toHaveBeenCalledOnce();
+		expect(navigate).toHaveBeenCalledOnce();
+	});
+
+	it("keeps auth and sync observers active when close discovers unpersisted edits", async () => {
+		const zero = client();
+		zero.close.mockRejectedValueOnce(
+			Object.assign(new Error("storage failure"), { pendingMutations: 2 }),
+		);
+		const stop = vi.fn();
+		lifecycle.registerZeroClient("a", zero, stop);
+		await expect(lifecycle.retireZeroClients()).rejects.toBeInstanceOf(
+			lifecycle.ZeroRetirementBlockedError,
+		);
+		expect(stop).not.toHaveBeenCalled();
+		await expect(zero.mutate().client).resolves.toMatchObject({
+			type: "success",
+		});
+		await lifecycle.retireZeroClients();
+		expect(stop).toHaveBeenCalledOnce();
+	});
+
+	it("leaves sync active and refuses navigation when the pending queue cannot be read", async () => {
+		const zero = client();
+		const stop = vi.fn();
+		const failure = new Error("queue read failed");
+		lifecycle.registerZeroClient("a", zero, stop, () => false, {
+			storageFailed: () => true,
+			pendingMutations: async () => {
+				throw failure;
+			},
+		});
+		const navigate = vi.fn(async () => {});
+		await expect(
+			lifecycle.runAfterZeroRetirement(navigate),
+		).rejects.toMatchObject({ cause: failure });
+		expect(zero.close).not.toHaveBeenCalled();
+		expect(stop).not.toHaveBeenCalled();
+		expect(navigate).not.toHaveBeenCalled();
+		await expect(zero.mutate().client).resolves.toMatchObject({
+			type: "success",
+		});
+	});
+
 	it("is a no-op before any authenticated client exists", async () => {
 		await lifecycle.retireZeroClients();
 		await lifecycle.waitForZeroRetirements();
@@ -49,7 +158,7 @@ describe("Zero retirement", () => {
 		lifecycle.registerZeroClient("a", zero, stop);
 		zero.mutate();
 		const retiring = lifecycle.retireZeroClients();
-		expect(stop).toHaveBeenCalledTimes(1);
+		expect(stop).not.toHaveBeenCalled();
 		await expect(zero.mutate().client).resolves.toMatchObject({
 			type: "error",
 			error: { type: "zero" },
@@ -67,6 +176,7 @@ describe("Zero retirement", () => {
 		durable.resolve();
 		await retiring;
 		expect(completed).toBe(true);
+		expect(stop).toHaveBeenCalledTimes(1);
 	});
 
 	it("a failed local commit settles without preventing durable close", async () => {
@@ -94,9 +204,10 @@ describe("Zero retirement", () => {
 		expect(owner.retire()).toBe(first);
 		const navigation = lifecycle.retireZeroClients();
 		await vi.waitFor(() => expect(zero.close).toHaveBeenCalledTimes(1));
-		expect(stop).toHaveBeenCalledTimes(1);
+		expect(stop).not.toHaveBeenCalled();
 		durable.resolve();
 		await Promise.all([first, navigation]);
+		expect(stop).toHaveBeenCalledTimes(1);
 	});
 
 	it("keeps a persistence failure blocking factories until an explicit retry succeeds", async () => {
@@ -187,10 +298,10 @@ describe("Zero retirement", () => {
 			reentered = owner.retire();
 		});
 		const first = owner.retire();
-		expect(reentered).toBe(first);
 		await vi.waitFor(() => expect(zero.close).toHaveBeenCalledTimes(1));
 		durable.resolve();
 		await first;
+		expect(reentered).toBe(first);
 	});
 
 	it("caches a cleanup callback failure and retries it only explicitly", async () => {
@@ -206,11 +317,11 @@ describe("Zero retirement", () => {
 			cause: failure,
 		});
 		expect(stop).toHaveBeenCalledTimes(1);
-		expect(zero.close).not.toHaveBeenCalled();
+		expect(zero.close).toHaveBeenCalledTimes(1);
 		stopFailed = false;
 		await lifecycle.retireZeroClients();
 		expect(stop).toHaveBeenCalledTimes(2);
-		expect(zero.close).toHaveBeenCalledTimes(1);
+		expect(zero.close).toHaveBeenCalledTimes(2);
 	});
 
 	it("does not retry a failed close during automatic reconciliation", async () => {

@@ -20,6 +20,7 @@ import { signInEmail } from "../lib/email-sign-in.ts";
 import { fetchPublicConfig } from "../lib/public-config.ts";
 import { passkeysAvailable } from "../lib/secure-context.ts";
 import {
+	retirementErrorMessage,
 	runAfterZeroRetirement,
 	ZeroRetirementError,
 } from "../lib/zero-lifecycle.ts";
@@ -96,7 +97,7 @@ export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 		} catch (error) {
 			setError(
 				error instanceof ZeroRetirementError
-					? m.sync_save_pending_failed()
+					? retirementErrorMessage(error)
 					: fallback(),
 			);
 		} finally {

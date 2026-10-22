@@ -8,11 +8,13 @@ import type { StoreProvider } from "../../../node_modules/@rocicorp/zero/out/rep
 import { ReplicacheImpl } from "../../../node_modules/@rocicorp/zero/out/replicache/src/replicache-impl.js";
 import { StorageFailureError } from "../../../node_modules/@rocicorp/zero/out/replicache/src/storage-failure.js";
 
-it("retries durable close after Zero stops background persistence on a storage failure", async () => {
-	const failure = new StorageFailureError(
-		"io-error",
-		"injected storage failure",
-	);
+it.each([
+	true,
+	false,
+])("retries durable close while retaining the dispatch latch for an unclassified failure (%s)", async (classified) => {
+	const failure = classified
+		? new StorageFailureError("io-error", "injected storage failure")
+		: new Error("injected unclassified failure");
 	let failing = false;
 	const stores: MemStore[] = [];
 	const provider: StoreProvider = {
@@ -54,11 +56,19 @@ it("retries durable close after Zero stops background persistence on a storage f
 		await rep.mutate.write();
 		failing = true;
 		// This records 1.11's sticky storage failure and stops its background writes.
-		await rep.persist();
+		if (classified) await rep.persist();
 		const first = rep.close();
 		expect(rep.close()).toBe(first);
 		expect(() => rep.mutate.write()).toThrow("closed");
-		await expect(first).rejects.toBe(failure);
+		if (classified)
+			await expect(first).rejects.toMatchObject({
+				cause: failure,
+				pendingMutations: 1,
+			});
+		else {
+			await expect(first).rejects.toBe(failure);
+			expect(() => rep.mutate.write()).toThrow("closed");
+		}
 		expect(stores.every((store) => !store.closed)).toBe(true);
 		failing = false;
 		await rep.close();

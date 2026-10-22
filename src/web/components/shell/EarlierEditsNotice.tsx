@@ -2,8 +2,17 @@ import { TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { m } from "../../../paraglide/messages.js";
 
-// Shown again on every start while the earlier database still holds edits.
-export function EarlierEditsNotice({ onDismiss }: { onDismiss: () => void }) {
+// Shown again on every start while the earlier database still holds edits, or
+// while the check for them could not finish.
+export function EarlierEditsNotice({
+	found,
+	incomplete,
+	onDismiss,
+}: {
+	found: boolean;
+	incomplete: boolean;
+	onDismiss: () => void;
+}) {
 	return (
 		<div
 			role="alert"
@@ -15,8 +24,21 @@ export function EarlierEditsNotice({ onDismiss }: { onDismiss: () => void }) {
 				className="mt-0.5 size-4 shrink-0 text-warning"
 			/>
 			<div className="flex flex-col gap-2">
-				<p className="font-medium">{m.sync_earlier_edits_title()}</p>
-				<p className="text-muted-foreground">{m.sync_earlier_edits_detail()}</p>
+				<p className="font-medium">
+					{found
+						? m.sync_earlier_edits_title()
+						: m.sync_earlier_edits_incomplete_title()}
+				</p>
+				{found && (
+					<p className="text-muted-foreground">
+						{m.sync_earlier_edits_detail()}
+					</p>
+				)}
+				{incomplete && (
+					<p className="text-muted-foreground">
+						{m.sync_earlier_edits_incomplete_detail()}
+					</p>
+				)}
 				<Button
 					variant="outline"
 					size="sm"

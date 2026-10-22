@@ -2,6 +2,11 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { m } from "../../paraglide/messages.js";
 import { Button } from "../components/ui/button.tsx";
 import { authClient } from "../lib/auth-client.ts";
+import {
+	retirementErrorMessage,
+	runAfterZeroRetirement,
+	ZeroRetirementError,
+} from "../lib/zero-lifecycle.ts";
 import { AuthShell, Login } from "./Login.tsx";
 
 // Browser consent for `/native/authorize?grantId=`. The native app opens this
@@ -128,7 +133,7 @@ function Consent({
 	const [submitting, setSubmitting] = useState(false);
 	const [approveFailed, setApproveFailed] = useState(false);
 	const [switching, setSwitching] = useState(false);
-	const [switchFailed, setSwitchFailed] = useState(false);
+	const [switchFailure, setSwitchFailure] = useState<string | null>(null);
 	const submittingRef = useRef(false);
 	const approveAbort = useRef<AbortController | null>(null);
 
@@ -164,19 +169,24 @@ function Consent({
 		if (submittingRef.current) return;
 		submittingRef.current = true;
 		setSwitching(true);
-		setSwitchFailed(false);
+		setSwitchFailure(null);
 		setApproveFailed(false);
 		const controller = new AbortController();
 		approveAbort.current = controller;
 		try {
-			const result = await authClient.signOut();
+			const result = await runAfterZeroRetirement(() => authClient.signOut());
 			if (controller.signal.aborted) return;
 			if (result.error) throw result.error;
 			window.location.assign(
 				`${window.location.origin}/native/authorize?grantId=${grantId}`,
 			);
-		} catch {
-			if (!controller.signal.aborted) setSwitchFailed(true);
+		} catch (error) {
+			if (!controller.signal.aborted)
+				setSwitchFailure(
+					error instanceof ZeroRetirementError
+						? retirementErrorMessage(error)
+						: m.native_authorize_switch_failed(),
+				);
 		} finally {
 			submittingRef.current = false;
 			if (!controller.signal.aborted) setSwitching(false);
@@ -188,7 +198,7 @@ function Consent({
 		submittingRef.current = true;
 		setSubmitting(true);
 		setApproveFailed(false);
-		setSwitchFailed(false);
+		setSwitchFailure(null);
 		const controller = new AbortController();
 		approveAbort.current = controller;
 		try {
@@ -304,9 +314,9 @@ function Consent({
 					{m.native_authorize_approve_failed()}
 				</p>
 			) : null}
-			{switchFailed && (
+			{switchFailure !== null && (
 				<p role="alert" className="text-sm text-destructive">
-					{m.native_authorize_switch_failed()}
+					{switchFailure}
 				</p>
 			)}
 			<div className="space-y-2" aria-busy={submitting || switching}>

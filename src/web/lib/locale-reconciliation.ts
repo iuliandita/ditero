@@ -5,7 +5,7 @@ type ReconciliationDeps = {
 	isOwnerActive: () => boolean;
 	retireClients: (retryFailed: boolean) => Promise<void>;
 	applyLocale: (locale: Locale) => void;
-	onError: (retry: () => void) => void;
+	onError: (retry: () => void, error: unknown) => void;
 };
 
 export function createLocaleReconciler(deps: ReconciliationDeps) {
@@ -29,9 +29,9 @@ export function createLocaleReconciler(deps: ReconciliationDeps) {
 				pending = undefined;
 				return applied;
 			},
-			() => {
+			(error: unknown) => {
 				pending = undefined;
-				if (deps.isOwnerActive()) deps.onError(() => void start(true));
+				if (deps.isOwnerActive()) deps.onError(() => void start(true), error);
 				return false;
 			},
 		);

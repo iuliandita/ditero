@@ -245,22 +245,38 @@ authentication refusals and malformed-request failures. Persistent database faul
 still need operator repair; retrying does not grant missing privileges.
 
 The durable-close patch blocks new writes immediately, waits for accepted local
-commits and forces persistence before closing storage. Failed persistence retains
-handles for explicit retry and blocks account navigation. Zero 1.11's paused
-background persistence does not bypass that final durability check.
+commits and forces persistence before closing storage. Network shutdown follows
+that preflight on the first successful close attempt; callbacks still cannot
+accept reentrant mutations. Failed persistence retains handles for explicit retry
+and blocks account navigation. Zero 1.11's paused background persistence does not
+bypass that final durability check.
 
 Zero reports local storage failures once per client through `onStorageFailure`:
 `cannot-open` and `full` when the database cannot open, after which the client
 runs in memory for the session, and `io-error` or `full` after opening, after
-which it stops persisting. The sync indicator then shows that changes are not
-saved on this device and are kept only once they reach the server. While the
-client is offline in that state, new edits are refused with the offline message
-rather than accepted into memory. Accepted edits stay in the running client and
-continue to sync; the app does not close or reload it. Free storage, let pending
-edits sync, then restart. Zero's IndexedDB store reports only open failures, so
-a browser quota or transaction error after opening is not detected this way.
-After a memory fallback, explicit sign-out or language changes still close the
-memory client; edits the server has not acknowledged by then are lost.
+which it stops persisting. The package patch also classifies native IndexedDB
+quota and transaction DOMExceptions after a successful open. The sync indicator
+then shows that changes are not saved on this device and are kept only once they
+reach the server. Storage warnings take precedence over rejection and expired
+session messages; none promises device saving in this state. While the client is
+offline in that state, new edits are refused rather than accepted into memory.
+
+Accepted edits stay in the running client and continue to sync. Sign-out,
+sign-in-again, language changes and account switches are blocked while storage
+has failed and the actual local mutation queue remains unacknowledged. The
+localized warning gives the queue count and asks the user to keep the app open,
+let the server acknowledge the edits, then retry. Reconnection alone is not proof
+of acknowledgement. The close barrier also checks failures first discovered
+while persisting, before stopping sync. After the queue drains, retirement can
+close a memory-only client without requiring its unavailable storage. There is
+no discard action. Closing a tab or terminating a process can still lose
+memory-only edits; free storage, let pending edits sync, then restart.
+
+The earlier-data scan checks at most 20 databases, with a five-second limit per
+request and a 30-second overall budget. Findings appear incrementally. Blocked,
+unreadable or timed-out data produces an incomplete-check warning; a clean result
+is not claimed for data that could not be inspected. Scan connections yield to
+version changes and close even if an open finishes after its timeout.
 
 Follow the upgrade and rollback procedure above when moving from 1.9; that client
 storage boundary applies even though the retry patch itself does not change data

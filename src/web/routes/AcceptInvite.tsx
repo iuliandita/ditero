@@ -24,6 +24,11 @@ import {
 	useKeyring,
 } from "../lib/e2e/KeyringProvider.tsx";
 import { signInEmail } from "../lib/email-sign-in.ts";
+import {
+	retirementErrorMessage,
+	runAfterZeroRetirement,
+	ZeroRetirementError,
+} from "../lib/zero-lifecycle.ts";
 
 // Client accept page for `/accept#token=` (legacy `?token=` also works).
 // An invitee landing here previews the
@@ -468,7 +473,9 @@ function AcceptInvitePage({
 					setError(m.account_name_invalid());
 					return;
 				}
-				const res = await authClient.signUp.email({ email, password, name });
+				const res = await runAfterZeroRetirement(() =>
+					authClient.signUp.email({ email, password, name }),
+				);
 				if (res.error) {
 					setError(authErrorMessage(res.error, m.accept_signup_failed));
 					return;
@@ -478,7 +485,9 @@ function AcceptInvitePage({
 				setNotice(true);
 				return;
 			} else {
-				const result = await signInEmail(email, password);
+				const result = await runAfterZeroRetirement(() =>
+					signInEmail(email, password),
+				);
 				if (result.kind === "error") {
 					setError(result.message);
 					return;
@@ -493,6 +502,12 @@ function AcceptInvitePage({
 			// authenticated effect resumes automatically.
 			if (fastInvite) window.location.reload();
 			else await ordinaryAccept();
+		} catch (error) {
+			setError(
+				error instanceof ZeroRetirementError
+					? retirementErrorMessage(error)
+					: m.accept_error_generic(),
+			);
 		} finally {
 			setBusy(false);
 		}
@@ -558,9 +573,14 @@ function AcceptInvitePage({
 									return;
 								}
 								setBusy(true);
-								void keyring
-									?.signOut()
-									.catch(() => setError(m.security_error_sign_out()))
+								void runAfterZeroRetirement(async () => keyring?.signOut())
+									.catch((error: unknown) =>
+										setError(
+											error instanceof ZeroRetirementError
+												? retirementErrorMessage(error)
+												: m.security_error_sign_out(),
+										),
+									)
 									.finally(() => setBusy(false));
 							}}
 						>

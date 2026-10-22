@@ -1539,6 +1539,18 @@
 	"sync_storage_failed_detail": "Cet appareil ne peut pas enregistrer tes modifications pour l'instant. Une modification n'est conservée qu'une fois arrivée sur le serveur, alors garde l'appli ouverte jusqu'à ce que plus rien n'attende la synchronisation. Libère de l'espace de stockage, puis redémarre l'appli.",
 	"sync_storage_offline_title": "Hors ligne, enregistrement impossible sur cet appareil",
 	"sync_storage_offline_detail": "Impossible de joindre le serveur, et cet appareil ne peut pas enregistrer tes modifications. Les nouvelles modifications sont en pause jusqu'au retour de la connexion. Garde l'appli ouverte : les modifications pas encore synchronisées sont perdues si elle se ferme.",
+	"sync_storage_reauth_detail": "Ta session a expiré et cet appareil ne peut pas enregistrer tes modifications. Garde l'appli ouverte. Connecte-toi à Ditero dans un autre onglet ou une autre fenêtre, puis reviens ici pour synchroniser les modifications en attente. Si tu fermes l'appli avant leur confirmation par le serveur, elles seront perdues.",
+	"sync_earlier_edits_incomplete_title": "Impossible de vérifier toutes les anciennes données hors ligne",
+	"sync_earlier_edits_incomplete_detail": "Certaines anciennes données hors ligne n'ont pas pu être vérifiées. Garde les données de Ditero et ne le désinstalle pas. Si tu as peut-être des modifications non synchronisées d'une version précédente, ferme Ditero et demande à la personne qui gère ton serveur comment les récupérer.",
+	"sync_retirement_blocked": [
+		{
+			"declarations": ["input count", "local countNum = count: number"],
+			"selectors": [],
+			"match": {
+				"*": "Modifications non synchronisées : {countNum}. Cet appareil ne peut pas les enregistrer. Garde l'appli ouverte jusqu'à leur confirmation par le serveur, puis réessaie."
+			}
+		}
+	],
 	"sync_earlier_edits_title": "Modifications non synchronisées d'une version précédente",
 	"sync_earlier_edits_detail": "Cet appareil contient encore des modifications faites avec une version précédente de Ditero qui ne sont jamais arrivées sur le serveur. Cette version ne peut pas les envoyer et, quelques minutes après son démarrage, elle supprime cette ancienne copie si elle n'a pas servi depuis deux jours. Pour les garder, ferme Ditero maintenant, n'efface pas ses données, ne le désinstalle pas et demande à la personne qui gère ton serveur comment les récupérer avec la version précédente.",
 	"sync_auth_rejected_title": "Connexion pour la synchronisation refusée",

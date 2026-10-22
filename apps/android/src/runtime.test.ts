@@ -1,5 +1,5 @@
 import { beforeEach, expect, test, vi } from "vitest";
-import { NativeError } from "./bridge.ts";
+import { NativeError, revokeSession } from "./bridge.ts";
 import {
 	captureVerifiedContext,
 	createNativeRuntime,
@@ -46,6 +46,35 @@ beforeEach(() => {
 	native.state.archiveMigration = false;
 	native.refresh.mockReset();
 	native.refusal.mockReset();
+	vi.mocked(revokeSession).mockReset();
+});
+
+test("blocked retirement preserves native session authority without restarting the account", async () => {
+	const context = await captureVerifiedContext();
+	const refusal = new Error("unsynced edits");
+	const retireZero = vi.fn(async (): Promise<void> => {
+		throw refusal;
+	});
+	const onSessionEnded = vi.fn();
+	const onSessionEndFailed = vi.fn();
+	const runtime = createNativeRuntime(context, {
+		retireZero,
+		onSessionEnded,
+		onSessionEndFailed,
+	});
+	await expect(runtime.e2e.signOut()).rejects.toBe(refusal);
+	expect(revokeSession).not.toHaveBeenCalled();
+	expect(onSessionEnded).not.toHaveBeenCalled();
+	expect(onSessionEndFailed).not.toHaveBeenCalled();
+	retireZero.mockResolvedValueOnce(undefined);
+	vi.mocked(revokeSession).mockResolvedValueOnce({
+		authorityAbsent: true,
+		localCleared: true,
+		remote: "revoked",
+	});
+	await runtime.e2e.signOut();
+	expect(revokeSession).toHaveBeenCalledOnce();
+	await vi.waitFor(() => expect(onSessionEnded).toHaveBeenCalledOnce());
 });
 test("only native-authorized offline proof supplies the opaque Zero handle", async () => {
 	const context = await captureVerifiedContext();

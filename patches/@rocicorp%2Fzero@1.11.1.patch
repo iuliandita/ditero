@@ -1,33 +1,145 @@
+diff --git a/out/replicache/src/kv/idb-store.js b/out/replicache/src/kv/idb-store.js
+index 4f577ebf7b865c6fa1fce5b4e2d94e0f92d050f4..0ca30abe5de628c43b0fff0e6f3d07cb0c4d9baf 100644
+--- a/out/replicache/src/kv/idb-store.js
++++ b/out/replicache/src/kv/idb-store.js
+@@ -47,7 +47,7 @@
+ 				reject(new IDBNotFoundError(`Expected IndexedDB not found: ${name}. This likely means that the user deleted IndexedDB instances while the app was running. This is non-fatal. The app will continue running in memory until reload.`));
+ 			};
+ 			req.onsuccess = () => resolve(req.result);
+-			req.onerror = () => reject(req.error);
++			req.onerror = () => reject(new IDBOpenError(`Failed to reopen IndexedDB ${name}`, { cause: req.error }));
+ 			const db = await promise;
+ 			db.onversionchange = () => db.close();
+ 			return db;
+@@ -59,14 +59,18 @@
+ 			if (!this.#closed && e instanceof DOMException) {
+ 				if (e.name === "InvalidStateError") {
+ 					this.#db = reopenExistingDB(db.name);
+-					return fn(await this.#db);
++					try {
++						return fn(await this.#db);
++					} catch (error) {
++						throw toStorageFailure(error);
++					}
+ 				} else if (e.name === "NotFoundError") {
+ 					this.#idbDeleted = true;
+ 					mustGetBrowserGlobal("indexedDB").deleteDatabase(db.name);
+ 					throw new IDBNotFoundError(`Expected IndexedDB ${db.name} missing object store. Deleting db. This is non-fatal, the app will continue working in memory until it is reloaded.`);
+ 				}
+ 			}
+-			throw e;
++			throw toStorageFailure(e);
+ 		}
+ 	}
+ };
+@@ -82,7 +86,7 @@
+ 			const req = objectStore(this.#tx).count(key);
+ 			req.onsuccess = () => resolve(req.result > 0);
+ 			req.onerror = () => reject(req.error);
+-		});
++		}).catch((error) => { throw toStorageFailure(error); });
+ 	}
+ 	get(key) {
+ 		if (this.#closed) return transactionIsClosedRejection();
+@@ -90,7 +94,7 @@
+ 			const req = objectStore(this.#tx).get(key);
+ 			req.onsuccess = () => resolve(deepFreezeAllowUndefined(req.result));
+ 			req.onerror = () => reject(req.error);
+-		});
++		}).catch((error) => { throw toStorageFailure(error); });
+ 	}
+ 	release() {
+ 		this.#closed = true;
+@@ -111,12 +115,19 @@
+ 		if (this._pending.size === 0) return promiseVoid;
+ 		return new Promise((resolve, reject) => {
+ 			const tx = this.#tx;
+-			const store = objectStore(tx);
+-			for (const [key, val] of this._pending) if (val === deleteSentinel) store.delete(key);
+-			else store.put(val, key);
+-			tx.oncomplete = () => resolve();
+-			tx.onerror = () => reject(tx.error);
+-		});
++			// An abort can arrive without an error event (and without tx.error).
++			tx.onabort = () => reject(tx.error ?? new DOMException("IndexedDB transaction aborted", "AbortError"));
++			try {
++				const store = objectStore(tx);
++				for (const [key, val] of this._pending) if (val === deleteSentinel) store.delete(key);
++				else store.put(val, key);
++				tx.oncomplete = () => resolve();
++			} catch (error) {
++				// Do not let earlier queued requests commit a partial write.
++				try { tx.abort(); } catch {}
++				reject(error);
++			}
++		}).catch((error) => { throw toStorageFailure(error); });
+ 	}
+ 	release() {
+ 		this.#closed = true;
+@@ -126,6 +137,16 @@
+ 		return this.#closed;
+ 	}
+ };
++// Classify only native storage/transaction failures at the IDB boundary.
++// DataCloneError, ConstraintError and programming errors retain their identity.
++function toStorageFailure(error) {
++	if (error instanceof DOMException) {
++		const kind = error.name === "QuotaExceededError" ? "full" :
++			error.name === "AbortError" || error.name === "UnknownError" || error.name === "InvalidStateError" ? "io-error" : void 0;
++		if (kind !== void 0) return new StorageFailureError(kind, error.message, { cause: error });
++	}
++	return error;
++}
+ function writeImpl(db) {
+ 	return new WriteImpl(db.transaction(OBJECT_STORE, "readwrite", RELAXED));
+ }
+@@ -162,7 +183,7 @@
+ /**
+ * `read()` and `write()` reject with this error when the initial
+ * `indexedDB.open` failed. The browser's error is the `cause`. A failure after
+-* the database opened, such as a transaction error, is not wrapped.
++* the database opened is classified separately at the transaction boundary.
+ *
+ * It is a `cannot-open` storage failure, or `full` when the browser says so
+ * (WebKit's IndexedDB is SQLite underneath and reports `database or disk is
+diff --git a/out/replicache/src/kv/idb-store.d.ts b/out/replicache/src/kv/idb-store.d.ts
+index e12e006dee67765e5827882ab32f362d52894f18..679ee7568b3e0ad217dfb1a958b811d80afb9eb0 100644
+--- a/out/replicache/src/kv/idb-store.d.ts
++++ b/out/replicache/src/kv/idb-store.d.ts
+@@ -20,7 +20,7 @@
+ /**
+  * `read()` and `write()` reject with this error when the initial
+  * `indexedDB.open` failed. The browser's error is the `cause`. A failure after
+- * the database opened, such as a transaction error, is not wrapped.
++ * the database opened is classified separately at the transaction boundary.
+  *
+  * It is a `cannot-open` storage failure, or `full` when the browser says so
+  * (WebKit's IndexedDB is SQLite underneath and reports `database or disk is
 diff --git a/out/replicache/src/replicache-impl.js b/out/replicache/src/replicache-impl.js
-index 0732d55a5c819e6816c096f0c8484c86423a595b..34785c0dc2afd26e1fcba3b0a84ac7c163f9339f 100644
+index 0732d55a5c819e6816c096f0c8484c86423a595b..01847a40cd59c22fc21f3b20222a6030f80e4871 100644
 --- a/out/replicache/src/replicache-impl.js
 +++ b/out/replicache/src/replicache-impl.js
-@@ -172,6 +172,9 @@ var ReplicacheImpl = class {
+@@ -172,6 +172,10 @@
  	#idbDatabases;
  	#lc;
  	#zero;
 +	#closePromise;
++	#closing = false;
 +	#closePersisted = false;
 +	#activeMutations = /* @__PURE__ */ new Set();
  	#closeAbortController = new AbortController();
  	/**
  	* Aborted on close, on a storage failure after the open, and by
-@@ -489,24 +492,44 @@ var ReplicacheImpl = class {
+@@ -489,24 +493,59 @@
  	*
  	* When closed all subscriptions end and no more read or writes are allowed.
  	*/
 -	async close() {
-+	close() {
-+		if (this.#closePromise) return this.#closePromise;
-+		const { promise, resolve, reject } = resolver();
-+		this.#closePromise = promise;
- 		this.#closed = true;
+-		this.#closed = true;
 -		const { promise, resolve } = resolver();
 -		closingInstances.set(this.name, promise);
-+		const gate = resolver();
-+		closingInstances.set(this.name, gate.promise);
- 		this.#closeAbortController.abort();
- 		getBrowserGlobal("document")?.removeEventListener("visibilitychange", this.#onVisibilityChange);
+-		this.#closeAbortController.abort();
+-		getBrowserGlobal("document")?.removeEventListener("visibilitychange", this.#onVisibilityChange);
 -		await Promise.race([this.#ready, this.#openFailed.promise]);
 -		const closingPromises = [
 -			this.memdag.close(),
@@ -40,22 +152,46 @@ index 0732d55a5c819e6816c096f0c8484c86423a595b..34785c0dc2afd26e1fcba3b0a84ac7c1
 -		await Promise.all(closingPromises);
 -		closingInstances.delete(this.name);
 -		resolve();
-+		this.#closeDurably(gate).then(resolve, (error) => {
++	close(onDurable) {
++		if (this.#closePromise) return this.#closePromise;
++		const { promise, resolve, reject } = resolver();
++		this.#closePromise = promise;
++		this.#closing = true;
++		const gate = resolver();
++		closingInstances.set(this.name, gate.promise);
++		this.#closeDurably(gate, onDurable).then(resolve, (error) => {
++			if (!this.#closed && typeof error?.pendingMutations === "number") this.#closing = false;
 +			this.#closePromise = void 0;
 +			reject(error);
 +		});
 +		return promise;
 +	}
-+	async #closeDurably(gate) {
++	async #closeDurably(gate, onDurable) {
 +		try {
 +			const ready = await Promise.race([this.#ready.then(() => true), this.#openFailed.promise.then(() => false)]);
 +			// Accepted local commits finish before their owner is persisted and closed.
 +			await Promise.allSettled([...this.#activeMutations]);
 +			if (ready && !this.#closePersisted) {
-+				if (this.#kvStoreProvider.failure) throw this.#kvStoreProvider.failure;
-+				await this.#persist(true);
++				let error = this.#kvStoreProvider.failure;
++				const drained = (error || this.#storageFailure) && await this.#persistLock.withLock(async () => (await this.experimentalPendingMutations()).length === 0);
++				if (!drained && !error) try {
++					await this.#persist(true);
++				} catch (e) { error = e; }
++				if (!drained && error) await this.#persistLock.withLock(async () => {
++					const failure = getStorageFailure(error);
++					if (!failure) throw error;
++					if (!this.#kvStoreProvider.failure) this.#handleStorageFailure(failure);
++					// Dispatch is gated and accepted commits have settled. Only server
++					// acknowledgements can now reduce this authoritative queue.
++					const pendingMutations = (await this.experimentalPendingMutations()).length;
++					if (pendingMutations > 0) throw Object.assign(new Error("Cannot close while unsaved mutations are pending", { cause: failure }), { pendingMutations });
++				});
 +				this.#closePersisted = true;
 +			}
++			this.#closed = true;
++			this.#closeAbortController.abort();
++			getBrowserGlobal("document")?.removeEventListener("visibilitychange", this.#onVisibilityChange);
++			onDurable?.();
 +			const closingPromises = [
 +				this.memdag.close(),
 +				this.perdag.close(),
@@ -72,7 +208,7 @@ index 0732d55a5c819e6816c096f0c8484c86423a595b..34785c0dc2afd26e1fcba3b0a84ac7c1
  	}
  	async maybeEndPull(syncHead, requestID) {
  		for (;;) {
-@@ -741,13 +764,17 @@ var ReplicacheImpl = class {
+@@ -741,13 +780,17 @@
  		};
  	}
  	persist() {
@@ -92,7 +228,7 @@ index 0732d55a5c819e6816c096f0c8484c86423a595b..34785c0dc2afd26e1fcba3b0a84ac7c1
  				if (e instanceof ClientStateNotFoundError) this.#clientStateNotFoundOnClient(clientID);
  				else if (e instanceof InvalidRefCountError) {
  					await this.#handleInvalidRefCount(e);
-@@ -760,6 +787,7 @@ var ReplicacheImpl = class {
+@@ -760,6 +803,7 @@
  					return;
  				}
  			}
@@ -100,11 +236,11 @@ index 0732d55a5c819e6816c096f0c8484c86423a595b..34785c0dc2afd26e1fcba3b0a84ac7c1
  			const clientGroupID = await this.#clientGroupIDPromise;
  			assert(clientGroupID, "Expected clientGroupID to be defined");
  			this.#onPersist({
-@@ -1076,8 +1104,12 @@ var ReplicacheImpl = class {
+@@ -1076,8 +1120,12 @@
  	#register(name, mutatorImpl) {
  		this.#mutatorRegistry[name] = mutatorImpl;
  		return (args) => {
-+			if (this.#closed) throw new Error("Replicache is closed");
++			if (this.#closed || this.#closing) throw new Error("Replicache is closed");
  			const trackingData = name === "_zero_crud" ? void 0 : this.#zero?.trackMutation();
  			const result = this.#mutate(trackingData, name, mutatorImpl, args, performance.now());
 +			this.#activeMutations.add(result);
@@ -113,11 +249,35 @@ index 0732d55a5c819e6816c096f0c8484c86423a595b..34785c0dc2afd26e1fcba3b0a84ac7c1
  			if (trackingData) return {
  				client: result,
  				server: trackingData.serverPromise
+@@ -1145,7 +1193,9 @@
+ 	*
+ 	* @experimental This method is experimental and may change in the future.
+ 	*/
+-	experimentalPendingMutations() {
++	async experimentalPendingMutations() {
++		const ready = await Promise.race([this.#ready.then(() => true), this.#openFailed.promise.then(() => false)]);
++		if (!ready) throw new Error("Cannot inspect pending mutations because storage failed to open");
+ 		return withRead(this.memdag, pendingMutationsForAPI);
+ 	}
+ };
+diff --git a/out/replicache/src/replicache-impl.d.ts b/out/replicache/src/replicache-impl.d.ts
+index bfbe5e52d0da45451eb44d1b8509653fb5dfd55c..20baa9b658a68f747611dbceced3b3ad5edc6bd3 100644
+--- a/out/replicache/src/replicache-impl.d.ts
++++ b/out/replicache/src/replicache-impl.d.ts
+@@ -262,7 +262,7 @@
+      *
+      * When closed all subscriptions end and no more read or writes are allowed.
+      */
+-    close(): Promise<void>;
++    close(onDurable?: () => void): Promise<void>;
+     maybeEndPull(syncHead: Hash, requestID: string): Promise<void>;
+     /**
+      * Push pushes pending changes to the {@link pushURL}.
 diff --git a/out/zero-client/src/client/error.js b/out/zero-client/src/client/error.js
 index 3e3090d3fcaee6af14801d1e915b56a9d978f646..69d526fab1ce2918e919117ebc9747923c8a2453 100644
 --- a/out/zero-client/src/client/error.js
 +++ b/out/zero-client/src/client/error.js
-@@ -57,6 +57,24 @@ function getErrorConnectionTransition(ex) {
+@@ -57,6 +57,24 @@
  		status: NeedsAuth,
  		reason: ex
  	};
@@ -143,10 +303,10 @@ index 3e3090d3fcaee6af14801d1e915b56a9d978f646..69d526fab1ce2918e919117ebc974792
  		case AbruptClose:
  		case CleanClose:
 diff --git a/out/zero-client/src/client/zero.js b/out/zero-client/src/client/zero.js
-index a1fec2409d02c59839e13ec1afe6e0d101d60b06..003999ecf287763e489a369d91f025b664fe1a5e 100644
+index a1fec2409d02c59839e13ec1afe6e0d101d60b06..daf0507192a1e14b0d681a9dce4692a7c16a25ea 100644
 --- a/out/zero-client/src/client/zero.js
 +++ b/out/zero-client/src/client/zero.js
-@@ -212,6 +212,8 @@ var Zero = class Zero {
+@@ -212,6 +212,8 @@
  	#socketResolver = resolver();
  	#connectionReadyResolver = connectionReadyResolver();
  	#currentConnectAttempt;
@@ -155,7 +315,17 @@ index a1fec2409d02c59839e13ec1afe6e0d101d60b06..003999ecf287763e489a369d91f025b6
  	#closeAbortController = new AbortController();
  	#visibilityWatcher;
  	#connectionManager;
-@@ -641,25 +643,36 @@ var Zero = class Zero {
+@@ -635,36 +637,52 @@
+ 	get closed() {
+ 		return this.#connectionManager.is(Closed);
+ 	}
++	/** Number of local mutations not yet acknowledged by the server. */
++	async pendingMutations() {
++		return (await this.#rep.experimentalPendingMutations()).length;
++	}
+ 	/**
+ 	* Closes this Zero instance.
+ 	*
  	* Once a Zero instance has been closed it no longer syncs, you can no
  	* longer query or mutate data with it, and its query views stop updating.
  	*/
@@ -172,12 +342,9 @@ index a1fec2409d02c59839e13ec1afe6e0d101d60b06..003999ecf287763e489a369d91f025b6
 +	}
 +	async #closeDurably() {
  		const lc = this.#lc.withContext("close");
-+		// Reject reentrant legacy and custom mutations before disconnect callbacks.
-+		const closing = this.#rep.close();
- 		try {
--			if (this.closed) {
--				lc.debug?.("close() called on already closed instance");
--				return;
++		// Gate dispatch synchronously, but keep sync alive until local durability
++		// or an empty authoritative queue makes shutdown safe.
++		const closing = this.#rep.close(() => {
 +			if (!this.closed) {
 +				lc.debug?.("Closing Zero instance. Stack:", (/* @__PURE__ */ new Error()).stack);
 +				this.#onlineManager.cleanup();
@@ -187,7 +354,13 @@ index a1fec2409d02c59839e13ec1afe6e0d101d60b06..003999ecf287763e489a369d91f025b6
 +				}), CLOSE_CODE_NORMAL);
 +				this.#closeAbortController.abort();
 +				this.#metrics.stop();
++				this.#connectionManager.closed();
 +			}
++		});
+ 		try {
+-			if (this.closed) {
+-				lc.debug?.("close() called on already closed instance");
+-				return;
 +			await closing;
 +			if (!this.#closeSucceeded) {
 +				this.#unexpose();
@@ -208,3 +381,21 @@ index a1fec2409d02c59839e13ec1afe6e0d101d60b06..003999ecf287763e489a369d91f025b6
  		} catch (e) {
  			lc.error?.("Error closing Zero instance", e);
  			throw e;
+-		} finally {
+-			this.#connectionManager.closed();
+ 		}
+ 	}
+ 	#onMessage = (e) => {
+diff --git a/out/zero-client/src/client/zero.d.ts b/out/zero-client/src/client/zero.d.ts
+index 4a4cb9d633eeb7949d7ad8831de139b00fa939a6..2d9002c4ad13c312baaebd78cd2db03d144a92b1 100644
+--- a/out/zero-client/src/client/zero.d.ts
++++ b/out/zero-client/src/client/zero.d.ts
+@@ -303,6 +303,8 @@
+      * longer query or mutate data with it, and its query views stop updating.
+      */
+     close(): Promise<void>;
++    /** Number of local mutations not yet acknowledged by the server. */
++    pendingMutations(): Promise<number>;
+     /**
+      * A rough heuristic for whether the client is currently online and
+      * authenticated.

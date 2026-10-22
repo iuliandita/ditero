@@ -14,7 +14,7 @@ import { ShellSkeleton } from "../components/shell/AppSkeleton.tsx";
 import { EarlierEditsNotice } from "../components/shell/EarlierEditsNotice.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { ConnectionRequiredError } from "./connection-required.ts";
-import { findEarlierUnsyncedEdits } from "./earlier-edits.ts";
+import { scanEarlierUnsyncedEdits } from "./earlier-edits.ts";
 import { createExportBoundary } from "./export-boundary.ts";
 import {
 	createSyncTracker,
@@ -27,6 +27,7 @@ import { createZeroClient, type ZeroClient } from "./zero-client.ts";
 import {
 	createAfterZeroRetirement,
 	registerZeroClient,
+	retirementErrorMessage,
 	retireZeroClients,
 	ZeroRetirementError,
 } from "./zero-lifecycle.ts";
@@ -73,11 +74,16 @@ export function AppZeroProvider({
 		tracker: SyncTracker;
 		exportBoundary: ReturnType<typeof createExportBoundary>;
 	} | null>(null);
-	const [earlierEdits, setEarlierEdits] = useState<ZeroClient | null>(null);
+	const [earlierEdits, setEarlierEdits] = useState<{
+		zero: ZeroClient;
+		found: string[];
+		incomplete: boolean;
+	} | null>(null);
 	const [startupFailed, setStartupFailed] = useState(false);
 	const [connectionFailed, setConnectionFailed] = useState(false);
 	const initializing = useRef(false);
 	const [startupSaveFailed, setStartupSaveFailed] = useState(false);
+	const [retirementError, setRetirementError] = useState<unknown>(null);
 	const [startupAttempt, setStartupAttempt] = useState(0);
 	const [retrying, setRetrying] = useState(false);
 	const retryPending = useRef(false);
@@ -90,7 +96,8 @@ export function AppZeroProvider({
 			await retireZeroClients();
 			if (!connectionFailed) setStartupFailed(false);
 			setStartupAttempt((n) => n + 1);
-		} catch {
+		} catch (error) {
+			setRetirementError(error);
 			setStartupFailed(true);
 			setStartupSaveFailed(true);
 			setConnectionFailed(false);
@@ -139,6 +146,10 @@ export function AppZeroProvider({
 							exportBoundary?.dispose();
 						},
 						() => cancelled,
+						{
+							storageFailed: () => tracker.getSnapshot().storageFailed,
+							pendingMutations: () => instance.pendingMutations(),
+						},
 					);
 					trackMutations(instance, tracker);
 					const boundary = createExportBoundary({
@@ -202,29 +213,29 @@ export function AppZeroProvider({
 				setStartupFailed(false);
 				setConnectionFailed(false);
 				setClient(created);
-				void findEarlierUnsyncedEdits(created.zero.idbName).then(
-					(names) => {
-						if (!cancelled && names.length > 0) setEarlierEdits(created.zero);
-					},
-					(error: unknown) => {
-						console.error("Checking earlier unsynced edits failed", error);
-					},
-				);
+				void scanEarlierUnsyncedEdits(created.zero.idbName, (snapshot) => {
+					if (!cancelled) setEarlierEdits({ zero: created.zero, ...snapshot });
+				}).catch((error: unknown) => {
+					console.error("Checking earlier unsynced edits failed", error);
+				});
 			}
 		})()
 			.catch(async (error: unknown) => {
 				let saveFailed = error instanceof ZeroRetirementError;
+				let saveError = error;
 				if (owner) {
 					try {
 						await owner.retire();
-					} catch {
+					} catch (retirementError) {
 						saveFailed = true;
+						saveError = retirementError;
 					}
 				}
 				if (!cancelled) {
 					console.error("Zero startup failed", error);
 					setStartupFailed(true);
 					setStartupSaveFailed(saveFailed);
+					setRetirementError(saveError);
 					setConnectionFailed(
 						!saveFailed && error instanceof ConnectionRequiredError,
 					);
@@ -249,7 +260,7 @@ export function AppZeroProvider({
 			<main className="flex min-h-dvh flex-col items-center justify-center gap-4 px-6">
 				<p role="alert">
 					{startupSaveFailed
-						? m.sync_save_pending_failed()
+						? retirementErrorMessage(retirementError)
 						: m.mutation_failed()}
 				</p>
 				<Button disabled={retrying} onClick={() => void retryStartup()}>
@@ -260,9 +271,14 @@ export function AppZeroProvider({
 	if (!client) return <ShellSkeleton />;
 	return (
 		<ZeroProvider zero={client.zero}>
-			{earlierEdits === client.zero && (
-				<EarlierEditsNotice onDismiss={() => setEarlierEdits(null)} />
-			)}
+			{earlierEdits?.zero === client.zero &&
+				(earlierEdits.found.length > 0 || earlierEdits.incomplete) && (
+					<EarlierEditsNotice
+						found={earlierEdits.found.length > 0}
+						incomplete={earlierEdits.incomplete}
+						onDismiss={() => setEarlierEdits(null)}
+					/>
+				)}
 			<SyncTrackerContext.Provider value={client.tracker}>
 				<ExportBoundaryContext.Provider value={client.exportBoundary}>
 					<SyncEndpointContext.Provider value={client.endpoint}>

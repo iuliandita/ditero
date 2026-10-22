@@ -221,6 +221,10 @@ still applies.
 
 The native client must retire its local sync client before changing account
 ownership and report network or local credential-cleanup failures truthfully.
+If local storage has failed, retirement waits for the actual pending mutation
+queue to reach the server. A blocked transition keeps the current sync client
+and its credentials active, reports the unsynced count, and permits retry after
+acknowledgement. It must not restart the provider or clear key material on failure.
 Local forgetting alone does not prove server revocation. The endpoint retains
 the same admission, no-store, and empty-body contract as native bootstrap.
 

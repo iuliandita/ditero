@@ -1539,6 +1539,18 @@
 	"sync_storage_failed_detail": "Acest dispozitiv nu îți poate salva modificările acum. O modificare se păstrează doar după ce ajunge pe server, așa că ține aplicația deschisă până când nu mai așteaptă nimic sincronizarea. Eliberează spațiu de stocare, apoi repornește aplicația.",
 	"sync_storage_offline_title": "Offline, nu se poate salva pe acest dispozitiv",
 	"sync_storage_offline_detail": "Serverul nu poate fi contactat, iar acest dispozitiv nu îți poate salva modificările. Modificările noi sunt în pauză până revine conexiunea. Ține aplicația deschisă: modificările încă nesincronizate se pierd dacă se închide.",
+	"sync_storage_reauth_detail": "Sesiunea ta a expirat, iar acest dispozitiv nu îți poate salva modificările. Ține aplicația deschisă. Autentifică-te în Ditero în altă filă sau fereastră, apoi revino aici pentru sincronizarea modificărilor în așteptare. Dacă închizi aplicația înainte ca serverul să le confirme, se pierd.",
+	"sync_earlier_edits_incomplete_title": "Nu au putut fi verificate toate datele offline anterioare",
+	"sync_earlier_edits_incomplete_detail": "Unele date offline anterioare nu au putut fi verificate. Păstrează datele Ditero și nu dezinstala aplicația. Dacă ai putea avea modificări nesincronizate dintr-o versiune anterioară, închide Ditero și întreabă persoana care administrează serverul tău cum le recuperezi.",
+	"sync_retirement_blocked": [
+		{
+			"declarations": ["input count", "local countNum = count: number"],
+			"selectors": [],
+			"match": {
+				"*": "Modificări nesincronizate: {countNum}. Acest dispozitiv nu le poate salva. Ține aplicația deschisă până când serverul le confirmă, apoi încearcă din nou."
+			}
+		}
+	],
 	"sync_earlier_edits_title": "Modificări nesincronizate dintr-o versiune anterioară",
 	"sync_earlier_edits_detail": "Pe acest dispozitiv există încă modificări făcute cu o versiune anterioară a Ditero care nu au ajuns niciodată pe server. Această versiune nu le poate trimite și, la câteva minute după pornire, șterge acea copie anterioară dacă nu a mai fost folosită de două zile. Ca să le păstrezi, închide Ditero acum, nu-i șterge datele, nu-l dezinstala și întreabă persoana care administrează serverul tău cum le recuperezi cu versiunea anterioară.",
 	"sync_auth_rejected_title": "Autentificarea pentru sincronizare a fost refuzată",

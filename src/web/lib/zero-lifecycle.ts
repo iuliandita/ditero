@@ -1,15 +1,22 @@
+import { m } from "../../paraglide/messages.js";
+
 type ManagedZero = {
 	userID?: string;
 	mutate: unknown;
 	close: () => Promise<void>;
 };
 type LocalMutation = { client: Promise<unknown> };
+type RetirementStorage = {
+	storageFailed: () => boolean;
+	pendingMutations: () => Promise<number>;
+};
 
 type Entry = {
 	zero: ManagedZero;
 	commits: Set<Promise<void>>;
 	onRetire: () => void;
 	isCancelled: () => boolean;
+	storage?: RetirementStorage;
 	retiring: boolean;
 	stopped: boolean;
 	failed: boolean;
@@ -25,6 +32,21 @@ export class ZeroRetirementError extends Error {
 	}
 }
 
+export class ZeroRetirementBlockedError extends ZeroRetirementError {
+	constructor(readonly count: number) {
+		super(undefined);
+	}
+}
+
+export function retirementErrorMessage(error: unknown): string {
+	while (error instanceof ZeroRetirementError) {
+		if (error instanceof ZeroRetirementBlockedError)
+			return m.sync_retirement_blocked({ count: error.count });
+		error = error.cause;
+	}
+	return m.sync_save_pending_failed();
+}
+
 function retire(entry: Entry, retry = false): Promise<void> {
 	if (entry.completion && !(retry && entry.failed)) return entry.completion;
 	entry.retiring = true;
@@ -36,22 +58,41 @@ function retire(entry: Entry, retry = false): Promise<void> {
 		reject = rej;
 	});
 	entry.completion = completion;
+	let closeStarted = false;
 	void (async () => {
+		// Freeze dispatch before waiting, including edits accepted just before
+		// storage failed. Reconnecting alone does not prove those edits reached the server.
+		await Promise.all(entry.commits);
+		if (entry.storage?.storageFailed()) {
+			const pending = await entry.storage.pendingMutations();
+			if (pending > 0) throw new ZeroRetirementBlockedError(pending);
+		}
+		closeStarted = true;
+		await entry.zero.close();
+		// Close may discover a storage failure during its own persistence barrier.
+		// Keep auth refresh and sync observers alive until that barrier succeeds.
 		if (!entry.stopped) {
 			entry.onRetire();
 			entry.stopped = true;
 		}
-		// Only local commits matter here: server acknowledgments can wait until
-		// this account reconnects, but accepted edits must reach durable storage.
-		await Promise.all(entry.commits);
-		await entry.zero.close();
 	})().then(
 		() => {
 			clients.delete(entry);
 			resolve();
 		},
 		(error: unknown) => {
+			if (
+				typeof error === "object" &&
+				error !== null &&
+				"pendingMutations" in error &&
+				typeof error.pendingMutations === "number" &&
+				Number.isSafeInteger(error.pendingMutations) &&
+				error.pendingMutations > 0
+			)
+				error = new ZeroRetirementBlockedError(error.pendingMutations);
 			entry.failed = true;
+			if (!closeStarted || error instanceof ZeroRetirementBlockedError)
+				entry.retiring = false;
 			reject(error);
 		},
 	);
@@ -63,6 +104,7 @@ export function registerZeroClient(
 	zero: ManagedZero,
 	onRetire: () => void,
 	isCancelled: () => boolean = () => false,
+	storage?: RetirementStorage,
 ): { retire: () => Promise<void> } {
 	if (zero.userID !== accountId)
 		throw new Error("Zero client does not belong to this account");
@@ -71,6 +113,7 @@ export function registerZeroClient(
 		commits: new Set(),
 		onRetire,
 		isCancelled,
+		storage,
 		retiring: false,
 		stopped: false,
 		failed: false,

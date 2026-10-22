@@ -148,7 +148,9 @@ describe("deriveSyncPhase", () => {
 					sessionExpired: true,
 					authRejected: true,
 				}),
-			).toBe("storage-offline");
+			).toBe(
+				connection === "needs-auth" ? "storage-reauth" : "storage-offline",
+			);
 		expect(
 			deriveSyncPhase({
 				...failed,
@@ -156,8 +158,26 @@ describe("deriveSyncPhase", () => {
 				tabHidden: true,
 			}),
 		).toBe("storage-offline");
-		expect(deriveSyncPhase({ ...failed, rejected: true })).toBe("rejected");
+		expect(deriveSyncPhase({ ...failed, rejected: true })).toBe(
+			"storage-failed",
+		);
 		expect(deriveSyncPhase({ ...failed, connection: "error" })).toBe("stopped");
+	});
+
+	it.each([
+		false,
+		true,
+	])("keeps storage failure ahead of rejection with expired session: %s", (sessionExpired) => {
+		expect(
+			deriveSyncPhase({
+				...base,
+				connection: "needs-auth",
+				sessionExpired,
+				storageFailed: true,
+				rejected: true,
+				pending: 2,
+			}),
+		).toBe(sessionExpired ? "storage-reauth" : "storage-offline");
 	});
 
 	it("puts a server rejection ahead of offline and syncing", () => {

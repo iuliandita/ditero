@@ -529,7 +529,7 @@ test("public Zero.close waits for accepted edits and durable persistence", async
 		).toMatchObject({
 			before: "connected",
 			after: "closed",
-			beforeCloseReturned: true,
+			beforeCloseReturned: false,
 			reentrant: { refused: true },
 		});
 		await expect

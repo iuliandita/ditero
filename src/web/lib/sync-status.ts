@@ -49,7 +49,8 @@ export type SyncPhase =
 	| "stopped"
 	| "rejected"
 	| "storage-failed"
-	| "storage-offline";
+	| "storage-offline"
+	| "storage-reauth";
 
 export function deriveSyncPhase({
 	connection,
@@ -82,9 +83,11 @@ export function deriveSyncPhase({
 		connection === "closed"
 	)
 		return "stopped";
-	// Every other phase but a refusal claims edits are kept on this device.
-	if (storageFailed && !rejected)
+	// Storage failure must override any wording that promises device durability.
+	if (storageFailed) {
+		if (connection === "needs-auth" && sessionExpired) return "storage-reauth";
 		return connection === "connected" ? "storage-failed" : "storage-offline";
+	}
 	if (connection === "needs-auth" && sessionExpired) return "reauth";
 	if (rejected) return "rejected";
 	if (connection !== "connected" && authRejected) return "auth-rejected";

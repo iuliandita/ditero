@@ -1510,6 +1510,18 @@
 	"sync_storage_failed_detail": "Dieses Gerät kann deine Änderungen gerade nicht speichern. Eine Änderung bleibt erst erhalten, wenn sie beim Server angekommen ist. Lass die App deshalb geöffnet, bis nichts mehr auf die Synchronisierung wartet. Schaffe Speicherplatz frei und starte die App dann neu.",
 	"sync_storage_offline_title": "Offline, Speichern auf diesem Gerät nicht möglich",
 	"sync_storage_offline_detail": "Der Server ist nicht erreichbar und dieses Gerät kann deine Änderungen nicht speichern. Neue Änderungen sind pausiert, bis die Verbindung wieder da ist. Lass die App geöffnet: Noch nicht synchronisierte Änderungen gehen verloren, wenn sie geschlossen wird.",
+	"sync_storage_reauth_detail": "Deine Anmeldung ist abgelaufen und dieses Gerät kann deine Änderungen nicht speichern. Lass die App geöffnet. Melde dich in einem anderen Tab oder Fenster bei Ditero an und kehre hierher zurück, damit ausstehende Änderungen synchronisiert werden. Beim Schließen vor der Bestätigung durch den Server gehen sie verloren.",
+	"sync_earlier_edits_incomplete_title": "Frühere Offline-Daten konnten nicht vollständig geprüft werden",
+	"sync_earlier_edits_incomplete_detail": "Einige frühere Offline-Daten konnten nicht geprüft werden. Behalte die Daten von Ditero und deinstalliere die App nicht. Falls du noch nicht synchronisierte Änderungen aus einer früheren Version hast, schließe Ditero und frag die Person, die deinen Server betreibt, wie du sie wiederherstellst.",
+	"sync_retirement_blocked": [
+		{
+			"declarations": ["input count", "local countNum = count: number"],
+			"selectors": [],
+			"match": {
+				"*": "Nicht synchronisierte Änderungen: {countNum}. Dieses Gerät kann sie nicht speichern. Lass die App geöffnet, bis der Server sie bestätigt, und versuche es dann erneut."
+			}
+		}
+	],
 	"sync_earlier_edits_title": "Nicht synchronisierte Änderungen aus einer früheren Version",
 	"sync_earlier_edits_detail": "Auf diesem Gerät liegen noch Änderungen aus einer früheren Ditero-Version, die nie beim Server angekommen sind. Diese Version kann sie nicht senden und löscht die frühere Kopie wenige Minuten nach dem Start, sobald sie zwei Tage lang nicht benutzt wurde. Damit sie erhalten bleiben, schließe Ditero jetzt, lösche keine App-Daten, deinstalliere die App nicht und frag die Person, die deinen Server betreibt, wie du sie mit der früheren Version wiederherstellst.",
 	"sync_auth_rejected_title": "Anmeldung zur Synchronisierung abgelehnt",
