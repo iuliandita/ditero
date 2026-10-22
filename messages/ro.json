@@ -1165,6 +1165,7 @@
 	"focus_cue_work_complete": "Concentrare încheiată",
 	"focus_cue_break_over": "Pauza s-a terminat",
 	"focus_log_failed": "Intervalul nu a putut fi salvat. Nu se va reîncerca.",
+	"focus_not_counted": "Intervalul așteaptă confirmarea duratei. Lasă deschisă o filă care l-a urmărit sau așteaptă sincronizarea.",
 	"focus_duration_seconds": [
 		{
 			"declarations": [
@@ -1539,6 +1540,7 @@
 	"auth_error_account_already_linked": "Acel cont de la furnizor este deja asociat cu alt cont Ditero.",
 	"auth_error_registration_unavailable": "Înregistrarea este temporar indisponibilă. Încearcă din nou peste puțin timp.",
 	"auth_error_invalid_origin": "Serverul nu are încredere în această adresă. Cere-i operatorului să o adauge la originile de încredere ale instanței.",
+	"auth_error_account_linked_concurrently": "Acest cont de conectare tocmai a fost asociat într-o altă fereastră. Conectează-te din nou.",
 	"auth_error_account_ownership_conflict": "Această identitate de autentificare unică este deja asociată cu alt cont.",
 	"mutation_failed": "Ceva n-a mers bine.",
 	"mutation_offline_not_saved": "Ești offline, modificarea nu a fost salvată. Reconectează-te și încearcă din nou.",

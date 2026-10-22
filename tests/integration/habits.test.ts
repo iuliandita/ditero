@@ -893,6 +893,7 @@ describe("M2 habit/recurrence/focus/karma mutators", () => {
 		test("replaying a persisted interval records once per account", async () => {
 			const interval = {
 				intervalId: crypto.randomUUID(),
+				proof: "monotonic" as const,
 				kind: "work" as const,
 				startedAt: ANCHOR,
 				endedAt: ANCHOR + 1500000,
@@ -924,6 +925,7 @@ describe("M2 habit/recurrence/focus/karma mutators", () => {
 		])("clock-adjusted timestamps remain strict about duration (%i ms)", async (correction) => {
 			const interval = {
 				intervalId: crypto.randomUUID(),
+				proof: "monotonic" as const,
 				kind: "work" as const,
 				startedAt: ANCHOR + correction,
 				endedAt: ANCHOR + correction + 10000,

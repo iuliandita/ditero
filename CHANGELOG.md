@@ -13,6 +13,9 @@ The first beta is a `0.x` prerelease, not a stable release. Native device/platfo
 qualification, trusted Windows/macOS signing, deep links and automatic updates
 remain incomplete in [#346](https://github.com/iuliandita/ditero/issues/346).
 
+- Focus intervals use server timing evidence to reject forward-clock inflation and
+  wait for completion confirmation before starting the next phase. Upgrades from
+  develop require no cache rebuild.
 - Authentication updates to Better Auth 1.7.12. Password reset opens the browser
   reset form and atomically revokes sessions, personal access tokens, calendar
   feeds, passkeys and linked sign-in accounts. Two-factor enrollment remains.

@@ -1165,6 +1165,7 @@
 	"focus_cue_work_complete": "Focus terminé",
 	"focus_cue_break_over": "Pause terminée",
 	"focus_log_failed": "Cet intervalle n’a pas pu être enregistré. Il ne sera pas réessayé.",
+	"focus_not_counted": "Cet intervalle attend la confirmation de sa durée. Garde ouvert un onglet qui l’a observé ou attends la synchronisation.",
 	"focus_duration_seconds": [
 		{
 			"declarations": [
@@ -1539,6 +1540,7 @@
 	"auth_error_account_already_linked": "Ce compte du fournisseur est déjà associé à un autre compte Ditero.",
 	"auth_error_registration_unavailable": "L'inscription est momentanément indisponible. Réessaie dans un instant.",
 	"auth_error_invalid_origin": "Le serveur ne fait pas confiance à cette adresse. Demande à l'opérateur de l'ajouter aux origines de confiance de l'instance.",
+	"auth_error_account_linked_concurrently": "Ce compte de connexion vient d'être associé dans une autre fenêtre. Reconnecte-toi.",
 	"auth_error_account_ownership_conflict": "Cette identité d'authentification unique est déjà associée à un autre compte.",
 	"mutation_failed": "Un problème est survenu.",
 	"mutation_offline_not_saved": "Tu es hors ligne, cette modification n'a pas été enregistrée. Reconnecte-toi et réessaie.",

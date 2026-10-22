@@ -57,7 +57,7 @@ const AUTH_ERROR_MESSAGES: Record<string, () => string> = {
 	// on an address the server does not trust (TRUSTED_ORIGINS / BETTER_AUTH_URL).
 	INVALID_ORIGIN: m.auth_error_invalid_origin,
 	// account-conflict.ts: the losing side of two simultaneous first sign-ins.
-	ACCOUNT_ALREADY_LINKED: m.auth_error_account_already_linked,
+	ACCOUNT_ALREADY_LINKED: m.auth_error_account_linked_concurrently,
 
 	// OAuth callback failures arrive as lowercase `?error=` redirect codes.
 	email_not_found: m.auth_error_email_not_found,

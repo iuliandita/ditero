@@ -325,6 +325,13 @@ export const queries = defineQueries({
 	focusSessions: {
 		mine: defineQuery(({ ctx }) => zql.focusSession.where("userId", ctx.id)),
 	},
+	// Ids of the caller's own server-recorded interval starts (read-only; the
+	// start time itself is never synced).
+	focusIntervalStarts: {
+		mine: defineQuery(({ ctx }) =>
+			zql.focusIntervalStart.where("userId", ctx.id),
+		),
+	},
 	// Own-user only. `config` is excluded at the drizzle-zero layer, so it can
 	// never reach a client even though the row itself syncs.
 	notificationChannels: {

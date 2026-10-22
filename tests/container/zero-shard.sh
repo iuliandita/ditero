@@ -124,6 +124,22 @@ for role in ditero_runtime ditero_migrator; do
 	fi
 done
 
+# Timing evidence stays outside Zero and runtime has only the needed DML.
+private_access=$(psql_as ditero_runtime "$DITERO_RUNTIME_DB_PASSWORD" --command "
+ select has_schema_privilege('server_private', 'USAGE')
+ and has_table_privilege('server_private.focus_interval_clock', 'SELECT')
+ and has_table_privilege('server_private.focus_interval_clock', 'INSERT')
+ and has_table_privilege('server_private.focus_interval_clock', 'UPDATE')
+ and not has_table_privilege('server_private.focus_interval_clock', 'DELETE')
+ and not has_schema_privilege('server_private', 'CREATE')
+ and not rolsuper and not rolbypassrls
+ from pg_roles where rolname=current_user")
+[ "$private_access" = "t" ] || { echo "runtime private clock grants are incorrect" >&2; exit 1; }
+published=$(psql_as postgres "$POSTGRES_PASSWORD" --command "
+ select count(*) from pg_publication_tables where schemaname='server_private'
+ or tablename='focus_interval_clock'")
+[ "$published" = "0" ] || { echo "private focus clocks are published" >&2; exit 1; }
+
 # The grants above are what the app's boot check reads. Revoking them must stop
 # the app from starting, or the check is decorative and this test proves nothing
 # about it.

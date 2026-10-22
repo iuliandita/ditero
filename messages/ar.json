@@ -1228,6 +1228,7 @@
 	"focus_cue_work_complete": "اكتمل التركيز",
 	"focus_cue_break_over": "انتهت الاستراحة",
 	"focus_log_failed": "تعذر حفظ هذه الفترة. لن تتكرر محاولة حفظها.",
+	"focus_not_counted": "تنتظر هذه الفترة تأكيد المدة. أبقِ علامة تبويب تابعت الفترة مفتوحة أو انتظر المزامنة.",
 	"focus_duration_seconds": [
 		{
 			"declarations": [
@@ -1626,6 +1627,7 @@
 	"auth_error_account_already_linked": "حساب المزوّد هذا مرتبط بالفعل بحساب Ditero آخر.",
 	"auth_error_registration_unavailable": "التسجيل غير متاح مؤقتًا. حاول مرة أخرى بعد قليل.",
 	"auth_error_invalid_origin": "الخادم لا يثق بهذا العنوان. اطلب من المشغّل إضافته إلى الأصول الموثوقة لهذه النسخة.",
+	"auth_error_account_linked_concurrently": "تم ربط حساب تسجيل الدخول هذا للتو في نافذة أخرى. سجّل الدخول مرة أخرى.",
 	"auth_error_account_ownership_conflict": "هوية تسجيل الدخول الموحّد هذه مرتبطة بالفعل بحساب آخر.",
 	"mutation_failed": "حدث خطأ ما.",
 	"mutation_offline_not_saved": "أنت غير متصل، لم يُحفظ هذا التغيير. أعد الاتصال وحاول مرة أخرى.",

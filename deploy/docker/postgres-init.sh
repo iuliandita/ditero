@@ -38,6 +38,11 @@ CREATE ROLE ditero_migrator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT 
 CREATE ROLE ditero_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS PASSWORD :'runtime_password';
 ALTER DATABASE :"database_name" OWNER TO ditero_migrator;
 ALTER SCHEMA public OWNER TO ditero_migrator;
+CREATE SCHEMA server_private AUTHORIZATION ditero_migrator;
+REVOKE ALL ON SCHEMA server_private FROM PUBLIC;
+GRANT USAGE ON SCHEMA server_private TO ditero_runtime;
+ALTER DEFAULT PRIVILEGES FOR ROLE ditero_migrator IN SCHEMA server_private
+  GRANT SELECT, INSERT, UPDATE ON TABLES TO ditero_runtime;
 GRANT CONNECT ON DATABASE :"database_name" TO ditero_runtime;
 GRANT USAGE ON SCHEMA public TO ditero_runtime;
 ALTER DEFAULT PRIVILEGES FOR ROLE ditero_migrator IN SCHEMA public

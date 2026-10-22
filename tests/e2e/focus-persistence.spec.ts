@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { expect, type Page, test } from "@playwright/test";
 import { Pool } from "pg";
 import {
@@ -70,10 +71,131 @@ test("running and paused task timers survive reload; Stop discards them", async 
 	await expect(timer).toHaveCount(0);
 });
 
+test("an online interval reloaded mid-way is still logged once", async ({
+	page,
+}) => {
+	const userId = await startTask(page, 8);
+	await serverStartObserved(page, userId);
+	await page.reload();
+	const timer = page.getByTestId("focus-timer");
+	await expect(timer.getByTestId("focus-task")).toHaveText("Read together");
+	await expect(timer.getByTestId("focus-phase")).toHaveText("Break", {
+		timeout: 20000,
+	});
+	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
+	try {
+		await expect
+			.poll(
+				async () =>
+					(
+						await pool.query(
+							"select duration_sec from focus_session where user_id=$1 and task_id is not null",
+							[userId],
+						)
+					).rows,
+			)
+			.toEqual([{ duration_sec: 8 }]);
+		await page.reload();
+		await expect(timer.getByTestId("focus-phase")).toHaveText("Break");
+		await expect
+			.poll(async () => (await focusState(page, userId)).pendingCompletions)
+			.toEqual([]);
+		expect(
+			(
+				await pool.query(
+					"select count(*)::int as count from focus_session where user_id=$1",
+					[userId],
+				)
+			).rows,
+		).toEqual([{ count: 1 }]);
+	} finally {
+		await pool.end();
+	}
+});
+
+test("a start acknowledgement lost before a reload is recovered from the synced start", async ({
+	page,
+}) => {
+	const userId = await startTask(page, 15);
+	await serverStartObserved(page, userId);
+	await forgetServerStart(page, userId);
+	await page.reload();
+	const timer = page.getByTestId("focus-timer");
+	await expect(timer.getByTestId("focus-task")).toHaveText("Read together");
+	await expect
+		.poll(async () => (await focusState(page, userId)).session?.serverStarted)
+		.toBe(true);
+	await expect(timer.getByTestId("focus-phase")).toHaveText("Break", {
+		timeout: 30000,
+	});
+	await expect(page.getByTestId("focus-error")).toHaveCount(0);
+	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
+	try {
+		await expect
+			.poll(
+				async () =>
+					(
+						await pool.query(
+							"select duration_sec from focus_session where user_id=$1",
+							[userId],
+						)
+					).rows,
+			)
+			.toEqual([{ duration_sec: 15 }]);
+	} finally {
+		await pool.end();
+	}
+});
+
+test("an interval without current proof stays unresolved after the lookup timeout", async ({
+	page,
+}) => {
+	await page.clock.install();
+	const userId = await startTask(page, 15);
+	await serverStartObserved(page, userId);
+	// Restore an offline/legacy interval that never reached the server. A fresh
+	// identity cannot inherit a deleted start from Zero's persistent cache.
+	const unrecordedId = randomUUID();
+	await forgetServerStart(page, userId, unrecordedId);
+	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
+	try {
+		expect(
+			(
+				await pool.query(
+					"select count(*)::int as count from focus_interval_start where user_id=$1 and interval_id=$2",
+					[userId, unrecordedId],
+				)
+			).rows,
+		).toEqual([{ count: 0 }]);
+		await page.clock.setSystemTime(
+			(await page.evaluate(() => Date.now())) + 60_000,
+		);
+		await page.reload();
+		await expect(page.getByTestId("workspace")).toBeVisible();
+		await page.clock.runFor(10_500);
+		const timer = page.getByTestId("focus-timer");
+		await expect(timer.getByTestId("focus-phase")).toHaveText("Focus");
+		await expect(page.getByTestId("focus-error")).toContainText(
+			"waiting for time confirmation",
+		);
+		expect(
+			(
+				await pool.query(
+					"select count(*)::int as count from focus_session where user_id=$1",
+					[userId],
+				)
+			).rows,
+		).toEqual([{ count: 0 }]);
+	} finally {
+		await pool.end();
+	}
+});
+
 test("an interval that expires away records once and parks on the next phase", async ({
 	page,
 }) => {
 	const userId = await startTask(page, 5);
+	await serverStartObserved(page, userId);
 	const origin = page.url();
 	const expiredAt = Date.now() + 6000;
 	await page.goto("about:blank");
@@ -132,6 +254,74 @@ async function focusState(page: Page, userId: string) {
 			db.close();
 		}
 	}, userId);
+}
+
+// Leaves the persisted timer as if the start acknowledgement never arrived.
+async function forgetServerStart(
+	page: Page,
+	userId: string,
+	intervalId?: string,
+) {
+	await page.evaluate(
+		async ({ userId, intervalId }) => {
+			const db = await new Promise<IDBDatabase>((resolve, reject) => {
+				const request = indexedDB.open("ditero-focus", 1);
+				request.onsuccess = () => resolve(request.result);
+				request.onerror = () => reject(request.error);
+			});
+			try {
+				await new Promise<void>((resolve, reject) => {
+					const transaction = db.transaction("timers", "readwrite");
+					const store = transaction.objectStore("timers");
+					const key = `ditero:focus:${JSON.stringify(["browser", userId])}`;
+					const request = store.get(key);
+					request.onsuccess = () => {
+						const state = request.result;
+						state.session.serverStarted = false;
+						if (intervalId) state.session.intervalId = intervalId;
+						state.revision += 1;
+						store.put(state, key);
+					};
+					transaction.oncomplete = () => resolve();
+					transaction.onerror = () => reject(transaction.error);
+				});
+			} finally {
+				db.close();
+			}
+		},
+		{ userId, intervalId },
+	);
+}
+
+// An online start is observed by the server and acknowledged back into the
+// persisted timer. Browser clocks that fake elapsed time cannot move the
+// server's clock, so those cases backdate the recorded start instead.
+async function serverStartObserved(
+	page: Page,
+	userId: string,
+	backdateSec = 0,
+) {
+	await expect
+		.poll(async () => (await focusState(page, userId)).session?.serverStarted)
+		.toBe(true);
+	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
+	try {
+		if (backdateSec > 0)
+			await pool.query(
+				"update server_private.focus_interval_clock set started_at = started_at - make_interval(secs => $2) where user_id=$1",
+				[userId, backdateSec],
+			);
+		expect(
+			(
+				await pool.query(
+					"select count(*)::int as count from focus_interval_start where user_id=$1",
+					[userId],
+				)
+			).rows,
+		).toEqual([{ count: 1 }]);
+	} finally {
+		await pool.end();
+	}
 }
 
 for (const deferredDisk of [true, false]) {
@@ -285,6 +475,7 @@ for (const correction of [-60000, 60000]) {
 	}) => {
 		await page.clock.install();
 		const userId = await startTask(page, 60);
+		await serverStartObserved(page, userId, 600);
 		const timer = page.getByTestId("focus-timer");
 		await page.clock.runFor(2000);
 		await timer.getByTestId("focus-pause").click();
