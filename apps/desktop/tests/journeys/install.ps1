@@ -14,7 +14,8 @@ if ((Get-FileHash $installed).Hash -ne (Get-FileHash $built).Hash) { throw 'Inst
 @{application=$installed; installer=$installer[0].Name} | ConvertTo-Json | Set-Content (Join-Path $out 'installed.json')
 $os = Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber
 $hosts = @(Get-Process | Where-Object {$_.ProcessName -match 'Shell|explorer|Notification'} | Select-Object ProcessName, SessionId)
-$packages = @(Get-AppxPackage -Name '*ShellExperienceHost*' | Select-Object Name, Status, InstallLocation)
+$systemApps = Join-Path $env:WINDIR 'SystemApps'
+$packages = if (Test-Path $systemApps) { @(Get-ChildItem $systemApps -Directory -Filter '*ShellExperienceHost*' | Select-Object Name, FullName) } else { @() }
 $settingsPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings'
 $settings = if (Test-Path $settingsPath) { Get-ItemProperty $settingsPath | Select-Object NOC_GLOBAL_SETTING_TOASTS_ENABLED, NOC_GLOBAL_SETTING_ALLOW_TOASTS_ABOVE_LOCK } else { $null }
 @{os=$os; hosts=$hosts; packages=$packages; settings=$settings} | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $out 'evidence/notification-platform.json')
