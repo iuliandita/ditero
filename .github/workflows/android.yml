@@ -66,7 +66,7 @@ jobs:
         run: ./gradlew --no-daemon testGoogleDebugUnitTest
       - name: Check release manifests carry no debug trust
         working-directory: apps/android/android
-        run: ./gradlew --no-daemon verifyReleaseManifests
+        run: ./gradlew --no-daemon verifyReleaseManifests lintIndependentDebug lintGoogleDebug
       - name: Refuse Google packaging without private configuration
         working-directory: apps/android/android
         shell: bash

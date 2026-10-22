@@ -156,6 +156,9 @@ It uses Gradle's development signing configuration. Install it on an Android dev
 running API 24 or later with `adb install -r` followed by that APK path. Debug APKs
 are test artifacts, not signed release or store distributions.
 
+The application name and Android package and URL-scheme identifiers are not translated;
+user-facing native messages retain the six locale resources.
+
 Debug builds also trust user-installed CAs for local HTTPS testing. Install a CA
 with critical CA constraints and certificate-signing key usage in Android Settings;
 its server certificate needs a matching SAN and server-authentication usage. The
