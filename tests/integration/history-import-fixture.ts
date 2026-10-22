@@ -1,7 +1,7 @@
 import type { Pool } from "pg";
 
-const workspaceIds = ["hia-source", "hia-target"];
-const userIds = [
+export const historyImportWorkspaceIds = ["hia-source", "hia-target"];
+export const historyImportUserIds = [
 	"hia-owner",
 	"hia-author",
 	"hia-viewer",
@@ -15,9 +15,12 @@ export async function cleanupHistoryImportFixture(pool: Pool): Promise<void> {
 		await client.query("begin");
 		const parents = await client.query<{ id: string }>(
 			"select id from task where list_id in (select id from list where workspace_id=any($1))",
-			[workspaceIds],
+			[historyImportWorkspaceIds],
 		);
-		const parentIds = [...workspaceIds, ...parents.rows.map((row) => row.id)];
+		const parentIds = [
+			...historyImportWorkspaceIds,
+			...parents.rows.map((row) => row.id),
+		];
 		// Privileged fixture teardown must remove otherwise immutable replay evidence.
 		await client.query("set local session_replication_role=replica");
 		await client.query(
@@ -30,22 +33,24 @@ export async function cleanupHistoryImportFixture(pool: Pool): Promise<void> {
 		);
 		await client.query("set local session_replication_role=origin");
 		await client.query("delete from template where workspace_id=any($1)", [
-			workspaceIds,
+			historyImportWorkspaceIds,
 		]);
 		await client.query(
 			"delete from task where list_id in (select id from list where workspace_id=any($1))",
-			[workspaceIds],
+			[historyImportWorkspaceIds],
 		);
 		await client.query("delete from list where workspace_id=any($1)", [
-			workspaceIds,
+			historyImportWorkspaceIds,
 		]);
 		await client.query("delete from membership where workspace_id=any($1)", [
-			workspaceIds,
+			historyImportWorkspaceIds,
 		]);
 		await client.query("delete from workspace where id=any($1)", [
-			workspaceIds,
+			historyImportWorkspaceIds,
 		]);
-		await client.query('delete from "user" where id=any($1)', [userIds]);
+		await client.query('delete from "user" where id=any($1)', [
+			historyImportUserIds,
+		]);
 		await client.query("commit");
 	} catch (error) {
 		await client.query("rollback");
