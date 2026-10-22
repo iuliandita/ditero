@@ -852,6 +852,8 @@ export function callAttachment(
 // ---- WebSocket adapter ------------------------------------------------------------
 
 const OPENISH = ["open", "message", "close", "error"] as const;
+const BASE64 =
+	/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 
 export class NativeWebSocket extends EventTarget {
 	static readonly CONNECTING = 0;
@@ -1008,15 +1010,18 @@ export class NativeWebSocket extends EventTarget {
 						this.dispatchEvent(new Event("open"));
 					}
 					break;
-				case "message":
-					if (
-						typeof event.data === "string" &&
-						(this.#state === 1 || this.#state === 2)
-					)
-						this.dispatchEvent(
-							new MessageEvent("message", { data: event.data }),
-						);
+				case "message": {
+					if (this.#state !== 1 && this.#state !== 2) break;
+					const data =
+						typeof event.data === "string"
+							? event.data
+							: typeof event.binary === "string"
+								? this.#binary(event.binary)
+								: undefined;
+					if (data !== undefined)
+						this.dispatchEvent(new MessageEvent("message", { data }));
 					break;
+				}
 				case "error":
 					this.dispatchEvent(new Event("error"));
 					break;
@@ -1046,6 +1051,18 @@ export class NativeWebSocket extends EventTarget {
 			JSON.stringify({ ...fields, rid: id, gen: current.gen }),
 		);
 		return id;
+	}
+
+	// Native relays binary frames (Zero's poke chunks) as base64. Dropping one would
+	// corrupt the poke, so a malformed frame ends the socket instead.
+	#binary(encoded: string): ArrayBuffer | Blob | undefined {
+		if (!BASE64.test(encoded)) {
+			this.close();
+			this.#fail(1006);
+			return undefined;
+		}
+		const bytes = Uint8Array.from(atob(encoded), (c) => c.charCodeAt(0));
+		return this.binaryType === "blob" ? new Blob([bytes]) : bytes.buffer;
 	}
 
 	#deliver(run: () => void): void {

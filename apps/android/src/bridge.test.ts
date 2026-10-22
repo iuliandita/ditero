@@ -193,6 +193,46 @@ test("snapshots retain sockets, UTF-8 oversized sends are refused, and native re
 	expect(next.readyState).toBe(NativeWebSocket.CLOSED);
 });
 
+test("binary frames reach Zero as ArrayBuffers and a malformed one ends the socket", async () => {
+	snapshot.session = session;
+	await connectBridge();
+	await readConfig();
+	const socket = new NativeWebSocket(
+		"wss://zero.example.test/sync/v53/connect",
+		"opaque",
+	);
+	socket.binaryType = "arraybuffer";
+	const received: unknown[] = [];
+	socket.onmessage = (event) => received.push(event.data);
+	const open = sent.at(-1);
+	if (!open) throw new Error("missing socket command");
+	const event = (fields: Record<string, unknown>) =>
+		native.onmessage?.(
+			new MessageEvent("message", {
+				data: JSON.stringify({
+					t: "ws",
+					gen: snapshot.gen,
+					cid: open.cid,
+					...fields,
+				}),
+			}),
+		);
+	event({ e: "open" });
+	await vi.advanceTimersByTimeAsync(0);
+	event({ e: "message", binary: "AP9bXQ==" });
+	event({ e: "message", data: '["pokeEnd",{}]' });
+	expect(received).toHaveLength(2);
+	expect(received[0]).toBeInstanceOf(ArrayBuffer);
+	expect([...new Uint8Array(received[0] as ArrayBuffer)]).toEqual([
+		0, 0xff, 0x5b, 0x5d,
+	]);
+	expect(received[1]).toBe('["pokeEnd",{}]');
+	event({ e: "message", binary: "AP9bX" });
+	expect(received).toHaveLength(2);
+	expect(socket.readyState).toBe(NativeWebSocket.CLOSED);
+	expect(sent.at(-1)).toMatchObject({ op: "ws.close", cid: open.cid });
+});
+
 test("only confirmed current socket refusal removes native authority", async () => {
 	snapshot.session = session;
 	await connectBridge();
@@ -200,7 +240,7 @@ test("only confirmed current socket refusal removes native authority", async () 
 	const ended = vi.fn();
 	setNativeSessionRefusalHandler(snapshot.gen, session.authHandle, ended);
 	const socket = new NativeWebSocket(
-		"wss://zero.example.test/sync/v51/connect",
+		"wss://zero.example.test/sync/v53/connect",
 		"opaque",
 	);
 	const command = [...sent].reverse().find((entry) => entry.op === "ws.open");
@@ -209,7 +249,7 @@ test("only confirmed current socket refusal removes native authority", async () 
 	expect(bridgeState().session?.userId).toBe("user-1");
 	expect(ended).not.toHaveBeenCalled();
 	const current = new NativeWebSocket(
-		"wss://zero.example.test/sync/v51/connect",
+		"wss://zero.example.test/sync/v53/connect",
 		"opaque",
 	);
 	const open = [...sent].reverse().find((entry) => entry.op === "ws.open");

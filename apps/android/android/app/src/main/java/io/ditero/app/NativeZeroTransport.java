@@ -82,6 +82,8 @@ final class NativeZeroTransport {
 
     private static final int MAX_CONTROL = 8 * 1024;
     private static final int MAX_SEND = 1024 * 1024;
+    // Zero poke chunks are at most 1 MiB; zero-protocol-pin.test.ts enforces it.
+    static final int MAX_BINARY = 1024 * 1024;
     private static final int MAX_PROTOCOL = 64 * 1024;
     private static final int MAX_URL = 4096;
     private static final int MAX_BODY = 64 * 1024;
@@ -1917,8 +1919,15 @@ final class NativeZeroTransport {
 
         @Override
         public void onMessage(@NonNull WebSocket webSocket, @NonNull ByteString bytes) {
-            // Zero speaks text frames only.
-            webSocket.close(1003, "text only");
+            String encoded = binaryFrame(bytes);
+            if (encoded == null) {
+                webSocket.close(1009, "too large");
+                return;
+            }
+            synchronized (this) {
+                if (terminal) return;
+                queue(put(event("message"), "binary", encoded), false);
+            }
         }
 
         @Override
@@ -1949,6 +1958,11 @@ final class NativeZeroTransport {
                 queue(put(put(put(event("close"), "code", 1006), "reason", ""), "clean", false), true);
             }
         }
+    }
+
+    /** Zero sends poke chunks as binary frames; the page rebuilds them as ArrayBuffers. */
+    static String binaryFrame(ByteString bytes) {
+        return bytes.size() > MAX_BINARY ? null : bytes.base64();
     }
 
     // ---- validation -----------------------------------------------------------------

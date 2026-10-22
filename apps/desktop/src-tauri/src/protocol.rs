@@ -9,6 +9,8 @@ pub type Result<T> = std::result::Result<T, &'static str>;
 pub const MAX_BODY: usize = 64 * 1024;
 pub const MAX_SEND: usize = 1024 * 1024;
 pub const HANDLE_BYTES: usize = 576;
+// Must equal the path the bundled Zero client requests; zero-protocol-pin.test.ts enforces it.
+pub const ZERO_SOCKET_PATH: &str = "/sync/v53/connect";
 static ID: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[A-Za-z0-9_.:-]{1,128}$").unwrap());
 static CREDENTIAL: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)auth|cookie|token|secret|session|bearer|key|jwt|credential|origin").unwrap()
@@ -113,7 +115,7 @@ pub fn socket_target(raw: &str, zero: &str) -> Result<String> {
         return Err("invalid-url");
     }
     let target = Url::parse(raw).map_err(|_| "invalid-url")?;
-    let expected = format!("wss:{}/sync/v51/connect", &zero[6..]);
+    let expected = format!("wss:{}{ZERO_SOCKET_PATH}", &zero[6..]);
     let fixed = Url::parse(&expected).map_err(|_| "invalid-url")?;
     if target.scheme() != "wss"
         || !target.username().is_empty()
@@ -906,13 +908,31 @@ mod tests {
     }
     #[test]
     fn fixed_destinations_and_scopes() {
+        assert_eq!(
+            socket_target(
+                "wss://example.com/z/sync/v53/connect?clientID=c&baseCookie=",
+                "https://example.com/z"
+            ),
+            Ok("wss://example.com/z/sync/v53/connect?clientID=c&baseCookie=".into())
+        );
+        for path in [
+            "/sync/v51/connect",
+            "/sync/v52/connect",
+            "/sync/v54/connect",
+            "/sync/v53",
+            "/sync/v53/connect/x",
+        ] {
+            assert!(
+                socket_target(&format!("wss://example.com{path}"), "https://example.com").is_err()
+            );
+        }
         assert!(socket_target(
-            "wss://example.com/sync/v51/connect?auth=x",
+            "wss://example.com/sync/v53/connect?auth=x",
             "https://example.com"
         )
         .is_err());
         assert!(socket_target(
-            "wss://example.com/a/../sync/v51/connect",
+            "wss://example.com/a/../sync/v53/connect",
             "https://example.com"
         )
         .is_err());

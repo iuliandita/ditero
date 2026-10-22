@@ -13,7 +13,8 @@ import java.util.regex.Pattern;
  */
 final class ServerContext {
     private static final int MAX_ORIGIN = 255;
-    private static final String ZERO_SOCKET_PATH = "/sync/v51/connect";
+    // Must equal the path the bundled Zero client requests; zero-protocol-pin.test.ts enforces it.
+    private static final String ZERO_SOCKET_PATH = "/sync/v53/connect";
     private static final Pattern HOST = Pattern.compile(
             "^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$");
     private static final Pattern ZERO_PATH = Pattern.compile("^(?:/[A-Za-z0-9._~-]+)*$");
@@ -99,7 +100,7 @@ final class ServerContext {
     static final class ZeroEndpoint {
         final String host;
         final int port;
-        // Path of the websocket route, including /sync/v51/connect.
+        // Path of the websocket route, ending in ZERO_SOCKET_PATH.
         final String socketPath;
         final String httpsUrl;
 
