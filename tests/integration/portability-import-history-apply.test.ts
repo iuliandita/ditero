@@ -1,7 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { Elysia } from "elysia";
 import { Pool, type PoolClient } from "pg";
-import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
+import {
+	afterAll,
+	afterEach,
+	beforeAll,
+	beforeEach,
+	expect,
+	test,
+} from "vitest";
 import type { HistoryPreviewItem } from "../../src/domain/portability/import-apply-plan-v2.ts";
 import { projectHistoricalRow } from "../../src/domain/portability/import-history-row.ts";
 import type { PortableExportV2 } from "../../src/domain/portability/v2.ts";
@@ -15,7 +22,7 @@ import {
 	type ImportPlanStatus,
 	saveImportPlan,
 } from "../../src/server/portability/import-plan-store.ts";
-import { resetAuthFixture } from "./reset-auth-fixture.ts";
+import { cleanupHistoryImportFixture } from "./history-import-fixture.ts";
 
 const databaseURL = process.env.DATABASE_URL;
 if (!databaseURL) throw new Error("DATABASE_URL is required");
@@ -78,8 +85,7 @@ beforeAll(async () => {
 	});
 });
 beforeEach(async () => {
-	await admin.query("truncate import_history_ledger, import_history_redaction");
-	await resetAuthFixture(admin);
+	await cleanupHistoryImportFixture(admin);
 	for (const id of ["hia-owner", "hia-author", "hia-viewer", "hia-outsider"])
 		await admin.query(
 			`insert into "user" (id,name,email,email_verified,created_at,updated_at)
@@ -139,9 +145,33 @@ beforeEach(async () => {
 	};
 	source = { mode: "new", id: randomUUID(), label: "History source" };
 });
+afterEach(async () => {
+	await cleanupHistoryImportFixture(admin);
+});
 afterAll(async () => {
-	await runtime.end();
-	await admin.end();
+	try {
+		expect(
+			(
+				await admin.query(
+					`select (select count(*) from workspace where id in ('hia-source','hia-target'))::int as workspaces,
+				 (select count(*) from template where workspace_id in ('hia-source','hia-target'))::int as templates,
+				 (select count(*) from "user" where id=any($1))::int as users`,
+					[
+						[
+							"hia-owner",
+							"hia-author",
+							"hia-viewer",
+							"hia-outsider",
+							"hia-writer",
+						],
+					],
+				)
+			).rows[0],
+		).toEqual({ workspaces: 0, templates: 0, users: 0 });
+	} finally {
+		await runtime.end();
+		await admin.end();
+	}
 });
 
 test("actual restricted role applies claims and ledger together without history side effects", async () => {
