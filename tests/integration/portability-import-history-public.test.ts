@@ -1,7 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { Elysia } from "elysia";
 import { Pool } from "pg";
-import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
+import {
+	afterAll,
+	afterEach,
+	beforeAll,
+	beforeEach,
+	expect,
+	test,
+} from "vitest";
 import { ordinaryArchiveContent } from "../../src/domain/portability/import-document.ts";
 import type { PortableExportV2 } from "../../src/domain/portability/v2.ts";
 import { parsePortableExportV2 } from "../../src/domain/portability/validate-v2.ts";
@@ -13,7 +20,11 @@ import {
 import { importPlanRoutes } from "../../src/server/portability/import-routes.ts";
 import { portabilityRoutes } from "../../src/server/portability/routes.ts";
 import { taskHistoryRoutes } from "../../src/server/task-history.ts";
-import { resetAuthFixture } from "./reset-auth-fixture.ts";
+import {
+	cleanupHistoryImportFixture,
+	historyImportUserIds,
+	historyImportWorkspaceIds,
+} from "./history-import-fixture.ts";
 
 const databaseURL = process.env.DATABASE_URL;
 if (!databaseURL) throw new Error("DATABASE_URL is required");
@@ -96,6 +107,27 @@ async function counts() {
 		)
 	).rows[0];
 }
+async function ledgerCount() {
+	return (
+		await admin.query(
+			`select count(*)::int as count from import_history_ledger
+			 where target_parent_id = any($1)
+			 or target_parent_id in (
+			  select id from task where list_id in (
+			   select id from list where workspace_id = any($1)))`,
+			[historyImportWorkspaceIds],
+		)
+	).rows[0].count;
+}
+async function importedTaskId() {
+	const rows = (
+		await admin.query(
+			"select t.id from task t join list l on l.id=t.list_id where l.workspace_id='hia-target'",
+		)
+	).rows;
+	expect(rows).toHaveLength(1);
+	return rows[0].id as string;
+}
 beforeAll(async () => {
 	await admin.query(
 		`do $$ begin if not exists (select from pg_roles where rolname = '${role}') then
@@ -110,8 +142,7 @@ beforeAll(async () => {
 	});
 });
 beforeEach(async () => {
-	await admin.query("truncate import_history_ledger, import_history_redaction");
-	await resetAuthFixture(admin);
+	await cleanupHistoryImportFixture(admin);
 	for (const id of ["hia-owner", "hia-author", "hia-viewer", "hia-outsider"])
 		await admin.query(
 			`insert into "user" (id,name,email,email_verified,created_at,updated_at)
@@ -257,9 +288,37 @@ beforeEach(async () => {
 	};
 	source = { mode: "new", id: randomUUID(), label: "History source" };
 });
+afterEach(async () => {
+	await cleanupHistoryImportFixture(admin);
+});
 afterAll(async () => {
-	await runtime.end();
-	await admin.end();
+	try {
+		expect(
+			(
+				await admin.query(
+					`select (select count(*) from workspace where id = any($1))::int as workspaces,
+				 (select count(*) from list where workspace_id = any($1))::int as lists,
+				 (select count(*) from task where list_id in (select id from list where workspace_id = any($1)))::int as tasks,
+				 (select count(*) from template where workspace_id = any($1))::int as templates,
+				 (select count(*) from import_source where owner_user_id = any($2))::int as sources,
+				 (select count(*) from import_job where owner_user_id = any($2))::int as jobs,
+				 (select count(*) from "user" where id = any($2))::int as users`,
+					[historyImportWorkspaceIds, historyImportUserIds],
+				)
+			).rows[0],
+		).toEqual({
+			workspaces: 0,
+			lists: 0,
+			tasks: 0,
+			templates: 0,
+			sources: 0,
+			jobs: 0,
+			users: 0,
+		});
+	} finally {
+		await runtime.end();
+		await admin.end();
+	}
 });
 
 test("public v2 export/save/bounded apply/read/reexport/replay preserves claims without side effects", async () => {
@@ -300,8 +359,7 @@ test("public v2 export/save/bounded apply/read/reexport/replay preserves claims 
 		imported_events:
 			before.imported_events + archive.data.completionEvents.length,
 	});
-	const task = (await admin.query("select id from task where id<>'hia-task'"))
-		.rows[0].id;
+	const task = await importedTaskId();
 	expect(
 		(await admin.query("select done,due_at from task where id=$1", [task]))
 			.rows[0],
@@ -403,8 +461,11 @@ test("malformed graph and injected qualification flag persist no public plan", a
 	});
 	expect(forged.status).toBe(400);
 	expect(
-		(await admin.query("select count(*)::int as count from import_job")).rows[0]
-			.count,
+		(
+			await admin.query(
+				"select count(*)::int as count from import_job where owner_user_id='hia-owner'",
+			)
+		).rows[0].count,
 	).toBe(0);
 });
 test("viewer cannot plan historical writes and nonowners cannot inspect or apply jobs", async () => {
@@ -456,7 +517,7 @@ test("changed digest and confirmation counts refuse before the first write", asy
 		);
 		expect(response.status).toBe(409);
 	}
-	expect((await counts()).ledger).toBe(0);
+	expect(await ledgerCount()).toBe(0);
 });
 test("revocation after saving blocks all public historical writes", async () => {
 	const job = await save();
@@ -467,13 +528,15 @@ test("revocation after saving blocks all public historical writes", async () => 
 	);
 	expect(result.status).toBe(200);
 	expect(await result.json()).toMatchObject({ state: "conflict" });
-	expect((await counts()).ledger).toBe(0);
+	expect(await ledgerCount()).toBe(0);
 });
 test("moving the imported parent between batches freezes a conflict without partial writes", async () => {
 	const job = await save();
 	await apply(job);
 	const before = await counts();
-	await admin.query("update task set list_id='hia-list' where id<>'hia-task'");
+	await admin.query(
+		"update task set list_id='hia-list' where list_id in (select id from list where workspace_id='hia-target')",
+	);
 	const result = await apply(job);
 	expect(result.state).toBe("conflict");
 	expect(await counts()).toEqual(before);
@@ -481,7 +544,7 @@ test("moving the imported parent between batches freezes a conflict without part
 test("mapped source cleanup is refused and administrative deletion retains template tombstones", async () => {
 	const job = await save();
 	await finish(job);
-	const before = await counts();
+	const before = await ledgerCount();
 	await admin.query("delete from template where workspace_id='hia-target'");
 	expect(
 		(
@@ -494,7 +557,7 @@ test("mapped source cleanup is refused and administrative deletion retains templ
 		).status,
 	).toBe(409);
 	await admin.query("delete from import_source where id=$1", [source.id]);
-	expect((await counts()).ledger).toBe(before.ledger);
+	expect(await ledgerCount()).toBe(before);
 	source = { ...source, id: randomUUID() };
 	await finish(await save());
 	expect(
@@ -516,7 +579,7 @@ test("public v1 plans retain planner 4 and ordinary apply semantics", async () =
 	const job: ImportPlanStatus = await response.json();
 	expect(job.report).toMatchObject({ plannerVersion: 4, applySupported: true });
 	await finish(job);
-	expect((await counts()).ledger).toBe(0);
+	expect(await ledgerCount()).toBe(0);
 });
 test("deleted importing actor cannot use a saved public history job", async () => {
 	const job = await save();
@@ -529,7 +592,7 @@ test("deleted importing actor cannot use a saved public history job", async () =
 			)
 		).status,
 	).toBe(403);
-	expect((await counts()).ledger).toBe(0);
+	expect(await ledgerCount()).toBe(0);
 });
 test("an existing import source cannot be rebound to another archive identity", async () => {
 	await save();
