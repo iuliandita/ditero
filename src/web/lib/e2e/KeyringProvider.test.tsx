@@ -128,7 +128,13 @@ const POLL_MS = 15_000;
 let recipient: Awaited<ReturnType<typeof generateIdentityKeyPair>>;
 let props: Parameters<typeof KeyringProvider>[0];
 let value: { lockNow: () => void } | undefined;
-let pendingResponse: () => Promise<Response>;
+let pendingResponse: (signal?: AbortSignal) => Promise<Response>;
+let grantResponse: (requestId: string) => Response;
+const page = { hidden: false, listeners: new Set<() => void>() };
+function setHidden(hidden: boolean) {
+	page.hidden = hidden;
+	for (const listener of page.listeners) listener();
+}
 const grantBodies: Array<Record<string, string>> = [];
 const signals: AbortSignal[] = [];
 const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -144,10 +150,12 @@ const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
 			passphraseWrapped: "wrapped",
 			passphraseSalt: "salt",
 		});
-	if (path === "/api/e2e/grants/pending") return await pendingResponse();
+	if (path === "/api/e2e/grants/pending")
+		return await pendingResponse(init?.signal ?? undefined);
 	if (path === "/api/e2e/grants") {
-		grantBodies.push(JSON.parse(String(init?.body)));
-		return Response.json({ requestId: "kgr_1", outcome: "granted" });
+		const body = JSON.parse(String(init?.body));
+		grantBodies.push(body);
+		return grantResponse(body.requestId);
 	}
 	throw new Error(`unexpected fetch ${path}`);
 });
@@ -201,18 +209,19 @@ function unmount() {
 const pendingPaths = () =>
 	fetcher.mock.calls.filter(([input]) => input === "/api/e2e/grants/pending");
 
-function request(publicKey: string | null = encodeBytes(recipient.publicKey)) {
+function request(
+	publicKey: string | null = encodeBytes(recipient.publicKey),
+	ids = ["kgr_1"],
+) {
 	return Response.json({
-		requests: [
-			{
-				requestId: "kgr_1",
-				workspaceId: "ws_1",
-				keyVersion: 1,
-				recipientUserId: "member-1",
-				recipientPublicKey: publicKey,
-				requestedAt: "2026-10-22T12:00:00.000Z",
-			},
-		],
+		requests: ids.map((requestId) => ({
+			requestId,
+			workspaceId: "ws_1",
+			keyVersion: 1,
+			recipientUserId: "member-1",
+			recipientPublicKey: publicKey,
+			requestedAt: "2026-10-22T12:00:00.000Z",
+		})),
 	});
 }
 
@@ -229,6 +238,19 @@ beforeEach(async () => {
 	fixture.reconcile.mockReset().mockResolvedValue([]);
 	recipient ??= await generateIdentityKeyPair();
 	pendingResponse = async () => Response.json({ requests: [] });
+	grantResponse = (requestId) =>
+		Response.json({ requestId, outcome: "granted" });
+	page.hidden = false;
+	page.listeners.clear();
+	vi.stubGlobal("document", {
+		get hidden() {
+			return page.hidden;
+		},
+		addEventListener: (_type: string, listener: () => void) =>
+			page.listeners.add(listener),
+		removeEventListener: (_type: string, listener: () => void) =>
+			page.listeners.delete(listener),
+	});
 	grantBodies.length = 0;
 	signals.length = 0;
 	fetcher.mockClear();
@@ -307,7 +329,8 @@ it("skips a tick while a reconcile is running and never overlaps itself", async 
 			release = () => resolve(request());
 		});
 	await settle(POLL_MS);
-	await settle(POLL_MS * 4);
+	// Held past one interval but inside the pass timeout.
+	await settle(19_000);
 	expect(pendingPaths()).toHaveLength(1);
 	release();
 	await until(() => grantBodies.length > 0);
@@ -356,4 +379,78 @@ it("reconciles once for a version it holds but has not loaded", async () => {
 	expect(pendingPaths()).toHaveLength(2);
 	expect(fixture.reconcile).toHaveBeenCalledTimes(1);
 	expect(grantBodies).toEqual([]);
+});
+
+it.each([
+	[409, "conflict"],
+	[404, "no-request"],
+])("skips a request another holder won (%i %s) and serves the rest", async (status, reason) => {
+	const error = vi.spyOn(console, "error").mockImplementation(() => {});
+	grantResponse = (requestId) =>
+		requestId === "kgr_1"
+			? new Response(reason, { status })
+			: Response.json({ requestId, outcome: "granted" });
+	pendingResponse = async () =>
+		request(encodeBytes(recipient.publicKey), ["kgr_1", "kgr_2"]);
+	await settle(POLL_MS);
+	await until(() => grantBodies.length === 2);
+	await settle(0);
+	expect(grantBodies.map((body) => body.requestId)).toEqual(["kgr_1", "kgr_2"]);
+	expect(error).not.toHaveBeenCalled();
+	// No backoff: the next pass runs on the normal cadence.
+	await settle(POLL_MS);
+	expect(pendingPaths()).toHaveLength(2);
+});
+
+it("still fails a pass on any other grant refusal", async () => {
+	const error = vi.spyOn(console, "error").mockImplementation(() => {});
+	grantResponse = () => new Response("inactive-version", { status: 409 });
+	pendingResponse = async () => request();
+	await settle(POLL_MS);
+	await until(() => error.mock.calls.length > 0);
+	expect(error).toHaveBeenCalledWith(
+		"e2e: grant fulfilment failed",
+		expect.objectContaining({ message: expect.stringContaining("409") }),
+	);
+});
+
+it("times out a stalled pass so a waiting file pick is released", async () => {
+	const error = vi.spyOn(console, "error").mockImplementation(() => {});
+	pendingResponse = (signal) =>
+		new Promise((_resolve, reject) => {
+			signal?.addEventListener("abort", () =>
+				reject(new DOMException("The operation was aborted.", "AbortError")),
+			);
+		});
+	await settle(POLL_MS);
+	expect(pendingPaths()).toHaveLength(1);
+	let picked = false;
+	void (
+		value as unknown as {
+			workspaceKey: (workspaceId: string) => Promise<unknown>;
+		}
+	)
+		.workspaceKey("ws_1")
+		.then(() => {
+			picked = true;
+		});
+	await settle(5_000);
+	expect(picked).toBe(false);
+	await settle(20_000);
+	expect(picked).toBe(true);
+	expect(error).toHaveBeenCalledWith(
+		"e2e: grant fulfilment failed",
+		expect.objectContaining({ message: "e2e: grant fulfilment timed out" }),
+	);
+});
+
+it("pauses while the page is hidden and checks at once on return", async () => {
+	setHidden(true);
+	await settle(POLL_MS * 4);
+	expect(pendingPaths()).toHaveLength(0);
+	setHidden(false);
+	await settle(0);
+	expect(pendingPaths()).toHaveLength(1);
+	await settle(POLL_MS);
+	expect(pendingPaths()).toHaveLength(2);
 });

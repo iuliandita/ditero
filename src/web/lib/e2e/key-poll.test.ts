@@ -88,3 +88,41 @@ it("ends after the run budget", async () => {
 	await vi.advanceTimersByTimeAsync(60_000);
 	expect(run).toHaveBeenCalledTimes(3);
 });
+
+it("reports exhaustion once when the run budget ends without success", async () => {
+	const onExhausted = vi.fn();
+	const run = vi.fn(async () => false);
+	const poll = startKeyPoll({
+		intervalMs: 1_000,
+		maxRuns: 3,
+		run,
+		onError: vi.fn(),
+		onExhausted,
+	});
+	await vi.advanceTimersByTimeAsync(10_000);
+	expect(run).toHaveBeenCalledTimes(3);
+	expect(onExhausted).toHaveBeenCalledOnce();
+	poll.stop();
+
+	const stopped = vi.fn();
+	startKeyPoll({
+		intervalMs: 1_000,
+		maxRuns: 3,
+		run: async () => true,
+		onError: vi.fn(),
+		onExhausted: stopped,
+	}).stop();
+	await vi.advanceTimersByTimeAsync(10_000);
+	expect(stopped).not.toHaveBeenCalled();
+});
+
+it("runs first after the initial delay, then on the interval", async () => {
+	const run = vi.fn(async () => undefined);
+	startKeyPoll({ intervalMs: 1_000, initialDelayMs: 0, run, onError: vi.fn() });
+	await vi.advanceTimersByTimeAsync(0);
+	expect(run).toHaveBeenCalledTimes(1);
+	await vi.advanceTimersByTimeAsync(999);
+	expect(run).toHaveBeenCalledTimes(1);
+	await vi.advanceTimersByTimeAsync(1);
+	expect(run).toHaveBeenCalledTimes(2);
+});

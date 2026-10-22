@@ -2,9 +2,9 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "eaa4fea83b77050a1fec5ea9b75be3b5be5580b5c108d1c014cd4ac3c5d58d3b",
+			"sourceDigest": "98035e9e8d0506bb515cefbfbb51a5323d38925526a3ed6590bcce3acf0cda28",
 			"docs": ["docs/security.md"],
-			"note": "An open, unlocked key holder fulfills pending workspace file-grant requests on the 15-second state cadence with backoff on failure, never alongside a reconcile, and stops on lock, sign-out and unmount. A member selection waiting for its grant retries for up to ten minutes and uploads once the key arrives, without a reload. Grant checks, sealing and server authorization are unchanged; no catalog, locale or theme change."
+			"note": "An open, visible, unlocked key holder fulfills pending workspace file-grant requests on the 15-second state cadence with backoff on failure and a bounded pass, never alongside a reconcile, skips requests another holder already won, pauses while hidden and stops on lock, sign-out and unmount. A member selection waiting for its grant checks its own request for up to ten minutes and uploads once the key arrives, only to the workspace and task or comment where it was picked, with the submitted comment text. Moving elsewhere or the time limit stops the wait with a visible message in all six locales. Grant checks, sealing and server authorization are unchanged; no theme change."
 		},
 		"release": {
 			"sourceDigest": "da9d2a9a8dd15d82056e1e549dadf911af318e068add68ba2123191d65326cbd",

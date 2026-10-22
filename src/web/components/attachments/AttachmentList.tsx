@@ -164,7 +164,7 @@ export const AttachmentList = forwardRef<
 	const [memberships] = useQuery(queries.memberships.mine());
 	const workspace = workspaces.find((row) => row.id === workspaceId);
 	const workspaceName = workspace?.name ?? m.field_workspace();
-	const gate = useAttachmentGate(workspaceId);
+	const gate = useAttachmentGate(workspaceId, `${parentKind}:${parentId}`);
 	const nativeAttachments = keyring.runtime.attachments;
 	const attachmentFetcher = nativeAttachments?.fetcher;
 	const runtimeFetcher = keyring.runtime.fetcher;
@@ -381,6 +381,14 @@ export const AttachmentList = forwardRef<
 	}
 
 	async function startUploads(files: File[], key: WorkspaceKeyMaterial) {
+		if (key.workspaceId !== workspaceId) {
+			const mismatch = new Error(
+				"attachments: key belongs to another workspace",
+			);
+			console.error(mismatch);
+			gate.reportUploadFailure(mismatch);
+			return;
+		}
 		const uploads = files.map((file) => ({
 			id: randomId(),
 			file,

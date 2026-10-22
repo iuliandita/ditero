@@ -439,6 +439,14 @@ test("attachments: open owner fulfils a member's grant request and the waiting u
 		await expect(owner.getByTestId("e2e-status")).toHaveText(
 			m.e2e_status_ready(),
 		);
+		// The member files its request at enrollment. Until its file is waiting
+		// the owner sees no requests, so no poll tick can grant it before the pick.
+		let ownerSeesRequests = false;
+		await ownerContext.route("**/api/e2e/grants/pending", (route) =>
+			ownerSeesRequests
+				? route.continue()
+				: route.fulfill({ json: { requests: [] } }),
+		);
 
 		await goToSettings(member);
 		await member.getByTestId("e2e-setup").click();
@@ -464,17 +472,17 @@ test("attachments: open owner fulfils a member's grant request and the waiting u
 			buffer: plaintext,
 		});
 		await expect(member.getByText(m.attachment_key_pending())).toBeVisible();
+		const requestState = async () =>
+			(
+				await pool.query(
+					"select state from key_grant_request where user_id=$1 and workspace_id=$2",
+					[memberId, workspaceId],
+				)
+			).rows;
+		expect(await requestState()).toEqual([{ state: "key_pending" }]);
+		ownerSeesRequests = true;
 		await expect
-			.poll(
-				async () =>
-					(
-						await pool.query(
-							"select state from key_grant_request where user_id=$1 and workspace_id=$2",
-							[memberId, workspaceId],
-						)
-					).rows,
-				{ timeout: 60_000 },
-			)
+			.poll(requestState, { timeout: 60_000 })
 			.toEqual([{ state: "ready" }]);
 		expect((await finalized).ok()).toBe(true);
 		await expect(member.getByText(m.attachment_key_pending())).toHaveCount(0);

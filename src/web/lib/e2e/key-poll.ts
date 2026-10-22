@@ -6,6 +6,10 @@ export type KeyPollOptions = {
 	maxIntervalMs?: number;
 	/** Stops after this many runs, successful or not. */
 	maxRuns?: number;
+	/** Delay before the first run; defaults to intervalMs. */
+	initialDelayMs?: number;
+	/** Called once when maxRuns ends the poll without a run resolving true. */
+	onExhausted?: () => void;
 	/** Resolving true ends the poll. */
 	run: () => Promise<unknown>;
 	onError: (error: unknown) => void;
@@ -17,7 +21,7 @@ export type KeyPollOptions = {
  */
 export function startKeyPoll(options: KeyPollOptions): KeyPoll {
 	const ceiling = options.maxIntervalMs ?? options.intervalMs;
-	let delay = options.intervalMs;
+	let delay = options.initialDelayMs ?? options.intervalMs;
 	let runs = 0;
 	let stopped = false;
 	let timer: ReturnType<typeof setTimeout> | undefined;
@@ -26,6 +30,7 @@ export function startKeyPoll(options: KeyPollOptions): KeyPoll {
 		if (stopped) return;
 		if (options.maxRuns !== undefined && runs >= options.maxRuns) {
 			stopped = true;
+			options.onExhausted?.();
 			return;
 		}
 		timer = setTimeout(tick, delay);
@@ -45,7 +50,7 @@ export function startKeyPoll(options: KeyPollOptions): KeyPoll {
 		} catch (error) {
 			if (stopped) return;
 			options.onError(error);
-			delay = Math.min(delay * 2, ceiling);
+			delay = Math.min(Math.max(delay, options.intervalMs) * 2, ceiling);
 		}
 		schedule();
 	};

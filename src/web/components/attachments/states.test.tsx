@@ -21,6 +21,8 @@ const fixture = vi.hoisted(() => ({
 	workspaceKey: vi.fn(),
 	refreshWorkspaceKeys: vi.fn(),
 	keyring: {} as Record<string, unknown>,
+	grants: vi.fn(),
+	props: { workspaceId: "ws_1", scope: "task:a" },
 }));
 
 vi.mock("react", async (importOriginal) => {
@@ -90,6 +92,7 @@ vi.mock("../../lib/e2e/KeyringProvider.tsx", () => ({
 }));
 vi.mock("../../lib/e2e/attachment-api.ts", () => ({
 	fetchAttachmentConfig: async () => ({ maxFileBytes: 1_000_000 }),
+	fetchMyGrants: fixture.grants,
 }));
 vi.mock("../e2e/EnrollmentWizard.tsx", () => ({ EnrollmentWizard: "wizard" }));
 vi.mock("../e2e/UnlockDialog.tsx", () => ({ UnlockDialog: "unlock" }));
@@ -104,7 +107,7 @@ let gate: AttachmentGateController;
 
 function render() {
 	hooks.cursor = 0;
-	gate = attachmentGate("ws_1");
+	gate = attachmentGate(fixture.props.workspaceId, fixture.props.scope);
 	const effects = hooks.pending.splice(0);
 	for (const effect of effects) {
 		(hooks.slots[effect.index] as EffectSlot | undefined)?.cleanup?.();
@@ -152,6 +155,8 @@ beforeEach(() => {
 	fixture.key = null;
 	fixture.workspaceKey.mockReset().mockImplementation(async () => fixture.key);
 	fixture.refreshWorkspaceKeys.mockReset().mockResolvedValue(undefined);
+	fixture.grants.mockReset().mockResolvedValue([]);
+	fixture.props = { workspaceId: "ws_1", scope: "task:a" };
 	fixture.keyring = {
 		state: "ready",
 		runtime: { fetcher: vi.fn() },
@@ -202,8 +207,10 @@ it("stops waiting on unmount, on lock, and after the budget", async () => {
 	fixture.keyring = { ...fixture.keyring, state: "ready" };
 	render();
 	await settle(WAIT_MS * 100);
-	// The restarted wait gets its own budget of sixty runs, then stops.
+	// The restarted wait gets its own budget of sixty runs, then says it stopped.
 	expect(calls()).toBe(before + 1 + 60);
+	expect(gate.error).toBe("attachment_key_wait_expired");
+	expect(gate.hasPendingAction()).toBe(false);
 
 	const action = await select();
 	const restarted = calls();
@@ -221,4 +228,74 @@ it("runs only the newest selection once its key arrives", async () => {
 	await settle(WAIT_MS);
 	expect(first).not.toHaveBeenCalled();
 	expect(second).toHaveBeenCalledTimes(1);
+});
+
+it.each([
+	["another task", { workspaceId: "ws_1", scope: "task:b" }],
+	["another workspace", { workspaceId: "ws_2", scope: "task:a" }],
+])("abandons a waiting selection when the user moves to %s", async (_name, next) => {
+	const action = await select();
+	fixture.props = next;
+	render();
+	await settle();
+	expect(gate.error).toBe("attachment_key_wait_moved");
+	expect(gate.hasPendingAction()).toBe(false);
+	fixture.key = { workspaceId: next.workspaceId, keyVersion: 1 };
+	await settle(WAIT_MS * 3);
+	expect(action).not.toHaveBeenCalled();
+	expect(
+		fixture.workspaceKey.mock.calls.every(
+			([workspace]) => workspace === "ws_1",
+		),
+	).toBe(true);
+});
+
+it("never runs a selection whose key arrives after the user moved", async () => {
+	const action = await select();
+	let release!: () => void;
+	fixture.workspaceKey.mockImplementationOnce(
+		() =>
+			new Promise((resolve) => {
+				release = () => resolve({ workspaceId: "ws_1", keyVersion: 1 });
+			}),
+	);
+	await vi.advanceTimersByTimeAsync(WAIT_MS);
+	// The move renders while the retry is in flight, before any effect runs.
+	fixture.props = { workspaceId: "ws_2", scope: "task:b" };
+	hooks.cursor = 0;
+	gate = attachmentGate(fixture.props.workspaceId, fixture.props.scope);
+	release();
+	await vi.advanceTimersByTimeAsync(0);
+	expect(action).not.toHaveBeenCalled();
+	expect(gate.hasPendingAction()).toBe(false);
+	await settle();
+	expect(gate.error).toBe("attachment_key_wait_moved");
+});
+
+it("refuses a key that belongs to another workspace", async () => {
+	vi.spyOn(console, "error").mockImplementation(() => {});
+	const action = await select();
+	fixture.key = { workspaceId: "ws_2", keyVersion: 1 };
+	await settle(WAIT_MS);
+	expect(action).not.toHaveBeenCalled();
+	expect(gate.error).toBe("attachment_error_upload_failed");
+	expect(console.error).toHaveBeenCalled();
+});
+
+it("checks its own request cheaply before a full retry", async () => {
+	const action = await select();
+	const before = fixture.workspaceKey.mock.calls.length;
+	fixture.grants.mockResolvedValue([
+		{ workspaceId: "ws_1", keyVersion: 1, state: "pending" },
+	]);
+	await settle(WAIT_MS * 3);
+	expect(fixture.grants).toHaveBeenCalledTimes(3);
+	expect(fixture.workspaceKey).toHaveBeenCalledTimes(before);
+	fixture.grants.mockResolvedValue([
+		{ workspaceId: "ws_1", keyVersion: 1, state: "ready" },
+	]);
+	fixture.key = { workspaceId: "ws_1", keyVersion: 1 };
+	await settle(WAIT_MS);
+	expect(fixture.workspaceKey).toHaveBeenCalledTimes(before + 1);
+	expect(action).toHaveBeenCalledOnce();
 });

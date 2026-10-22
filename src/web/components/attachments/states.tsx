@@ -17,6 +17,7 @@ import { queries } from "../../../zero/queries.ts";
 import type { schema } from "../../../zero/schema.gen.ts";
 import {
 	fetchAttachmentConfig,
+	fetchMyGrants,
 	type MyAttachmentGrant,
 } from "../../lib/e2e/attachment-api.ts";
 import {
@@ -45,6 +46,9 @@ type PendingAction = {
 	files: File[];
 	keyVersion?: number;
 	action: ReadyAction;
+	// Where the selection was made; a wait never completes anywhere else.
+	workspaceId: string;
+	scope: string;
 };
 
 export type AttachmentGateController = {
@@ -73,7 +77,8 @@ export type AttachmentGateController = {
 };
 
 // A selection waiting on a grant keeps its files and retries until the key
-// arrives, for at most ten minutes; picking again starts a fresh wait.
+// arrives, for at most ten minutes; picking again starts a fresh wait. Moving
+// to another workspace or parent (the scope) abandons it.
 const KEY_WAIT_MS = 10_000;
 const KEY_WAIT_RUNS = 60;
 
@@ -84,6 +89,7 @@ function displayNames(names: string[]): string {
 
 export function useAttachmentGate(
 	workspaceId: string,
+	scope = "",
 ): AttachmentGateController {
 	const zero = useZero<typeof schema>();
 	const [workspaces] = useQuery(queries.workspaces.mine());
@@ -108,6 +114,8 @@ export function useAttachmentGate(
 	const [keyWait, setKeyWait] = useState(0);
 	const keyWaits = useRef(0);
 	const alive = useRef(true);
+	const context = useRef({ workspaceId, scope });
+	context.current = { workspaceId, scope };
 	useEffect(() => {
 		alive.current = true;
 		return () => {
@@ -141,16 +149,51 @@ export function useAttachmentGate(
 		};
 	}, [blocked, runtimeFetcher, workspaceId]);
 
+	const abandon = useCallback((current: PendingAction, message: string) => {
+		if (pending.current !== current) return;
+		pending.current = null;
+		setKeyWait(0);
+		setPendingFileName(null);
+		setError(message);
+	}, []);
+
+	useEffect(() => {
+		const current = pending.current;
+		if (
+			current &&
+			(current.workspaceId !== workspaceId || current.scope !== scope)
+		)
+			abandon(current, m.attachment_key_wait_moved());
+	}, [abandon, scope, workspaceId]);
+
 	const continueWithKey = useCallback(
 		async (current: PendingAction, waiting = false): Promise<boolean> => {
 			// workspaceKey reconciles first, so one call is a full retry.
-			let key = await keyring.workspaceKey(workspaceId, current.keyVersion);
+			let key = await keyring.workspaceKey(
+				current.workspaceId,
+				current.keyVersion,
+			);
 			if (!key && !waiting) {
 				await keyring.refreshWorkspaceKeys();
-				key = await keyring.workspaceKey(workspaceId, current.keyVersion);
+				key = await keyring.workspaceKey(
+					current.workspaceId,
+					current.keyVersion,
+				);
 			}
 			// A newer selection or an unmount superseded this one meanwhile.
 			if (!alive.current || pending.current !== current) return false;
+			if (
+				current.workspaceId !== context.current.workspaceId ||
+				current.scope !== context.current.scope
+			) {
+				abandon(current, m.attachment_key_wait_moved());
+				return false;
+			}
+			if (key && key.workspaceId !== current.workspaceId) {
+				console.error("attachments: key belongs to another workspace");
+				abandon(current, m.attachment_error_upload_failed());
+				return false;
+			}
 			if (!key) {
 				setError(m.attachment_key_pending());
 				if (!waiting) {
@@ -165,7 +208,7 @@ export function useAttachmentGate(
 			await current.action(key, current.files);
 			return true;
 		},
-		[keyring, workspaceId],
+		[abandon, keyring],
 	);
 	const continueRef = useRef(continueWithKey);
 	continueRef.current = continueWithKey;
@@ -178,16 +221,35 @@ export function useAttachmentGate(
 			run: async () => {
 				const current = pending.current;
 				if (!current) return true;
+				// An open request means no granter has answered; skip the full
+				// reconcile until one has.
+				const requests = await fetchMyGrants(runtimeFetcher);
+				if (pending.current !== current) return true;
+				const asked = requests.some(
+					(request) =>
+						request.workspaceId === current.workspaceId &&
+						request.state === "pending" &&
+						(current.keyVersion === undefined ||
+							request.keyVersion === current.keyVersion),
+				);
+				if (asked) return false;
 				return await continueRef.current(current, true);
+			},
+			onExhausted: () => {
+				const current = pending.current;
+				if (current) abandon(current, m.attachment_key_wait_expired());
 			},
 			onError: (caught) =>
 				console.error("attachments: waiting for file access failed", caught),
 		});
 		return () => poll.stop();
-	}, [keyWait, keyring.state]);
+	}, [abandon, keyWait, keyring.state, runtimeFetcher]);
 
 	const begin = useCallback(
-		async (current: PendingAction): Promise<boolean> => {
+		async (
+			selection: Omit<PendingAction, "workspaceId" | "scope">,
+		): Promise<boolean> => {
+			const current = { ...selection, ...context.current };
 			setError(null);
 			setKeyWait(0);
 			pending.current = current;

@@ -80,6 +80,9 @@ const STATE_POLL_MS = 15_000;
 // Members request grants while the granter is already open, and no synced row
 // announces it, so an unlocked granter checks on the state poll's cadence.
 const GRANT_POLL_MAX_MS = 5 * 60_000;
+// workspaceKey waits on an in-flight pass, so a stalled request must not hold
+// a file pick for longer than this.
+const GRANT_PASS_TIMEOUT_MS = 20_000;
 
 export function KeyringProvider({
 	userId,
@@ -291,43 +294,73 @@ export function KeyringProvider({
 		// Versions this pass already sent to a full reconcile: one that still
 		// cannot open them would only repeat the same failure every tick.
 		const reloaded = new Set<string>();
-		const poll = startKeyPoll({
-			intervalMs: STATE_POLL_MS,
-			maxIntervalMs: GRANT_POLL_MAX_MS,
-			run: async () => {
-				if (keyring.state() !== "ready" || hydration.current) return;
-				if (typeof navigator !== "undefined" && !navigator.onLine) return;
-				const controller = new AbortController();
-				fulfilmentAbort.current = controller;
-				const pass = fulfilPendingGrants(keyring, (input, init) =>
-					runtime.fetcher(input, { ...init, signal: controller.signal }),
-				);
-				fulfilment.current = pass;
-				const result = await pass
-					.catch((error: unknown) => {
-						if (controller.signal.aborted) return null;
-						throw error;
-					})
-					.finally(() => {
-						if (fulfilment.current === pass) fulfilment.current = null;
-						if (fulfilmentAbort.current === controller)
-							fulfilmentAbort.current = null;
-					});
-				if (!result) return;
-				const fresh = result.missing
-					.map((row) => `${row.workspaceId}:${row.keyVersion}`)
-					.filter((id) => !reloaded.has(id));
-				if (fresh.length === 0) return;
-				for (const id of fresh) reloaded.add(id);
-				await hydrateWorkspaceKeys(publicKey);
-			},
-			onError: (error) => {
-				if (mounted.current)
-					console.error("e2e: grant fulfilment failed", error);
-			},
-		});
+		const run = async () => {
+			if (
+				keyring.state() !== "ready" ||
+				hydration.current ||
+				fulfilment.current
+			)
+				return;
+			if (typeof navigator !== "undefined" && !navigator.onLine) return;
+			const controller = new AbortController();
+			fulfilmentAbort.current = controller;
+			let timedOut = false;
+			const timer = setTimeout(() => {
+				timedOut = true;
+				controller.abort();
+			}, GRANT_PASS_TIMEOUT_MS);
+			const pass = fulfilPendingGrants(keyring, (input, init) =>
+				runtime.fetcher(input, { ...init, signal: controller.signal }),
+			);
+			fulfilment.current = pass;
+			const result = await pass
+				.catch((error: unknown) => {
+					if (timedOut) throw new Error("e2e: grant fulfilment timed out");
+					if (controller.signal.aborted) return null;
+					throw error;
+				})
+				.finally(() => {
+					clearTimeout(timer);
+					if (fulfilment.current === pass) fulfilment.current = null;
+					if (fulfilmentAbort.current === controller)
+						fulfilmentAbort.current = null;
+				});
+			if (!result) return;
+			const fresh = result.missing
+				.map((row) => `${row.workspaceId}:${row.keyVersion}`)
+				.filter((id) => !reloaded.has(id));
+			if (fresh.length === 0) return;
+			for (const id of fresh) reloaded.add(id);
+			await hydrateWorkspaceKeys(publicKey);
+		};
+		// A hidden tab does not poll; returning to it checks at once.
+		let poll: ReturnType<typeof startKeyPoll> | null = null;
+		const start = (initialDelayMs?: number) => {
+			poll = startKeyPoll({
+				intervalMs: STATE_POLL_MS,
+				maxIntervalMs: GRANT_POLL_MAX_MS,
+				initialDelayMs,
+				run,
+				onError: (error) => {
+					if (mounted.current)
+						console.error("e2e: grant fulfilment failed", error);
+				},
+			});
+		};
+		const hidden = () => typeof document !== "undefined" && document.hidden;
+		const onVisibility = () => {
+			if (hidden()) {
+				poll?.stop();
+				poll = null;
+			} else if (!poll) start(0);
+		};
+		if (!hidden()) start();
+		if (typeof document !== "undefined")
+			document.addEventListener("visibilitychange", onVisibility);
 		return () => {
-			poll.stop();
+			if (typeof document !== "undefined")
+				document.removeEventListener("visibilitychange", onVisibility);
+			poll?.stop();
 			fulfilmentAbort.current?.abort();
 		};
 	}, [hydrateWorkspaceKeys, keyring, publicKey, runtime, state]);

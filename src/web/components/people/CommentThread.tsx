@@ -90,7 +90,7 @@ export function CommentThread({
 	const [comments] = useQuery(queries.comments.mine());
 	const [memberships] = useQuery(queries.memberships.mine());
 	const [attachments] = useQuery(queries.attachments.mine());
-	const gate = useAttachmentGate(workspaceId);
+	const gate = useAttachmentGate(workspaceId, task.id);
 	const keyring = useKeyring();
 
 	const [error, setError] = useState<string | null>(null);
@@ -389,7 +389,15 @@ export function CommentThread({
 		files: PendingCommentFile[],
 		key: WorkspaceKeyMaterial,
 	) {
-		if (fileSubmissionPending.current) return;
+		if (fileSubmissionPending.current) {
+			setError(m.attachment_key_wait_busy());
+			return;
+		}
+		if (key.workspaceId !== workspaceId) {
+			console.error("attachments: key belongs to another workspace");
+			setError(m.attachment_error_upload_failed());
+			return;
+		}
 		const focusIntent = composerReturn.current;
 		fileSubmissionPending.current = true;
 		setBusy(true);
@@ -407,8 +415,11 @@ export function CommentThread({
 				if (!(await mutationServerSucceeded(mutation))) {
 					throw new Error("comment.add did not reach the server");
 				}
-				setBody("");
-				setCaret(0);
+				// A draft typed while access was pending is not this comment.
+				if (bodyRef.current.trim() === text) {
+					setBody("");
+					setCaret(0);
+				}
 				setPendingFiles((current) =>
 					current.map((file) =>
 						files.some((candidate) => candidate.id === file.id)
@@ -474,7 +485,7 @@ export function CommentThread({
 							(file) => !file.selectionController.signal.aborted,
 						);
 						if (selected.length === 0) return;
-						return submitWithFiles(bodyRef.current.trim(), selected, key);
+						return submitWithFiles(text, selected, key);
 					},
 				);
 				restoreFocus = !callbackStarted && !gate.hasPendingAction();

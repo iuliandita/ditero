@@ -10,7 +10,7 @@ const fixture = vi.hoisted(() => ({
 		fetcher?: typeof fetch;
 		attachments?: { fetcher: typeof fetch };
 	},
-	key: { keyVersion: 1, wdk: new Uint8Array(32) },
+	key: { workspaceId: "workspace-1", keyVersion: 1, wdk: new Uint8Array(32) },
 	mutate: vi.fn(),
 	upload: vi.fn(),
 	reportUploadFailure: vi.fn(),
@@ -205,4 +205,83 @@ test("retry keeps the native attachment transport and reuses the created comment
 		expect(input.parentId).toBe(fixture.mutate.mock.calls[0]?.[0].id);
 		expect(options.fetcher).toBe(nativeFetcher);
 	}
+});
+
+function type(value: string) {
+	const input = find(
+		render(),
+		(props) => props["data-testid"] === "comment-input",
+	);
+	(input.onChange as (event: unknown) => void)({
+		target: { value, selectionStart: value.length },
+	});
+}
+
+function alertText(): unknown {
+	return find(render(), (props) => props.role === "alert").children;
+}
+
+// The key arrives later: runWithFiles reports a wait and keeps the action.
+function deferKey() {
+	const waiting: Array<(key: typeof fixture.key) => unknown> = [];
+	fixture.runWithFiles.mockImplementation(async (_files, action) => {
+		waiting.push(action);
+		return false;
+	});
+	return waiting;
+}
+
+test("a resumed comment posts the submitted text and keeps a newer draft", async () => {
+	const waiting = deferKey();
+	selectFile();
+	type("submitted text");
+	await send();
+	expect(fixture.mutate).not.toHaveBeenCalled();
+	type("a newer draft");
+	await waiting[0]?.(fixture.key);
+	expect(fixture.mutate).toHaveBeenCalledOnce();
+	expect(fixture.mutate.mock.calls[0]?.[0]).toMatchObject({
+		taskId: "task-1",
+		body: "submitted text",
+	});
+	expect(fixture.upload).toHaveBeenCalledOnce();
+	const input = find(
+		render(),
+		(props) => props["data-testid"] === "comment-input",
+	);
+	expect(input.value).toBe("a newer draft");
+});
+
+test("a key that arrives while another file comment is sending says so", async () => {
+	const waiting = deferKey();
+	selectFile();
+	await send();
+	let acknowledge!: (result: { type: string }) => void;
+	fixture.mutate.mockImplementation(() => ({
+		client: Promise.resolve({ type: "success" }),
+		server: new Promise((resolve) => {
+			acknowledge = resolve;
+		}),
+	}));
+	fixture.runWithFiles.mockImplementation(async (_files, action) =>
+		action(fixture.key),
+	);
+	const sending = send();
+	await waiting[0]?.(fixture.key);
+	expect(fixture.mutate).toHaveBeenCalledOnce();
+	expect(alertText()).toBe("attachment_key_wait_busy");
+	acknowledge({ type: "success" });
+	await sending;
+});
+
+test("a key for another workspace never encrypts the comment's files", async () => {
+	vi.spyOn(console, "error").mockImplementation(() => {});
+	fixture.runWithFiles.mockImplementation(async (_files, action) =>
+		action({ ...fixture.key, workspaceId: "workspace-2" }),
+	);
+	selectFile();
+	await send();
+	expect(fixture.mutate).not.toHaveBeenCalled();
+	expect(fixture.upload).not.toHaveBeenCalled();
+	expect(alertText()).toBe("attachment_error_upload_failed");
 });
