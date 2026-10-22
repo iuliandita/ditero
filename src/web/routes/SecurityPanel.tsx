@@ -92,7 +92,8 @@ export function SecurityPanel() {
 			password,
 			method: "totp",
 		});
-		if (result.error || result.data.method !== "totp") {
+		// A rolled-back 1.6 server omits `method`; the setup fields identify TOTP.
+		if (result.error || !("totpURI" in result.data)) {
 			setError(authErrorMessage(result.error, m.security_error_enable_2fa));
 			return;
 		}

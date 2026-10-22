@@ -7,12 +7,27 @@ import { registrationAPIError } from "./registration-error.ts";
 describe("OAuth registration denial", () => {
 	it.each([
 		[
-			"bootstrap",
+			"bootstrap policy",
 			"REGISTRATION_INVITE_REQUIRED",
 			"Registration requires an invitation",
+			() => assertRegistrationAllowed("bootstrap", 1),
 		],
-		["closed", "REGISTRATION_DISABLED", "Registration is disabled"],
-	] as const)("preserves %s policy through the real callback", async (mode, code, message) => {
+		[
+			"closed policy",
+			"REGISTRATION_DISABLED",
+			"Registration is disabled",
+			() => assertRegistrationAllowed("closed", 1),
+		],
+		[
+			"policy lookup outage",
+			"REGISTRATION_UNAVAILABLE",
+			"Registration is unavailable",
+			() => {
+				throw new Error("connect ECONNREFUSED db:5432");
+			},
+		],
+	] as const)("preserves %s through the real callback", async (_name, code, message, check) => {
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
 		const store = { user: [], account: [], session: [], verification: [] };
 		const auth = betterAuth({
 			baseURL: "http://localhost:3000",
@@ -27,7 +42,7 @@ describe("OAuth registration denial", () => {
 					create: {
 						before: async () => {
 							try {
-								assertRegistrationAllowed(mode, 1);
+								check();
 							} catch (error) {
 								throw registrationAPIError(error);
 							}
@@ -90,13 +105,14 @@ describe("OAuth registration denial", () => {
 		expect(store.account).toEqual([]);
 		expect(store.session).toEqual([]);
 		try {
-			assertRegistrationAllowed(mode, 1);
+			check();
 		} catch (error) {
 			expect(registrationAPIError(error).body).toMatchObject({
 				code,
 				message,
 			});
 		}
+		log.mockRestore();
 	});
 
 	it("logs an unexpected failure without exposing it as policy", () => {
@@ -104,7 +120,10 @@ describe("OAuth registration denial", () => {
 		const cause = new Error("connect ECONNREFUSED db:5432");
 		const error = registrationAPIError(cause);
 		expect(error.status).toBe("INTERNAL_SERVER_ERROR");
-		expect(error.body).toEqual({ message: "Registration is unavailable" });
+		expect(error.body).toEqual({
+			message: "Registration is unavailable",
+			code: "REGISTRATION_UNAVAILABLE",
+		});
 		expect(log).toHaveBeenCalledWith("registration policy check failed", cause);
 		log.mockRestore();
 	});

@@ -1535,6 +1535,7 @@
 	"auth_error_email_not_found": "Furnizorul nu a partajat o adresă de e-mail. Permite-i să o partajeze și încearcă din nou sau folosește altă metodă de autentificare.",
 	"auth_error_account_not_linked": "Există deja un cont cu acest e-mail. Autentifică-te mai întâi în el, apoi asociază acest furnizor din Setări.",
 	"auth_error_account_already_linked": "Acel cont de la furnizor este deja asociat cu alt cont Ditero.",
+	"auth_error_registration_unavailable": "Înregistrarea este temporar indisponibilă. Încearcă din nou peste puțin timp.",
 	"auth_error_invalid_origin": "Serverul nu are încredere în această adresă. Cere-i operatorului să o adauge la originile de încredere ale instanței.",
 	"mutation_failed": "Ceva n-a mers bine.",
 	"mutation_offline_not_saved": "Ești offline, modificarea nu a fost salvată. Reconectează-te și încearcă din nou.",

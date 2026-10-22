@@ -1535,6 +1535,7 @@
 	"auth_error_email_not_found": "Le fournisseur n'a pas partagé d'adresse e-mail. Autorise-le à la partager et réessaie, ou utilise un autre moyen de connexion.",
 	"auth_error_account_not_linked": "Un compte existe déjà avec cet e-mail. Connecte-toi d'abord à ce compte, puis associe ce fournisseur dans les réglages.",
 	"auth_error_account_already_linked": "Ce compte du fournisseur est déjà associé à un autre compte Ditero.",
+	"auth_error_registration_unavailable": "L'inscription est momentanément indisponible. Réessaie dans un instant.",
 	"auth_error_invalid_origin": "Le serveur ne fait pas confiance à cette adresse. Demande à l'opérateur de l'ajouter aux origines de confiance de l'instance.",
 	"mutation_failed": "Un problème est survenu.",
 	"mutation_offline_not_saved": "Tu es hors ligne, cette modification n'a pas été enregistrée. Reconnecte-toi et réessaie.",

@@ -489,3 +489,73 @@ test("browser token refresh retries session lookup outages but refuses revoked s
 	await admin.query("delete from session where id=$1", [f.browser.id]);
 	expect((await refresh()).status).toBe(401);
 });
+
+// #1165: a completed reset has to end the sessions an attacker may already hold,
+// including the sync access they issued before the reset.
+test("a completed password reset ends every session and the Zero access issued from them", async () => {
+	const f = await fixture();
+	const context = await auth.$context;
+	await admin.query(
+		"insert into account (id,account_id,provider_id,user_id,password,updated_at) values ($1,$2,'credential',$2,$3,now())",
+		[randomUUID(), f.userId, await context.password.hash("old-password-123")],
+	);
+	const nativeJwt = await nativeToken(f);
+	const browserJwt = await browserToken(f);
+	expect(await verify(`Bearer ${nativeJwt}`)).toEqual({ id: f.userId });
+	expect(await verify(`Bearer ${browserJwt}`)).toEqual({ id: f.userId });
+
+	const resetToken = randomBytes(24).toString("hex");
+	await context.internalAdapter.createVerificationValue({
+		identifier: `reset-password:${resetToken}`,
+		value: f.userId,
+		expiresAt: new Date(Date.now() + 60_000),
+	});
+	const reset = await auth.handler(
+		new Request(`${origin}/api/auth/reset-password`, {
+			method: "POST",
+			headers: { "content-type": "application/json", origin },
+			body: JSON.stringify({
+				newPassword: "new-password-456",
+				token: resetToken,
+			}),
+		}),
+	);
+	expect(reset.status, await reset.clone().text()).toBe(200);
+
+	expect(
+		(
+			await admin.query(
+				"select count(*)::int as n from session where user_id=$1",
+				[f.userId],
+			)
+		).rows,
+	).toEqual([{ n: 0 }]);
+	expect(await verify(`Bearer ${nativeJwt}`)).toBeUndefined();
+	expect(await verify(`Bearer ${browserJwt}`)).toBeUndefined();
+	await assertRefused(nativeJwt, f);
+	await assertRefused(browserJwt, f);
+	const refresh = await auth.handler(
+		new Request(`${origin}/api/auth/token`, { headers: { cookie: f.cookie } }),
+	);
+	expect(refresh.status).toBe(401);
+	expect(
+		(
+			await app.handle(
+				new Request(`${origin}/api/native/token`, {
+					headers: { authorization: `Bearer ${f.native.token}` },
+				}),
+			)
+		).status,
+	).toBe(401);
+	expect(
+		await context.password.verify({
+			hash: (
+				await admin.query(
+					"select password from account where user_id=$1 and provider_id='credential'",
+					[f.userId],
+				)
+			).rows[0].password,
+			password: "new-password-456",
+		}),
+	).toBe(true);
+});

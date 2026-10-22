@@ -54,8 +54,13 @@ caller-supplied callback URL.
 
 Better Auth 1.7 keeps Google's `/api/auth/callback/google` redirect URI and the
 pending native approval URL; the other providers use `/api/auth/callback/<provider>`. Registration refusals carry a stable `error` code
-and a readable `error_description`; clients localize the code. TOTP enrollment
-explicitly requests the `totp` method and accepts setup keys only from that response.
+and a readable `error_description`; clients localize the code. A registration-policy
+check that cannot run (for example during a database outage) returns the same way
+with `REGISTRATION_UNAVAILABLE`, so the system browser returns to the sign-in page
+with a localized error. The unapproved native grant still expires normally.
+TOTP enrollment explicitly requests the `totp` method
+and accepts setup keys from any response that carries them, including the method-less
+reply of a rolled-back 1.6 server.
 Before deploying 1.7, apply the additive JWT key migration described in
 [database roles](database-roles.md#better-auth-17-upgrade). Browser and native
 session credentials and the explicit approval step retain their existing format.

@@ -47,22 +47,32 @@ afterEach(() => {
 });
 
 test.each([
-	{
-		method: "totp",
-		totpURI: "otpauth://totp/Ditero?secret=test",
-		backupCodes: ["backup"],
-	},
-	{ method: "otp" },
-])("TOTP enrollment handles the $method response before reading setup fields", async (data) => {
+	[
+		"totp",
+		{
+			method: "totp",
+			totpURI: "otpauth://totp/Ditero?secret=test",
+			backupCodes: ["backup"],
+		},
+		true,
+	],
+	[
+		"method-less (rolled-back 1.6 server)",
+		{
+			totpURI: "otpauth://totp/Ditero?secret=legacy",
+			backupCodes: ["legacy-backup"],
+		},
+		true,
+	],
+	["otp", { method: "otp" }, false],
+] as const)("TOTP enrollment handles the %s response before reading setup fields", async (_name, data, accepted) => {
 	enable.mockResolvedValue({ data, error: null });
 	const action = enableButton(SecurityPanel());
 	if (!action) throw new Error("Missing TOTP enable action");
 	action();
-	await vi.waitFor(() =>
-		expect(writes).toHaveLength(data.method === "totp" ? 4 : 2),
-	);
+	await vi.waitFor(() => expect(writes).toHaveLength(accepted ? 4 : 2));
 	expect(enable).toHaveBeenCalledWith({ password: "", method: "totp" });
-	if (data.method === "totp") {
+	if (accepted && "totpURI" in data) {
 		expect(writes).toEqual([null, "", data.totpURI, data.backupCodes]);
 	} else {
 		expect(writes).toEqual([

@@ -2,9 +2,12 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "af9226244133af6ac0bc4f0a2ee3b5f6221b6408613842e3a0f535564040d66e",
-			"docs": ["docs/runbooks/sign-in-providers.md"],
-			"note": "Sign-in shows every server-listed provider and Settings gains explicit link and unlink actions, localized in all six catalogs. Existing locale, theme, session and native consent behavior is preserved."
+				"sourceDigest": "af9226244133af6ac0bc4f0a2ee3b5f6221b6408613842e3a0f535564040d66e",
+				"docs": [
+					"docs/runbooks/sign-in-providers.md",
+					"docs/runbooks/native-authentication.md"
+				],
+				"note": "Sign-in shows every server-listed provider and Settings gains explicit link and unlink actions, localized in all six catalogs. Existing locale, theme, session and native consent behavior is preserved. Upgrade Better Auth and passkey together to 1.7.12. TOTP enrollment explicitly requests totp and identifies the response by its setup keys, so the method-less reply of a rolled-back 1.6 server still works. Document the response boundary and unchanged explicit native approval. Session startup, transport retry, locale and theme behavior are preserved. The registration-unavailable message is localized in all six locales."
 		},
 		"release": {
 			"sourceDigest": "a675a1dc3668f040faf1c5a69a6adb43d3852b9e3a461a9a6b5aebc3fb0eaf76",
@@ -30,17 +33,19 @@
 			"note": "Document desktop cold offline activation from complete unexpired evidence in the OS credential store, exact session binding, fail-closed verification and revocation markers, and native token refresh on socket retry. Existing records need one complete online start; downgrades require signing out stored accounts before installing an older build. Retain queued edits, refuse fallback for trust, HTTP, validation or storage failures, and keep platform runtime qualification explicit. Android cached activation policy is unchanged. Every authenticated native request now persists a refusal fence before I/O, including attachment, notification, cleanup and sync-handshake requests. Binary keyring chunks stay within the Windows blob limit, share credential references, and use a bounded recovery journal. Both earlier protected-record formats require fresh online evidence after upgrade; downgrades require OS credential-manager cleanup. The desktop TLS refusal test fixture now carries a fixed non-secret password because macOS refuses empty-password PKCS#12 imports; test-only, no runtime or documented behavior change."
 		},
 		"authentication": {
-			"sourceDigest": "128e5bfe71413c4c84b17420d4e2e05c406b7a711f1367f9debc704ab6e82d04",
-			"docs": ["docs/runbooks/native-authentication.md"],
-			"note": "Add generic OpenID Connect, Microsoft, GitHub, Discord, Apple and Facebook sign-in beside Google. Provider accounts are keyed on immutable IDs, only provider-verified emails count for invitations, same-email accounts are no longer linked implicitly (Google included) and linking is explicit in Settings. Account schema, credential formats and the native approval step are unchanged. Anyone who relied on automatic Google linking signs in with their password once and links Google. To roll back, remove the provider variables; linked provider accounts stay as unused rows. Microsoft and Apple ID tokens are bound to a single-use nonce kept with the server-side state, and client-submitted ID token sign-in stays refused for every provider but Google, including OpenID Connect providers registered after discovery recovers; the provider runbook states the nonce binding."
+				"sourceDigest": "128e5bfe71413c4c84b17420d4e2e05c406b7a711f1367f9debc704ab6e82d04",
+				"docs": [
+					"docs/runbooks/native-authentication.md"
+				],
+				"note": "Add generic OpenID Connect, Microsoft, GitHub, Discord, Apple and Facebook sign-in beside Google. Provider accounts are keyed on immutable IDs, only provider-verified emails count for invitations, same-email accounts are no longer linked implicitly (Google included) and linking is explicit in Settings. Account schema, credential formats and the native approval step are unchanged. Anyone who relied on automatic Google linking signs in with their password once and links Google. To roll back, remove the provider variables; linked provider accounts stay as unused rows. Microsoft and Apple ID tokens are bound to a single-use nonce kept with the server-side state, and client-submitted ID token sign-in stays refused for every provider but Google, including OpenID Connect providers registered after discovery recovers; the provider runbook states the nonce binding. Upgrade Better Auth and passkey together to 1.7.12. Google keeps its callback URI, PKCE and pending native consent return URL. OAuth callbacks now preserve APIError codes, so remove the message-as-code workaround and retain readable error descriptions; a registration-policy outage returns REGISTRATION_UNAVAILABLE so the callback still redirects. A concurrent duplicate provider link is refused with ACCOUNT_ALREADY_LINKED. A completed password reset now revokes every session of the account, including native sessions and the Zero access issued from them. Document the required additive JWT key migration and the account key check; credential formats, registration policies and trusted origins are unchanged."
 		},
 		"compatibility": {
-			"sourceDigest": "40d30bcfd813e7074890ee483f1417968e6758a3e3d60a1295424a2afa461e64",
+			"sourceDigest": "dc6b737ee2572b75c46058bf29aa3c622bfb14394335dc83050724a549de106c",
 			"docs": ["docs/runbooks/database-roles.md"],
-			"note": "Better Auth 1.7 requires nullable jwks.alg and jwks.crv columns. The additive migration retains encrypted Ed25519 keys and the existing restricted runtime-role grants; account and client credential formats are unchanged. Document upgrade, backup, rollback and client guidance.",
-			"upgrade": "Stop app replicas and Zero, back up the matching recovery set, and run the additive better_auth_jwks migration as the migration owner before starting the new app and Zero. Preserve NOSUPERUSER NOBYPASSRLS runtime credentials.",
+			"note": "Better Auth 1.7 requires nullable jwks.alg and jwks.crv columns. The additive migration retains encrypted Ed25519 keys and the existing restricted runtime-role grants. A second additive migration adds a unique index on account (provider_id, account_id) after checking for duplicate provider accounts; it fails without changing rows when duplicates exist. Account and client credential formats are unchanged. Document upgrade, backup, rollback and client guidance.",
+			"upgrade": "Run the duplicate provider account query from the guide first. Stop app replicas and Zero, back up the matching recovery set, and run the additive better_auth_jwks and account_provider_unique migrations as the migration owner before starting the new app and Zero. A duplicate makes the second migration fail without changing rows; repair the rows and rerun. Preserve NOSUPERUSER NOBYPASSRLS runtime credentials.",
 			"backup": "Keep coordinated database and attachment backups with the original authentication secret and encryption keys. Existing encrypted keys are preserved without conversion.",
-			"rollback": "The previous app with Better Auth 1.6.23 tolerates and ignores the added nullable columns. Leave them in place during application rollback; restore older database snapshots only with matching secrets and attachments, accounting for newer data loss.",
+			"rollback": "The previous app with Better Auth 1.6.23 tolerates and ignores the added nullable columns and the unique index. Leave them in place during application rollback; restore older database snapshots only with matching secrets and attachments, accounting for newer data loss.",
 			"clientVersions": "Existing browser, Android and desktop sessions and native consent protocols remain compatible. Reload web clients after upgrade or rollback so the TOTP caller matches the server response format. Retain browser storage until queued edits sync and verify sign-in after rollback."
 		},
 		"clients": {

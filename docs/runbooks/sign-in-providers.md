@@ -71,6 +71,10 @@ for their own address.
   verified flag). Microsoft work accounts and Facebook never report a verified email,
   so they cannot redeem an invitation on their own; the invited person signs up with
   that email address first and links the provider afterwards.
+- **Policy outages.** If registration cannot be checked, the callback returns with
+  `REGISTRATION_UNAVAILABLE` and a localized retry message. Pending native approval
+  still expires normally. Concurrent duplicate provider links are refused with
+  `ACCOUNT_ALREADY_LINKED`.
 - **No implicit linking.** A provider account is never attached to an existing account
   because the emails match. If an account with that email already exists, the sign-in
   is refused with "an account with this email already exists". Sign in to that account

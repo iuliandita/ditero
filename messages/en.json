@@ -1506,6 +1506,7 @@
 	"auth_error_email_not_found": "The provider did not share an email address. Allow it to share your email and try again, or use another way to sign in.",
 	"auth_error_account_not_linked": "An account with this email already exists. Sign in to it first, then link this provider under Settings.",
 	"auth_error_account_already_linked": "That provider account is already linked to a different Ditero account.",
+	"auth_error_registration_unavailable": "Registration is temporarily unavailable. Try again in a moment.",
 	"auth_error_invalid_origin": "This address is not trusted by the server. Ask the operator to add it to the instance's trusted origins.",
 	"mutation_failed": "Something went wrong.",
 	"mutation_offline_not_saved": "You're offline, this change wasn't saved. Reconnect and try again.",

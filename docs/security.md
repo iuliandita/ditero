@@ -69,6 +69,13 @@ from creating an unused address and subsequently proving that creation by signin
 in with their chosen password. Rate limits bound attempts; the neutral response
 does not claim to eliminate that active registration side channel.
 
+A completed password reset revokes every session of that account, browser and
+native, because the old password may be compromised. The reset page does not sign
+the user in, so no session is kept. Sync access ends within the revocation bound
+described below: new Zero tokens and requests are refused immediately and open
+subscriptions close at the next revalidation. A session started with the new
+password is unaffected.
+
 Android and desktop use explicit system-browser consent to obtain a device-bound
 native session. Credentials remain in native storage. After sign-out or session/device
 revocation commits, subsequent HTTP requests (including Zero query and mutation
