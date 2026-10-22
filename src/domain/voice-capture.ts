@@ -27,7 +27,6 @@ export const VOICE_REASONS = [
 	"unsupported-locale",
 	"unsupported-insecure-context",
 	"unsupported-no-api",
-	"unsupported-no-local-processing",
 	"language-pack-unavailable",
 	// Everything below lands in the `error` phase.
 	"language-pack-downloadable",
@@ -39,6 +38,7 @@ export const VOICE_REASONS = [
 	"permission-denied",
 	"audio-capture",
 	"no-speech",
+	"network",
 	"no-match",
 	"engine-error",
 	"ended-without-result",
@@ -52,7 +52,7 @@ export const VOICE_REASONS = [
 export type VoiceReason = (typeof VOICE_REASONS)[number];
 
 const UNSUPPORTED_REASONS: ReadonlySet<string> = new Set(
-	VOICE_REASONS.slice(0, 6),
+	VOICE_REASONS.slice(0, 5),
 );
 
 export function isVoiceReason(value: unknown): value is VoiceReason {
@@ -72,9 +72,22 @@ export type VoicePhase =
 	| "unsupported";
 
 export type VoiceState =
-	| { phase: "idle"; session: number; ready: boolean }
+	| {
+			phase: "idle";
+			session: number;
+			ready: boolean;
+			/** The engine may send audio to the browser vendor's service. */
+			vendor: boolean;
+			/** The vendor-service notice was accepted; always true on-device. */
+			acknowledged: boolean;
+	  }
 	| { phase: "checking" | "listening" | "stopping"; session: number }
-	| { phase: "review"; session: number; alternatives: readonly string[] }
+	| {
+			phase: "review";
+			session: number;
+			alternatives: readonly string[];
+			vendor: boolean;
+	  }
 	| { phase: "error" | "unsupported"; session: number; reason: VoiceReason };
 
 export type VoiceInvalidation =
@@ -86,8 +99,10 @@ export type VoiceInvalidation =
 
 // --- engine port -----------------------------------------------------------
 
+export type VoiceProcessing = "device" | "vendor";
+
 export type VoiceCapability =
-	| { status: "available" }
+	| { status: "available"; processing: VoiceProcessing }
 	| { status: "refused"; reason: VoiceReason };
 
 export type VoiceEngineEvent =
@@ -181,6 +196,10 @@ export interface VoiceCaptureOptions {
 	native: boolean;
 	/** App locale code (en/de/es/fr/ro/ar). Fixed for this controller. */
 	locale: string;
+	/** The vendor-service notice was already accepted (persisted by the caller). */
+	acknowledged?: boolean;
+	/** Called once when `acknowledge()` records a new acceptance. */
+	onAcknowledge?: () => void;
 	timers?: VoiceTimers;
 	timeoutMs?: number;
 }
@@ -196,6 +215,11 @@ export interface VoiceCapture {
 	 * the probe runs first and start follows when it resolves.
 	 */
 	start(): void;
+	/**
+	 * Accept the vendor-service notice. Without it `start()` refuses to listen
+	 * on an engine that may send audio to the browser vendor.
+	 */
+	acknowledge(): void;
 	/** Ask for the final result; stays in `stopping` until it arrives. */
 	stop(): void;
 	/** Abort and discard any transcript. Returns to idle. */
@@ -232,12 +256,21 @@ export function createVoiceCapture(options: VoiceCaptureOptions): VoiceCapture {
 	let session = 0;
 	let disposed = false;
 	let ready = false;
+	let vendor = false;
+	let acknowledged = options.acknowledged === true;
 	let timer: unknown = null;
 	let active: VoiceEngineSession | null = null;
 	const listeners = new Set<() => void>();
+	const idle = (token: number): VoiceState => ({
+		phase: "idle",
+		session: token,
+		ready,
+		vendor,
+		acknowledged: !vendor || acknowledged,
+	});
 	let state: VoiceState = permanent
 		? { phase: "unsupported", session, reason: permanent }
-		: { phase: "idle", session, ready };
+		: idle(session);
 
 	const set = (next: VoiceState) => {
 		state = next;
@@ -310,6 +343,7 @@ export function createVoiceCapture(options: VoiceCaptureOptions): VoiceCapture {
 				phase: "review",
 				session: token,
 				alternatives: result.alternatives,
+				vendor,
 			});
 		} else if (type === "error") {
 			const reason = (raw as { reason?: unknown }).reason;
@@ -358,6 +392,8 @@ export function createVoiceCapture(options: VoiceCaptureOptions): VoiceCapture {
 						: undefined;
 				if (status === "available") {
 					ready = true;
+					// Anything but an explicit on-device engine is treated as vendor.
+					vendor = (raw as { processing?: unknown }).processing !== "device";
 					onAvailable();
 				} else if (status === "refused") {
 					const reason = (raw as { reason?: unknown }).reason;
@@ -376,7 +412,7 @@ export function createVoiceCapture(options: VoiceCaptureOptions): VoiceCapture {
 		if (disposed) return;
 		fence();
 		if (permanent) return;
-		if (state.phase !== "idle") set({ phase: "idle", session, ready });
+		if (state.phase !== "idle") set(idle(session));
 	};
 
 	return {
@@ -396,11 +432,12 @@ export function createVoiceCapture(options: VoiceCaptureOptions): VoiceCapture {
 			armTimer(token);
 			runCheck(token, () => {
 				clearTimer();
-				set({ phase: "idle", session: token, ready: true });
+				set(idle(token));
 			});
 		},
 		start() {
 			if (disposed || permanent || busy()) return;
+			if (ready && vendor && !acknowledged) return;
 			const token = fence();
 			armTimer(token);
 			if (ready) {
@@ -409,7 +446,20 @@ export function createVoiceCapture(options: VoiceCaptureOptions): VoiceCapture {
 			}
 			set({ phase: "checking", session: token });
 			if (!live(token, "checking")) return;
-			runCheck(token, () => listen(token));
+			runCheck(token, () => {
+				if (vendor && !acknowledged) {
+					clearTimer();
+					set(idle(token));
+					return;
+				}
+				listen(token);
+			});
+		},
+		acknowledge() {
+			if (disposed || permanent || acknowledged) return;
+			acknowledged = true;
+			options.onAcknowledge?.();
+			if (state.phase === "idle") set(idle(session));
 		},
 		stop() {
 			if (disposed || state.phase !== "listening") return;
@@ -432,7 +482,7 @@ export function createVoiceCapture(options: VoiceCaptureOptions): VoiceCapture {
 			const picked = state.alternatives[index];
 			if (picked === undefined) return null;
 			fence();
-			set({ phase: "idle", session, ready });
+			set(idle(session));
 			return appendVoiceDraft(typeof draft === "string" ? draft : "", picked);
 		},
 		dispose() {
@@ -440,7 +490,7 @@ export function createVoiceCapture(options: VoiceCaptureOptions): VoiceCapture {
 			disposed = true;
 			fence();
 			listeners.clear();
-			if (!permanent) state = { phase: "idle", session, ready };
+			if (!permanent) state = idle(session);
 		},
 	};
 }

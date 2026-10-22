@@ -328,3 +328,5 @@ cd apps/android/android
 Some shared browser-only account settings and integrations still need explicit
 native support. Keep unsupported operations unavailable until their native
 transport and lifecycle behavior are implemented and tested.
+
+Quick add voice dictation is unavailable in the Android app: the shared interface detects the native bridge and shows an explanation instead of the control, and no native speech plugin exists. Use the browser; see the [voice capture guide](../../docs/runbooks/voice-capture.md).

@@ -102,8 +102,12 @@ templates use the name you enter, or the template name when you leave it blank.
 
 iOS and direct Microsoft PST import remain pending. Provider imports require review
 of exclusions and exact snapshot identity; they are not account synchronization. Wider attachment migration
-runtime, terminal, native and deployment qualification remain pending. Voice capture is
-pending final qualification. Calendar subscriptions can be created and revoked
+runtime, terminal, native and deployment qualification remain pending. Quick add has
+[voice dictation](docs/runbooks/voice-capture.md) with review before use. It runs on-device
+where the browser supports it; browsers that only offer the standard Web Speech API may
+send audio to the browser vendor's speech service, so a notice must be accepted first.
+Dictation stops when the tab is hidden.
+It is unavailable in the native apps, and real-device qualification is pending. Calendar subscriptions can be created and revoked
 in web settings; a new subscription URL is shown only once.
 The [roadmap](docs/ROADMAP.md) distinguishes delivered capabilities from remaining work.
 

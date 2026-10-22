@@ -1,4 +1,4 @@
-import { ProviderImportError } from "./common.ts";
+import { PROVIDER_MAX_FIELD_BYTES, ProviderImportError } from "./common.ts";
 import {
 	ContentBuilder,
 	type ContentOptions,
@@ -7,6 +7,7 @@ import {
 	items,
 	nonempty,
 	record,
+	truncateProviderText,
 } from "./content-common.ts";
 
 function trelloId(value: unknown): string {
@@ -26,6 +27,36 @@ function dueText(builder: ContentBuilder, value: unknown): string {
 }
 // Original file position, kept because rows are processed in board order.
 const positions = new WeakMap<object, number>();
+const ATTACHMENT_LINE_LIMIT = 25;
+const ATTACHMENT_URL_LIMIT = 2048;
+const encoder = new TextEncoder();
+// Attachments are never fetched here. A well-formed web link survives as
+// inert text; anything else is named without a link.
+function attachmentLine(value: unknown) {
+	const row = record(value);
+	const name =
+		typeof row.name === "string"
+			? truncateProviderText(
+					row.name.replace(/[\p{Cc}\p{Cf}\s]+/gu, " ").trim(),
+					200,
+				)
+			: "";
+	let link: string | null = null;
+	if (typeof row.url === "string" && row.url.length <= ATTACHMENT_URL_LIMIT)
+		try {
+			const url = new URL(row.url);
+			if (
+				(url.protocol === "https:" || url.protocol === "http:") &&
+				!url.username &&
+				!url.password &&
+				url.href.length <= ATTACHMENT_URL_LIMIT
+			)
+				link = url.href;
+		} catch {
+			// Unparseable links are reported as omitted below.
+		}
+	return { text: `- ${name || "attachment"}${link ? `: ${link}` : ""}`, link };
+}
 function ordered(values: unknown[]) {
 	return values
 		.map((value, index) => {
@@ -127,7 +158,32 @@ export async function parseTrelloContent(
 				"idChecklists",
 				"isTemplate",
 				"cardRole",
+				"attachments",
 			]);
+			const lines: string[] = [];
+			for (const attachment of items(card.attachments ?? []).map(
+				attachmentLine,
+			)) {
+				builder.notice("attachments-excluded", "card-attachments");
+				if (!attachment.link)
+					builder.notice("attachments-excluded", "attachment-link-omitted");
+				if (lines.length < ATTACHMENT_LINE_LIMIT) lines.push(attachment.text);
+				else builder.notice("format-limits", "attachment-links");
+			}
+			const base =
+				card.desc == null ? null : builder.notes(text(card.desc), "desc");
+			let notes = base;
+			if (lines.length) {
+				const withLinks = [
+					base,
+					`Attachments not migrated:\n${lines.join("\n")}`,
+				]
+					.filter(Boolean)
+					.join("\n\n");
+				if (encoder.encode(withLinks).length < PROVIDER_MAX_FIELD_BYTES)
+					notes = withLinks;
+				else builder.notice("format-limits", "attachment-links");
+			}
 			const labels = items(card.labels ?? []).map((value) => {
 				const label = record(value);
 				builder.unsupported(label, ["id", "name"]);
@@ -146,8 +202,7 @@ export async function parseTrelloContent(
 				id: cardId,
 				listId,
 				title: builder.text(text(card.name), "name"),
-				notes:
-					card.desc == null ? null : builder.notes(text(card.desc), "desc"),
+				notes,
 				...builder.date(dueText(builder, card.due), undefined, "due"),
 				done: flag(card.dueComplete) || archived,
 				labels,

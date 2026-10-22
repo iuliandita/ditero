@@ -2,9 +2,13 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "70c1ecafa4446768707ecb3f91dfed84e70aac9f66ce3fc63f8b9d5ec0f2dc08",
-			"docs": ["docs/runbooks/data-portability.md"],
-			"note": "Document bounded per-cell truncation with row notices, skipped Todoist descendants, restored ISO clocks, cross-day retained anchors, all-day TickTick precedence, valid-date-only Outlook order detection and immediate timezone preview invalidation. Preserve immutable snapshot settings, notification exclusions and real-export qualification limits."
+			"sourceDigest": "6df6e87fe3e7fa2a512b6e2c57fb76ae29713a8432dd724c97cf7091d6b7efe0",
+			"docs": [
+				"README.md",
+				"docs/ROADMAP.md",
+				"docs/runbooks/voice-capture.md"
+			],
+			"note": "Document five reviewed provider content import pickers, timezone/date and recurrence limits, flattened subtasks, completion/notes/labels, field notices, notification exclusions and immutable snapshot retry identity. Keep legacy adapter behavior and native runtime qualification limits explicit. Voice dictation runs on-device where the browser supports it; browsers with only the standard Web Speech API show a vendor-service notice that must be accepted before the mic works, and native webviews stay unavailable. Dictation also stops when the tab is hidden or minimized, not when focus moves to another visible window."
 		},
 		"release": {
 			"sourceDigest": "a675a1dc3668f040faf1c5a69a6adb43d3852b9e3a461a9a6b5aebc3fb0eaf76",
@@ -32,9 +36,9 @@
 			"note": "OAuth registration denials preserve their stable policy code through Better Auth callback redirects. Native browser sign-in retains the grant ID and displays the localized policy message. Document periodic stream revalidation after session revocation; HTTP authorization remains checked against live session state. Invitations remain HTTPS browser links with fragment tokens and backward-compatible acceptance; native task scheme handling is unchanged. Document the current account name, identity update validation, synced display behavior, and managed-account normalization with JSON validation errors. Production startup validates secret length and retained JWKS decryption. The authentication guide links the stopped-replica secret rotation procedure instead of direct replacement. Browser sign-in checks the per-IP ceiling before creating IP-plus-email buckets. The handoff and trusted-proxy guides document that order, unchanged limits and batch-drained cleanup; docs/security.md records the body bound and unchanged TOTP lockout. The authentication guides already changed in this branch document neutral public email sign-up, explicit sign-in without SMTP, admission policy and unchanged native approval. This follow-up preserves that public and native protocol: only identity and password fields reach account creation, and persistence failures use the existing neutral result and timing floor. docs/security.md now describes discarded fields and operator-visible failure logs. No new setup, recovery, native trust, account admission, or credential storage procedure is introduced; managed-account creation retains explicit failures. Unexpected registration-policy failures are logged and return a generic unavailable error instead of a policy refusal carrying the raw message; documented refusals are unchanged."
 		},
 		"compatibility": {
-			"sourceDigest": "c3d5648373ef515e4e2cb1b5ecbfd499722bc139c7704517a5884a9e1e94a1af",
+			"sourceDigest": "ac318d3849630ad5dc00baf62ca02cd7bc625aedd64739a61f62dacd2e34a9b2",
 			"docs": ["docs/runbooks/native-format.md"],
-			"note": "Add version 2 provider-content input binding validation (including dateOrder and anchorDay and the nesting bound) alongside unchanged native and legacy provider contracts. Conversion reuses the existing version 1 intermediate document, planner 4, authorized writer and notification activation.",
+			"note": "Add version 2 provider-content input binding validation alongside unchanged native and legacy provider contracts. Conversion reuses the existing version 1 intermediate document, planner 4, authorized writer and notification activation.",
 			"upgrade": "Back up the database and run the additive binding migration before deploying the updated application.",
 			"backup": "Keep coordinated database, attachment ciphertext and original encryption/authentication secrets; retain provider export files privately for a fresh preview.",
 			"rollback": "Keep the additive migration. Stop new provider imports and use the updated application to resume or discard new binding plans before using an older build. Do not replace newer content with an older database.",

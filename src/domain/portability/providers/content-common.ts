@@ -136,6 +136,19 @@ export function string(value: unknown, max = 500): string {
 	checkProviderText(value, max);
 	return value;
 }
+const graphemes = new Intl.Segmenter("und", { granularity: "grapheme" });
+export function truncateProviderText(
+	value: string,
+	maxCodeUnits: number,
+): string {
+	if (value.length <= maxCodeUnits) return value;
+	let end = 0;
+	for (const { segment, index } of graphemes.segment(value)) {
+		if (index + segment.length > maxCodeUnits) break;
+		end = index + segment.length;
+	}
+	return value.slice(0, end);
+}
 export function nonempty(value: unknown, max = 500): string {
 	const text = string(value, max);
 	if (!text.trim()) throw new ProviderImportError("invalid-row");

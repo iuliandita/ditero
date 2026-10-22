@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { projectImportApply } from "../import-apply.ts";
 import { buildImportPlan } from "../import-plan.ts";
 import { parseContentProvider } from "./content.ts";
@@ -329,6 +329,133 @@ describe("provider content adapters", () => {
 		await expect(
 			parseContentProvider("trello", bytes(JSON.stringify(board)), options),
 		).rejects.toMatchObject({ code });
+	});
+	test("keeps Trello attachment links as inert text, never fetches them and reports them as not migrated", async () => {
+		const fetchSpy = vi
+			.spyOn(globalThis, "fetch")
+			.mockRejectedValue(new Error("server-side fetch"));
+		const board = JSON.parse(fixture("trello-content.json").toString());
+		board.cards[0].attachments = [
+			{
+				id: "333333333333333333333333",
+				name: "Menu\u202e.pdf\n",
+				url: "https://example.test/menu.pdf",
+				isUpload: true,
+			},
+			{
+				id: "777777777777777777777777",
+				name: "Credentialed",
+				url: "https://user:secret@example.test/x",
+			},
+			{
+				id: "888888888888888888888888",
+				name: "Script",
+				url: "javascript:alert(1)",
+			},
+			{ id: "999999999999999999999999", url: "http://169.254.169.254/latest" },
+		];
+		const result = await parseContentProvider(
+			"trello",
+			bytes(JSON.stringify(board)),
+			options,
+		);
+		const task = result.document.data.tasks.find(
+			(row) => row.title === "Prepare picnic",
+		);
+		expect(task?.notes).toContain(
+			[
+				"Bring a blanket",
+				"",
+				"Attachments not migrated:",
+				"- Menu .pdf: https://example.test/menu.pdf",
+				"- Credentialed",
+				"- Script",
+				"- attachment: http://169.254.169.254/latest",
+			].join("\n"),
+		);
+		expect(task?.notes).not.toContain("secret");
+		expect(task?.notes).not.toContain("javascript");
+		expect(result.document.data.attachments).toEqual([]);
+		expect(result.notices).toContainEqual({
+			code: "attachments-excluded",
+			path: "card-attachments",
+			count: 4,
+		});
+		expect(result.notices).toContainEqual({
+			code: "attachments-excluded",
+			path: "attachment-link-omitted",
+			count: 2,
+		});
+		expect(result.notices).not.toContainEqual(
+			expect.objectContaining({
+				code: "unsupported-field",
+				path: "attachments",
+			}),
+		);
+		expect(fetchSpy).not.toHaveBeenCalled();
+		fetchSpy.mockRestore();
+	});
+	test.each([
+		["surrogate pair", `${"a".repeat(199)}😀`, "a".repeat(199)],
+		["split combining grapheme", `${"a".repeat(199)}e\u0301`, "a".repeat(199)],
+	])("bounds Trello attachment names at whole graphemes: %s", async (_kind, name, expected) => {
+		const board = JSON.parse(fixture("trello-content.json").toString());
+		board.cards[0].attachments = [{ name, url: "https://example.test/file" }];
+		const result = await parseContentProvider(
+			"trello",
+			bytes(JSON.stringify(board)),
+			options,
+		);
+		expect(result.document.data.tasks).toHaveLength(4);
+		const notes = result.document.data.tasks.find(
+			(row) => row.title === "Prepare picnic",
+		)?.notes;
+		expect(notes).toContain(`- ${expected}: https://example.test/file`);
+		expect(notes?.isWellFormed()).toBe(true);
+	});
+	test("bounds Trello attachment text and never fails the board because of it", async () => {
+		const board = JSON.parse(fixture("trello-content.json").toString());
+		board.cards[0].attachments = Array.from({ length: 40 }, (_, i) => ({
+			id: String(i).padStart(24, "a"),
+			name: `file-${i}`,
+			url: `https://example.test/${i}`,
+		}));
+		const result = await parseContentProvider(
+			"trello",
+			bytes(JSON.stringify(board)),
+			options,
+		);
+		const notes =
+			result.document.data.tasks.find((row) => row.title === "Prepare picnic")
+				?.notes ?? "";
+		expect(
+			notes.split("\n").filter((line) => line.startsWith("- ")),
+		).toHaveLength(25);
+		expect(result.notices).toContainEqual({
+			code: "format-limits",
+			path: "attachment-links",
+			count: 15,
+		});
+		board.actions = [];
+		board.cards[0].desc = "x".repeat(32 * 1024 - 10);
+		board.cards[0].attachments = [
+			{ id: "a".repeat(24), name: "n", url: "https://example.test/" },
+		];
+		const full = await parseContentProvider(
+			"trello",
+			bytes(JSON.stringify(board)),
+			options,
+		);
+		const fullNotes =
+			full.document.data.tasks.find((row) => row.title === "Prepare picnic")
+				?.notes ?? "";
+		expect(fullNotes).toBe(board.cards[0].desc);
+		expect(fullNotes).not.toContain("Attachments not migrated");
+		expect(full.notices).toContainEqual({
+			code: "format-limits",
+			path: "attachment-links",
+			count: 1,
+		});
 	});
 	test("preserves local fractional seconds and reports note-row fields instead of silently discarding them", async () => {
 		expect(contentDate("2026-07-18T09:30:00.123", "Europe/Berlin").dueAt).toBe(
