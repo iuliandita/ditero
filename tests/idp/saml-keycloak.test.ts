@@ -283,34 +283,37 @@ async function browse(
 				action: decode(attributes(form).action ?? ""),
 			};
 		}
-		const forms = [...html.matchAll(/<form\b[^>]*>[\s\S]*?<\/form>/gi)].map(
-			(match) => match[0],
-		);
-		const form = forms
-			.find((candidate) => /name="password"/i.test(candidate))
-			?.match(/<form\b[^>]*>/i)?.[0];
-		if (!form) {
+		const formHtml = /<form\b[^>]*>[\s\S]*?<\/form>/i.exec(html)?.[0];
+		if (!formHtml) {
 			const title = /<title[^>]*>([^<]*)</i.exec(html)?.[1]?.trim();
 			throw new Error(
-				`unexpected Keycloak page at ${url}: status ${response.status}, title ${title}, ${html.length} bytes, forms ${forms.length}, text ${html
-					.replace(
-						/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<[^>]+>/gi,
-						" ",
-					)
-					.replace(/\s+/g, " ")
-					.slice(0, 300)}`,
+				`unexpected Keycloak page at ${url}: status ${response.status}, title ${title}, no form`,
 			);
 		}
-		url = new URL(decode(attributes(form).action), url).href;
-		init = {
-			method: "POST",
-			headers: { "content-type": "application/x-www-form-urlencoded" },
-			body: new URLSearchParams({
-				username: "alice",
-				password: PASSWORD,
-				credentialId: "",
-			}),
-		};
+		const form = attributes(/<form\b[^>]*>/i.exec(formHtml)?.[0] ?? "");
+		const fields = new URLSearchParams();
+		for (const match of formHtml.matchAll(/<(?:input|button)\b[^>]*>/gi)) {
+			const field = attributes(match[0]);
+			if (field.name && field.type !== "submit" && field.type !== "button")
+				fields.set(field.name, decode(field.value ?? ""));
+		}
+		if (/name="password"/i.test(formHtml)) {
+			fields.set("username", "alice");
+			fields.set("password", PASSWORD);
+		}
+		const target = new URL(decode(form.action ?? ""), url);
+		if ((form.method ?? "get").toLowerCase() === "post") {
+			url = target.href;
+			init = {
+				method: "POST",
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+				body: fields,
+			};
+		} else {
+			for (const [name, value] of fields) target.searchParams.set(name, value);
+			url = target.href;
+			init = {};
+		}
 	}
 	throw new Error("Keycloak journey did not finish");
 }
