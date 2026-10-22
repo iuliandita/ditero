@@ -399,7 +399,10 @@ test("touch: long-press Select starts selection mode and taps then select", asyn
 		"2 tasks selected",
 	);
 	await expect(page.getByRole("dialog")).toHaveCount(0);
-	expect((await control.boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(44);
+	// The box includes the zoom-in enter transform, so wait for the settled size.
+	await expect
+		.poll(async () => (await control.boundingBox())?.width ?? 0)
+		.toBeGreaterThanOrEqual(44);
 	// The floating add button steps aside for the bar.
 	await expect(
 		page.getByRole("button", { name: "Quick add", exact: true }),

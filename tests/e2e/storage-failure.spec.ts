@@ -178,7 +178,11 @@ for (const discoverDuringClose of [false, true]) {
 			.poll(() => serverHasTask(queued), { timeout: 30_000 })
 			.toBe(true);
 		await expect(indicator).toHaveAttribute("data-phase", "storage-failed");
-		expect(await attemptRetirement(page)).toMatchObject({ retired: true });
+		// The server row can land before this client's ack; a refused retirement
+		// stays retryable, so retry until the queue is acknowledged.
+		await expect
+			.poll(() => attemptRetirement(page), { timeout: 20_000 })
+			.toMatchObject({ retired: true });
 		await page.evaluate(() => window.__zeroCloseControls.restore());
 	});
 }
