@@ -22,6 +22,7 @@ import { signInEmail } from "../lib/email-sign-in.ts";
 import { fetchPublicConfig } from "../lib/public-config.ts";
 import { passkeysAvailable } from "../lib/secure-context.ts";
 import { signInProviderOptions } from "../lib/sign-in-providers.ts";
+import { signInReturnPath } from "../lib/sign-in-return.ts";
 import {
 	retirementErrorMessage,
 	runAfterZeroRetirement,
@@ -45,9 +46,13 @@ export function AuthShell({ children }: { children: ReactNode }) {
 	);
 }
 
-// `callbackURL` only carries a same-origin return path through the Google
-// redirect; the caller builds it, and the other sign-in flows ignore it.
-export function Login({ callbackURL }: { callbackURL?: string } = {}) {
+export function Login({
+	callbackURL,
+	twoFactor = false,
+}: {
+	callbackURL?: string;
+	twoFactor?: boolean;
+} = {}) {
 	const [mode, setMode] = useState<"signin" | "signup">("signin");
 	const [email, setEmail] = useState("");
 	const [displayName, setDisplayName] = useState("");
@@ -75,7 +80,7 @@ export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 			active = false;
 		};
 	}, []);
-	const [needsTwoFactor, setNeedsTwoFactor] = useState(false);
+	const [needsTwoFactor, setNeedsTwoFactor] = useState(twoFactor);
 	const [twoFactorCode, setTwoFactorCode] = useState("");
 	const [backupCode, setBackupCode] = useState("");
 	const [pending, setPending] = useState(false);
@@ -149,6 +154,10 @@ export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 			const res = await authClient.signIn.passkey();
 			if (res.error)
 				setError(authErrorMessage(res.error, m.login_error_passkey_failed));
+			else if (
+				(res.data as { twoFactorRedirect?: boolean } | null)?.twoFactorRedirect
+			)
+				setNeedsTwoFactor(true);
 		}, m.login_error_passkey_failed);
 	}
 
@@ -189,6 +198,7 @@ export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 				code: twoFactorCode,
 			});
 			if (res.error) setError(totpErrorMessage(res.error));
+			else finishTwoFactor();
 		}, m.login_error_totp_network);
 	}
 
@@ -201,7 +211,14 @@ export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 				setError(
 					authErrorMessage(res.error, m.login_error_invalid_backup_code),
 				);
+			else finishTwoFactor();
 		}, m.login_error_invalid_backup_code);
+	}
+
+	function finishTwoFactor() {
+		window.location.assign(
+			signInReturnPath(callbackURL ?? null, window.location.origin),
+		);
 	}
 
 	const visibleError =

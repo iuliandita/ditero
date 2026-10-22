@@ -4,7 +4,7 @@ import { sso } from "@better-auth/sso";
 import { APIError, betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
-import { jwt, twoFactor } from "better-auth/plugins";
+import { jwt } from "better-auth/plugins";
 import { count, isNull } from "drizzle-orm";
 import { validateAuthSecret } from "../config/auth-secret.ts";
 import { db, pool } from "../db/client.ts";
@@ -33,7 +33,6 @@ import {
 	runPasswordReset,
 	withPasswordResetTransaction,
 } from "./password-reset.ts";
-
 import {
 	acceptedAuthOrigins,
 	providerAuthOptions,
@@ -71,6 +70,7 @@ import {
 	SIGN_IN_RATE_REFILL_PER_SEC,
 	signInRateKey,
 } from "./security.ts";
+import { signInTwoFactor } from "./sign-in-two-factor.ts";
 
 export const SIGN_UP_RESPONSE_FLOOR_MS = 500;
 
@@ -339,15 +339,7 @@ export const auth = betterAuth({
 				DITERO_PASSKEY_RP_ID: process.env.DITERO_PASSKEY_RP_ID,
 			}),
 		),
-		twoFactor({
-			issuer: "Ditero",
-			allowPasswordless: true,
-			accountLockout: {
-				enabled: true,
-				maxFailedAttempts: 5,
-				durationSeconds: 15 * 60,
-			},
-		}),
+		signInTwoFactor(),
 		jwt({ jwt: zeroJwtOptions() }),
 		...(saml ? [sso(saml.options)] : []),
 	],

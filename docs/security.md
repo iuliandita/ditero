@@ -11,6 +11,17 @@
 
 Email/password, passkeys, TOTP, and recovery codes are supported. Cookie-authenticated mutations require an exact configured origin. Sensitive auth routes use PostgreSQL-backed rate limits. Proxy headers are ignored unless the direct peer is within `DITERO_TRUSTED_PROXIES`.
 
+Accounts with enrolled local TOTP must complete the local second factor on every
+sign-in path, including passkeys, all social providers, generic OpenID Connect,
+SAML and native sign-in through the system browser. A recovery code can complete
+the same local challenge. Provider-asserted MFA (including OIDC `acr`/`amr` or SAML
+AuthnContext) is not accepted as a substitute; there is no operator exemption.
+Remembered-device cookies do not bypass the challenge. Better Auth deletes the
+callback's provisional session and clears its cookies before returning the
+challenge; no authenticated session, Zero token or native bearer is returned.
+A password reset invalidates federated challenges through the same account-bound
+verification cleanup as password challenges, while keeping the enrollment.
+
 Email sign-in combines an atomic `rate_bucket` token bucket per client IP and
 trimmed, lowercased email (capacity five, refill five per minute) with Better Auth's
 30-per-minute per-IP ceiling. The bounded JSON body clone is limited to 4 KiB;

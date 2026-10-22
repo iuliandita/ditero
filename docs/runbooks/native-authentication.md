@@ -50,6 +50,14 @@ SAML single sign-on, when configured, appears on the same page and returns to it
 with the grant ID intact; it uses the browser flow described in
 [SAML single sign-on](sign-in-providers.md#saml-single-sign-on) and adds no native
 credential path. A refused or unlinked identity returns here with a readable error.
+When local TOTP is enrolled, every sign-in provider requires the local second
+factor in the system browser before a session is returned. Provider-asserted MFA
+is not accepted in its place. The `/two-factor` page preserves the same-origin
+native approval URL and grant ID; the grant remains pending until verification
+and explicit device approval succeed. No native bearer or Zero token is available
+from the pending challenge. Keep the server and web bundle together when upgrading;
+reload open sign-in pages. Backup and rollback guidance is in
+[local second factor](sign-in-providers.md#local-second-factor-after-provider-sign-in).
 Preview exposes only the device label, expiry, and pending or approved status.
 An approved grant is visible only to its approving account while the original
 approving session remains live. Cancel leaves the request unapproved.

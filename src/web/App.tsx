@@ -30,6 +30,17 @@ export function App() {
 					<DisplayPreferencesProvider userId={null}>
 						<ResetPassword />
 					</DisplayPreferencesProvider>
+				) : window.location.pathname.replace(/\/+$/, "") === "/two-factor" ? (
+					<DisplayPreferencesProvider userId={null}>
+						<Login
+							twoFactor
+							callbackURL={
+								new URLSearchParams(window.location.search).get(
+									"callbackURL",
+								) ?? undefined
+							}
+						/>
+					</DisplayPreferencesProvider>
 				) : (
 					<Routes />
 				)}

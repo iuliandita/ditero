@@ -405,6 +405,29 @@ The sign-in page shows these after a failed attempt.
   nonce; unverified or missing email; same-email accounts). Microsoft, GitHub, Discord,
   Apple and Facebook have not been exercised against the real services.
 
+## Local second factor after provider sign-in
+
+An account with enrolled local TOTP completes Ditero's second-factor challenge
+before any authenticated session is returned. This applies to Google, Microsoft,
+GitHub, Discord, Apple, Facebook, generic OpenID Connect and SAML, including sign-in
+started by Android or desktop in the system browser. Provider-asserted MFA is not
+a substitute, including OIDC `acr`/`amr` and SAML AuthnContext. There is no operator
+exemption, and remembered-device cookies do not skip the challenge.
+
+The callback redirects to `/two-factor` with an HTTP-only challenge cookie. Enter
+the authenticator code or a recovery code there. Only successful verification
+establishes a session and returns to the original same-origin callback destination.
+A pending native grant keeps its ID, remains unapproved, and still requires explicit
+device approval after verification. The grant and challenge retain their normal
+expiry limits. A password reset invalidates pending provider challenges too.
+
+Upgrade the server and web bundle together; reload open browser sign-in pages.
+There is no schema or credential-format change. Take the usual database and
+original-secret backup before upgrading. Rolling back removes this protection:
+accounts linked to providers can again skip their enrolled local factor. Disable
+provider sign-in before rollback if that risk is unacceptable. Native clients use
+the server's system-browser page and need no new bridge permissions.
+
 ## SAML single sign-on
 
 One SAML 2.0 identity provider (IdP) can sign users in. Ditero uses the maintained
@@ -437,9 +460,10 @@ self-service provider registration (those routes answer 404).
   address in an assertion is the IdP's claim, not a verified mailbox; the invitation
   must still be redeemed. Without it, create the account from the invitation with a
   password or passkey, then link SAML.
-- SAML sign-in does not ask for the local TOTP code; the IdP is the authority for
-  its own multi-factor policy. Single logout is not supported: signing out of
-  Ditero does not sign out of the IdP.
+- Accounts with enrolled local TOTP must complete Ditero's local second-factor
+  challenge after the SAML callback, even if the IdP asserts MFA in AuthnContext.
+  A recovery code is also accepted. No provider-MFA exemption is available.
+  Single logout is not supported: signing out of Ditero does not sign out of the IdP.
 - Android and desktop apps sign in through the system browser, so SAML works there
   with the same configuration; see [native authentication](native-authentication.md).
 
