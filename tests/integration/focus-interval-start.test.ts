@@ -41,7 +41,7 @@ const ANCHOR = Date.UTC(2026, 0, 1);
 async function asServer<Args>(
 	userId: string,
 	mutator: {
-		fn: (a: { tx: never; ctx: { id: string }; args: Args }) => Promise<void>;
+		fn: (a: { tx: never; ctx: { id: string }; args: Args }) => Promise<unknown>;
 	},
 	args: Args,
 ) {
