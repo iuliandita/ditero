@@ -2935,6 +2935,7 @@
 	"import_content_err_date_order_conflict": "التواريخ لا تطابق الترتيب المختار أو تخلط الترتيبين. تحقق من إعداد ترتيب التواريخ.",
 	"import_content_err_timeout": "استغرقت قراءة الملف وقتًا طويلًا. جرّب تصديرًا أصغر.",
 	"import_content_limits": "الملف يتجاوز حدود الاستيراد: 32 ميبيبايت و50,000 صف و32 كيبيبايت لكل قيمة.",
+	"import_content_err_at_row": "تم العثور على المشكلة قرب الصف {row}.",
 	"import_content_mapping_list": "المهام بلا قائمة توضع في: {list}",
 	"import_content_label_collision": "هذه التسميات المستوردة موجودة بالفعل في مساحة العمل الهدف وسيُعاد استخدامها بلونها الحالي: {names}",
 	"import_content_secure": "يتطلب حساب بصمة الملف HTTPS أو localhost. افتح اتصالًا آمنًا قبل الاستيراد.",

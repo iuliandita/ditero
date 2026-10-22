@@ -47,15 +47,34 @@ export async function parseTodoistContent(
 	const builder = new ContentBuilder("todoist", options);
 	const anchorDay =
 		options.anchorDay ?? dayInZone(options.exportedAt, options.timezone);
-	builder.anchorDay = anchorDay;
-	const { header, rows } = csvRecords(input, undefined, options);
+	const { header, rows } = csvRecords(
+		input,
+		undefined,
+		options,
+		false,
+		builder,
+	);
 	if (!["TYPE", "CONTENT"].every((key) => header.includes(key)))
 		throw new ProviderImportError("invalid-csv");
 	let list: string | null = null;
 	const stack: string[] = [];
 	let previous: DraftTask | undefined;
+	let skippedIndent: number | null = null;
 	builder.notice("completion-unavailable");
 	for (const { record: row, number } of rows) {
+		const rawIndent = Number(row.INDENT || "1");
+		const rowIndent =
+			Number.isInteger(rawIndent) && rawIndent >= 1 && rawIndent <= 100
+				? rawIndent
+				: 1;
+		if (row.TYPE === "task" && skippedIndent !== null) {
+			if (rowIndent > skippedIndent) {
+				builder.skipped(`row:${number}`);
+				continue;
+			}
+			skippedIndent = null;
+		}
+		let accepted = false;
 		builder.row(`row:${number}`, () => {
 			if (row.TYPE === "meta") {
 				builder.unsupported(row, ["TYPE"]);
@@ -73,6 +92,7 @@ export async function parseTodoistContent(
 					builder.notice("unsupported-field", "section-description");
 				stack.length = 0;
 				previous = undefined;
+				skippedIndent = null;
 				return;
 			}
 			if (row.TYPE === "note") {
@@ -159,10 +179,18 @@ export async function parseTodoistContent(
 				...due,
 			};
 			builder.task(task);
+			if (parsed.kind === "date" && parsed.anchored && due.dueAt)
+				builder.anchorDay = anchorDay;
 			previous = task;
 			stack.length = indent;
 			stack[indent - 1] = task.id;
+			accepted = true;
 		});
+		if (row.TYPE === "task" && !accepted) {
+			previous = undefined;
+			stack.length = Math.min(stack.length, rowIndent - 1);
+			skippedIndent = rowIndent;
+		}
 	}
 	return builder.finish(input);
 }

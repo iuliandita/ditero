@@ -1,7 +1,5 @@
-// Todoist exports DATE as the text its own UI showed (no machine format): absolute
-// dates such as "Oct 21", "21 Oct 2026 14:00" or ISO, and recurrence phrases such as
-// "every 2 weeks" that no longer carry their start date. Natural-language relative
-// dates ("tomorrow") cannot be resolved from an export and are reported as unsupported.
+// Todoist accepts date/time and recurrence text; real account export spelling is
+// not guaranteed by its CSV help. Unsupported natural-language dates stay explicit.
 const MONTHS: Record<string, readonly string[]> = {
 	en: [
 		"jan january",
@@ -147,13 +145,13 @@ function absolute(
 	raw: string,
 	lang: string,
 	anchorDay: string,
-): { day: string; time: string | null } | null {
+): { day: string; time: string | null; anchored: boolean } | null {
 	const text = plain(raw);
 	const iso = /^(\d{4})-(\d{2})-(\d{2})(?: (\d{1,2}):(\d{2}))?$/.exec(text);
 	if (iso) {
 		const day = validDay(Number(iso[1]), Number(iso[2]), Number(iso[3]));
 		const time = iso[4] ? clock(`${iso[4]}:${iso[5]}`) : null;
-		return day && (!iso[4] || time) ? { day, time } : null;
+		return day && (!iso[4] || time) ? { day, time, anchored: false } : null;
 	}
 	let year = 0;
 	let month = 0;
@@ -171,7 +169,7 @@ function absolute(
 	}
 	if (!day || !month) return null;
 	const result = validDay(year || Number(anchorDay.slice(0, 4)), month, day);
-	return result ? { day: result, time } : null;
+	return result ? { day: result, time, anchored: !year } : null;
 }
 
 function nextWeekday(from: string, wanted: number[]): string {
@@ -277,6 +275,13 @@ export function parseTodoistDate(
 ): ParsedTodoistDate {
 	const original = raw.trim();
 	if (!original) return { kind: "none" };
+	// Preserve ISO clocks, seconds and offsets for the shared contentDate validator.
+	if (
+		/^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,7})?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/.test(
+			original,
+		)
+	)
+		return { kind: "date", value: original, rule: null, anchored: false };
 	const text = plain(original);
 	if (/^(every|jeden|jede|alle|cada|chaque|tous|fiecare)\b/.test(text)) {
 		if (lang && lang !== "en" && !text.startsWith("every"))
@@ -312,6 +317,7 @@ export function parseTodoistDate(
 			const begin = absolute(start, lang, anchorDay);
 			if (!begin) return { kind: "unsupported-recurrence" };
 			day = begin.day;
+			anchored = begin.anchored;
 			time ??= begin.time;
 		} else {
 			anchored = true;
@@ -334,6 +340,6 @@ export function parseTodoistDate(
 		kind: "date",
 		value: found.time ? `${found.day}T${found.time}` : found.day,
 		rule: null,
-		anchored: false,
+		anchored: found.anchored,
 	};
 }

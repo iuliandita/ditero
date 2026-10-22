@@ -2739,6 +2739,7 @@
 	"import_content_err_date_order_conflict": "The dates do not match the chosen order, or they mix both orders. Check the date order setting.",
 	"import_content_err_timeout": "Reading the file took too long. Try a smaller export.",
 	"import_content_limits": "The file exceeds the import limits: 32 MiB, 50,000 rows and 32 KiB per value.",
+	"import_content_err_at_row": "Problem found near row {row}.",
 	"import_content_mapping_list": "Tasks without a list are placed in: {list}",
 	"import_content_label_collision": "These imported labels already exist in the target workspace and are reused with their current color: {names}",
 	"import_content_secure": "File hashing requires HTTPS or localhost. Open a secure connection before importing.",

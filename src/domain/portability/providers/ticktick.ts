@@ -17,6 +17,7 @@ export async function parseTickTickBackup(
 		"Folder Name",
 		options,
 		true,
+		builder,
 	);
 	if (
 		!["List Name", "Title", "Status", "taskId"].every((key) =>
@@ -109,15 +110,25 @@ export async function parseTickTickBackup(
 			}
 			const dueText = row["Due Date"] || "";
 			let due = builder.date(dueText, zone, "Due Date");
-			if (due.dueAt && builder.flag(row["Is Floating"], "Is Floating"))
-				// Floating times are wall-clock values: keep the clock, not the instant.
-				due = builder.date(
-					dueText.replace(/([+-]\d{2}:?\d{2}|Z)$/, "").slice(0, 19),
-					options.timezone,
-					"Due Date",
-				);
-			else if (due.dueAt && builder.flag(row["Is All Day"], "Is All Day"))
-				due = builder.date(dayInZone(due.dueAt, zone), zone, "Due Date");
+			// A date-only value is already anchored to the import calendar day.
+			if (due.dueAt && !/^\d{4}-\d{2}-\d{2}$/.test(dueText.trim())) {
+				const allDay = builder.flag(row["Is All Day"], "Is All Day");
+				const floating = builder.flag(row["Is Floating"], "Is Floating");
+				if (allDay)
+					// All-day wins over floating; floating keeps the literal calendar day.
+					due = builder.date(
+						floating ? dueText.trim().slice(0, 10) : dayInZone(due.dueAt, zone),
+						zone,
+						"Due Date",
+					);
+				else if (floating)
+					// Floating times are wall-clock values: keep the clock, not the instant.
+					due = builder.date(
+						dueText.replace(/([+-]\d{2}:?\d{2}|Z)$/, "").slice(0, 19),
+						options.timezone,
+						"Due Date",
+					);
+			}
 			const id = row.taskId || `row:${number}`;
 			if (seen.has(id)) {
 				if (seen.get(id) !== JSON.stringify(row))

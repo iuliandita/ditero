@@ -3,6 +3,7 @@ import { m } from "../../../paraglide/messages.js";
 import {
 	collidingLabelNames,
 	contentError,
+	contentLimitError,
 	noticeField,
 	validZone,
 } from "./import-content-text.ts";
@@ -23,6 +24,20 @@ describe("import content text", () => {
 	test("a CSV failure names the row", () => {
 		expect(contentError({ code: "invalid-csv", row: 12 })).toBe(
 			m.import_content_err_csv_row({ row: "12" }),
+		);
+	});
+	test("a limit failure names the row when it is known", () => {
+		expect(contentLimitError({ row: 12 })).toBe(
+			`${m.import_content_limits()} ${m.import_content_err_at_row({ row: "12" })}`,
+		);
+		expect(contentLimitError({})).toBe(m.import_content_limits());
+	});
+	test("a row-level failure without its own wording still names the row", () => {
+		expect(contentError({ code: "invalid-row", row: 1234 })).toBe(
+			`${m.import_content_invalid()} ${m.import_content_err_at_row({ row: "1,234" })}`,
+		);
+		expect(contentError({ code: "invalid-row" })).toBe(
+			m.import_content_invalid(),
 		);
 	});
 	test.each([

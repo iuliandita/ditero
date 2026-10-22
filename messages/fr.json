@@ -2788,6 +2788,7 @@
 	"import_content_err_date_order_conflict": "Les dates ne correspondent pas à l'ordre choisi ou mélangent les deux ordres. Vérifie le réglage de l'ordre des dates.",
 	"import_content_err_timeout": "La lecture du fichier a pris trop de temps. Essaie un export plus petit.",
 	"import_content_limits": "Le fichier dépasse les limites d'import : 32 Mio, 50 000 lignes et 32 Kio par valeur.",
+	"import_content_err_at_row": "Le problème se situe près de la ligne {row}.",
 	"import_content_mapping_list": "Les tâches sans liste sont placées dans : {list}",
 	"import_content_label_collision": "Ces étiquettes importées existent déjà dans l'espace de travail cible et sont réutilisées avec leur couleur actuelle : {names}",
 	"import_content_secure": "Le calcul du hash nécessite HTTPS ou localhost. Ouvre une connexion sécurisée avant l’import.",

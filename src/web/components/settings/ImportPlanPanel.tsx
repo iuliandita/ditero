@@ -36,6 +36,7 @@ import { ImportApplyPanel } from "./ImportApplyPanel.tsx";
 import {
 	collidingLabelNames,
 	contentError,
+	contentLimitError,
 	noticeField,
 	validZone,
 	ZONES,
@@ -756,6 +757,13 @@ export function ImportPlanPanel() {
 										const value = event.target.value;
 										setTimezone(value);
 										clearTimeout(zoneTimer.current);
+										// A loaded conversion is bound to the previous zone.
+										worker.current?.terminate();
+										worker.current = null;
+										changed();
+										setLoaded(null);
+										setPolicyAccepted(false);
+										setParsing(false);
 										if (validZone(value))
 											zoneTimer.current = setTimeout(
 												() =>
@@ -1046,7 +1054,7 @@ export function ImportPlanPanel() {
 											? m.import_plan_quota()
 											: error === "limit"
 												? contentFormat
-													? m.import_content_limits()
+													? contentLimitError(errorDetail)
 													: m.import_plan_limits()
 												: error === "invalid"
 													? contentFormat

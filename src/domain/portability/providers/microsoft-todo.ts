@@ -33,6 +33,15 @@ const OUTLOOK_COLUMNS = [
 const DATE_COLUMNS = ["Due Date", "Date Completed"] as const;
 const NUMERIC_DATE = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/;
 
+function realDay(year: number, month: number, day: number): boolean {
+	const date = new Date(Date.UTC(year, month - 1, day));
+	return (
+		date.getUTCFullYear() === year &&
+		date.getUTCMonth() === month - 1 &&
+		date.getUTCDate() === day
+	);
+}
+
 // Outlook writes dates in the Windows regional order, so the order must come from the
 // data or from the user, never from an English default.
 function resolveDateOrder(
@@ -41,12 +50,22 @@ function resolveDateOrder(
 ): DateOrder {
 	let monthFirst = false;
 	let dayFirst = false;
+	let ambiguous = false;
 	for (const { record } of rows)
 		for (const column of DATE_COLUMNS) {
 			const match = NUMERIC_DATE.exec(record[column]?.trim() ?? "");
 			if (!match) continue;
-			if (Number(match[1]) > 12) dayFirst = true;
-			if (Number(match[2]) > 12) monthFirst = true;
+			const [first, second, year] = [
+				Number(match[1]),
+				Number(match[2]),
+				Number(match[3]),
+			];
+			const asDmy = realDay(year, second, first);
+			const asMdy = realDay(year, first, second);
+			// An impossible date fits neither order; its row reports it later.
+			if (asDmy && !asMdy) dayFirst = true;
+			else if (asMdy && !asDmy) monthFirst = true;
+			else if (asDmy && asMdy) ambiguous = true;
 		}
 	if (dayFirst && monthFirst)
 		throw new ProviderImportError("date-order-conflict");
@@ -60,11 +79,6 @@ function resolveDateOrder(
 	}
 	if (dayFirst) return "dmy";
 	if (monthFirst) return "mdy";
-	const ambiguous = rows.some(({ record }) =>
-		DATE_COLUMNS.some((column) =>
-			NUMERIC_DATE.test(record[column]?.trim() ?? ""),
-		),
-	);
 	if (ambiguous) throw new ProviderImportError("date-order-required");
 	return "mdy";
 }
@@ -81,7 +95,13 @@ export async function parseMicrosoftTodoCsv(
 	options: ContentOptions,
 ) {
 	const builder = new ContentBuilder("microsoft", options);
-	const { header, rows } = csvRecords(input, undefined, options);
+	const { header, rows } = csvRecords(
+		input,
+		undefined,
+		options,
+		false,
+		builder,
+	);
 	if (
 		!["Subject", "Status", "Notes"].every((key) => header.includes(key)) ||
 		header.some((key) => !OUTLOOK_COLUMNS.includes(key))

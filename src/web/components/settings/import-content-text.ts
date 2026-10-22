@@ -23,6 +23,18 @@ export function noticeField(code: NoticeCode, path: string): string {
 	return match[3] ? `${place}, ${match[3]}` : place;
 }
 
+function atRow(detail: { row?: number }): string {
+	return detail.row
+		? ` ${m.import_content_err_at_row({
+				row: new Intl.NumberFormat(getLocale()).format(detail.row),
+			})}`
+		: "";
+}
+
+export function contentLimitError(detail: { row?: number }): string {
+	return `${m.import_content_limits()}${atRow(detail)}`;
+}
+
 export function contentError(detail: { code?: string; row?: number }): string {
 	switch (detail.code) {
 		case "invalid-encoding":
@@ -44,7 +56,7 @@ export function contentError(detail: { code?: string; row?: number }): string {
 		case "timeout":
 			return m.import_content_err_timeout();
 		default:
-			return m.import_content_invalid();
+			return `${m.import_content_invalid()}${atRow(detail)}`;
 	}
 }
 

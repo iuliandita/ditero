@@ -2,13 +2,9 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "ff15364505e19809e711f0beca34c7ae47c8eb239d0a1e5041468e2c8641a3f7",
-			"docs": [
-				"README.md",
-				"docs/ROADMAP.md",
-				"docs/runbooks/data-portability.md"
-			],
-			"note": "Document five reviewed provider content import pickers, Todoist date and recurrence reading, all-day dates on the importer's calendar day, bound Outlook date order, archived Trello cards, per-row notices, reuse of same-named target workspace labels, timezone/date and recurrence limits, flattened subtasks, completion/notes/labels, field notices, notification exclusions and immutable snapshot retry identity. Keep legacy adapter behavior and native runtime qualification limits explicit."
+			"sourceDigest": "70c1ecafa4446768707ecb3f91dfed84e70aac9f66ce3fc63f8b9d5ec0f2dc08",
+			"docs": ["docs/runbooks/data-portability.md"],
+			"note": "Document bounded per-cell truncation with row notices, skipped Todoist descendants, restored ISO clocks, cross-day retained anchors, all-day TickTick precedence, valid-date-only Outlook order detection and immediate timezone preview invalidation. Preserve immutable snapshot settings, notification exclusions and real-export qualification limits."
 		},
 		"release": {
 			"sourceDigest": "a675a1dc3668f040faf1c5a69a6adb43d3852b9e3a461a9a6b5aebc3fb0eaf76",

@@ -172,13 +172,16 @@ export function csvRecords(
 	headerStart?: string,
 	options: ProviderImportOptions = {},
 	tolerant = false,
+	builder?: ContentBuilder,
 ) {
 	const checkpoint = providerCheckpoint(options);
+	const truncated: { row: number; column: number }[] = [];
 	const rows = parseProviderCsvCells(
 		decodeContent(input),
 		checkpoint,
 		64,
 		tolerant,
+		builder ? (row, column) => truncated.push({ row, column }) : undefined,
 	);
 	const start = headerStart
 		? rows.findIndex((row) => row[0] === headerStart)
@@ -205,6 +208,14 @@ export function csvRecords(
 		)
 	)
 		throw new ProviderImportError("invalid-csv", start + 1);
+	for (const { row, column } of truncated) {
+		if (row <= start + 1) throw new ProviderImportError("field-limit", row);
+		if (builder) {
+			builder.at = `row:${row}`;
+			builder.noticeAt("field-truncated", header[column]);
+			builder.at = "";
+		}
+	}
 	const parsed: CsvRow[] = [];
 	// Long rows in tolerant mode cannot be aligned to the header, so callers skip them.
 	const misaligned: number[] = [];

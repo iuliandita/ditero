@@ -243,11 +243,7 @@ describe("provider content adapters", () => {
 		["NUL", bytes("title\nA\u0000B\n"), "invalid-row"],
 		["invalid UTF-8", new Uint8Array([0xc3, 0x28]), "invalid-encoding"],
 		["UTF-16", new Uint8Array([0xff, 0xfe, 0x74, 0x00]), "invalid-encoding"],
-		[
-			"long field",
-			bytes(`title\n${"x".repeat(32 * 1024 + 1)}\n`),
-			"field-limit",
-		],
+		["long header", bytes(`${"x".repeat(32 * 1024 + 1)}\nA\n`), "field-limit"],
 		["duplicate ID collision", bytes("id,title\nx,A\nx,B\n"), "invalid-graph"],
 		[
 			"missing parent",

@@ -25,7 +25,13 @@ export async function parseGenericCsv(
 	options: ContentOptions,
 ) {
 	const builder = new ContentBuilder("generic-csv", options);
-	const { header, rows } = csvRecords(input, undefined, options);
+	const { header, rows } = csvRecords(
+		input,
+		undefined,
+		options,
+		false,
+		builder,
+	);
 	if (!header.includes("title")) throw new ProviderImportError("invalid-csv");
 	for (const { record: row, number } of rows) {
 		builder.row(`row:${number}`, () => {

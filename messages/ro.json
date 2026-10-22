@@ -2788,6 +2788,7 @@
 	"import_content_err_date_order_conflict": "Datele nu se potrivesc cu ordinea aleasă sau amestecă ambele ordini. Verifică setarea ordinii datelor.",
 	"import_content_err_timeout": "Citirea fișierului a durat prea mult. Încearcă un export mai mic.",
 	"import_content_limits": "Fișierul depășește limitele de import: 32 MiB, 50.000 de rânduri și 32 KiB pe valoare.",
+	"import_content_err_at_row": "Problema se află în apropiere de rândul {row}.",
 	"import_content_mapping_list": "Sarcinile fără listă sunt plasate în: {list}",
 	"import_content_label_collision": "Aceste etichete importate există deja în spațiul de lucru țintă și sunt refolosite cu culoarea lor actuală: {names}",
 	"import_content_secure": "Calcularea hashului necesită HTTPS sau localhost. Deschide o conexiune sigură înainte de import.",

@@ -49,8 +49,12 @@ async function body(
 	provider: ContentProvider,
 	bytes: Uint8Array,
 	id = randomUUID(),
+	exportedAt = options.exportedAt,
 ) {
-	const conversion = await parseContentProvider(provider, bytes, options);
+	const conversion = await parseContentProvider(provider, bytes, {
+		...options,
+		exportedAt,
+	});
 	return {
 		source: { mode: "new" as const, id, label: `${provider} snapshot` },
 		input: {
@@ -523,4 +527,70 @@ test("import activation suppresses recent past-due notifications before the over
 	);
 	expect((await overdueSweep(database, { now: new Date() })).scanned).toBe(1);
 	expect(await count("notification_outbox")).toBe(0);
+});
+
+test("Todoist identical bytes replan across days with the original source anchor and no duplicate tasks", async () => {
+	for (const date of [
+		"",
+		"every day",
+		"Oct 21",
+		"every week starting Oct 21",
+		"Feb 29",
+	]) {
+		const bytes = Buffer.from(
+			`TYPE,CONTENT,DATE,DATE_LANG\ntask,Anchor ${date || "undated"},${date},en\n`,
+		);
+		const leap = date === "Feb 29";
+		const firstAt = leap ? "2028-01-15T00:00:00.000Z" : options.exportedAt;
+		const laterAt = leap
+			? "2029-01-16T00:00:00.000Z"
+			: "2027-01-16T00:00:00.000Z";
+		const first = await body("todoist", bytes, randomUUID(), firstAt);
+		const plan = await save(first);
+		const later = await body("todoist", bytes, first.source.id, laterAt);
+		expect(later.input.originalBase64).toBe(first.input.originalBase64);
+		expect(first.input.anchorDay).toBe(date ? firstAt.slice(0, 10) : null);
+		expect(later.input.anchorDay).toBe(
+			date && !leap ? laterAt.slice(0, 10) : null,
+		);
+		const replan = await save({
+			...later,
+			source: { mode: "existing", id: first.source.id },
+		});
+		expect(replan.id).toBe(plan.id);
+		expect(replan.documentDigest).toBe(plan.documentDigest);
+		expect(replan.inputBinding).toEqual(plan.inputBinding);
+		expect(replan.inputBinding.anchorDay).toBe(first.input.anchorDay);
+		expect((await apply(replan)).state).toBe("completed");
+		const before = (
+			await admin.query("select id, due_at, rrule from task order by id")
+		).rows;
+		const retry = await save({
+			...later,
+			source: { mode: "existing", id: first.source.id },
+		});
+		expect(retry.documentDigest).toBe(plan.documentDigest);
+		expect(retry.inputBinding).toEqual(plan.inputBinding);
+		expect((await apply(retry)).state).toBe("completed");
+		expect(
+			(await admin.query("select id, due_at, rrule from task order by id"))
+				.rows,
+		).toEqual(before);
+		const expectedDue = !date
+			? null
+			: leap
+				? "2028-02-29T00:00:00.000Z"
+				: date === "every day"
+					? "2026-01-15T00:00:00.000Z"
+					: "2026-10-21T00:00:00.000Z";
+		expect(
+			(
+				await admin.query("select due_at from task where title=$1", [
+					`Anchor ${date || "undated"}`,
+				])
+			).rows.map((row) => row.due_at?.toISOString() ?? null),
+		).toEqual([expectedDue]);
+	}
+	expect(await count("task")).toBe(5);
+	expect(await count("import_source")).toBe(5);
 });

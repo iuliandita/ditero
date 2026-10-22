@@ -2739,6 +2739,7 @@
 	"import_content_err_date_order_conflict": "Die Daten passen nicht zur gewählten Reihenfolge oder mischen beide Reihenfolgen. Prüfe die Einstellung der Datumsreihenfolge.",
 	"import_content_err_timeout": "Das Lesen der Datei hat zu lange gedauert. Versuche einen kleineren Export.",
 	"import_content_limits": "Die Datei überschreitet die Importgrenzen: 32 MiB, 50.000 Zeilen und 32 KiB pro Wert.",
+	"import_content_err_at_row": "Das Problem liegt in der Nähe von Zeile {row}.",
 	"import_content_mapping_list": "Aufgaben ohne Liste kommen in: {list}",
 	"import_content_label_collision": "Diese importierten Labels gibt es im Zielarbeitsbereich bereits; sie werden mit ihrer aktuellen Farbe wiederverwendet: {names}",
 	"import_content_secure": "Das Berechnen des Datei-Hashwerts erfordert HTTPS oder localhost. Öffne vor dem Import eine sichere Verbindung.",
