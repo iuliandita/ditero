@@ -12,6 +12,7 @@ if ($Worker) {
         if ($elevated) { throw 'Journey must run as a normal, unelevated desktop application' }
         $start = [Diagnostics.ProcessStartInfo]::new((Get-Command node).Source)
         $start.UseShellExecute = $false
+        $start.RedirectStandardInput = $true
         $start.RedirectStandardOutput = $true
         $start.RedirectStandardError = $true
         $start.WorkingDirectory = (Get-Location).Path
@@ -20,7 +21,11 @@ if ($Worker) {
         $process = [Diagnostics.Process]::new()
         $process.StartInfo = $start
         try {
+            $executable = [IO.File]::OpenRead($start.FileName)
+            $executable.Dispose()
+            @{executableReadable=$true; allStreamsRedirected=$true} | ConvertTo-Json | Set-Content (Join-Path $State 'evidence/session-process.json')
             if (-not $process.Start()) { throw 'Journey process did not start' }
+            $process.StandardInput.Close()
             $stdout = $process.StandardOutput.ReadToEndAsync()
             $stderr = $process.StandardError.ReadToEndAsync()
             $process.WaitForExit()
