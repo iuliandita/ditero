@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isoDateTimeSchema } from "../../../domain/iso-datetime.ts";
 import type { E2eFetcher } from "./workspace-keys.ts";
 
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
@@ -90,7 +91,7 @@ const reservationSchema = z.strictObject({
 	attemptId: z.string().uuid().nullable(),
 	targetAttachmentId: targetId.nullable(),
 	committed: z.boolean(),
-	committedAt: z.iso.datetime({ offset: true }).nullable(),
+	committedAt: isoDateTimeSchema({ offset: true }).nullable(),
 	attachmentState: z
 		.enum(["reserved", "uploading", "committed", "aborted", "deleting"])
 		.nullable(),
@@ -105,7 +106,7 @@ const inspectionSchema = reservationSchema
 		...bindingSchema.shape,
 		sourceFingerprint: hash,
 		destinationParent: destinationSchema,
-		reservationExpiresAt: z.iso.datetime({ offset: true }).nullable(),
+		reservationExpiresAt: isoDateTimeSchema({ offset: true }).nullable(),
 		recoverable: z.boolean(),
 	})
 	.refine(

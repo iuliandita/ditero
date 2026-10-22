@@ -263,8 +263,9 @@ parameters are accepted, and the UTF-8 JSON body is limited to 64 KiB.
 ```
 
 Only `listId` and `title` are required. Title is trimmed and limited to 500
-characters; notes are limited to 32,768 characters. `dueAt` is an ISO 8601 instant
-with a timezone offset, or null. Resolve relative dates using the profile timezone
+characters; notes are limited to 32,768 characters. `dueAt` accepts minute, second
+or fractional-second precision with `Z` or an explicit UTC offset (for example,
+`2026-10-22T12:30+02:00`), normalized to UTC milliseconds, or null. Resolve relative dates using the profile timezone
 before submitting. `dueAllDay: true` requires a due instant. Priority is an integer
 from 0 to 3. Assignees are up to 20 unique active workspace member IDs, and labels
 are up to 50 unique IDs from the same workspace. Unknown fields and duplicate IDs

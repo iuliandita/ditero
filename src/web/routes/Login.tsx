@@ -391,7 +391,16 @@ export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 				</Button>
 			</form>
 			{mode === "signin" && (
-				<details className="mt-3 text-sm text-muted-foreground">
+				<a
+					data-testid="login-forgot-password"
+					href="/reset-password"
+					className="mt-3 inline-flex min-h-11 items-center rounded-sm text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+				>
+					{m.login_forgot_password()}
+				</a>
+			)}
+			{mode === "signin" && (
+				<details className="text-sm text-muted-foreground">
 					<summary
 						data-testid="login-recovery"
 						className="min-h-11 cursor-pointer content-center rounded-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"

@@ -7,7 +7,9 @@ complete native application or its behavior on devices.
 
 The app connects to an HTTPS Ditero server with a certificate trusted by Android
 and the system browser. Sign-in opens the server's consent page in the system
-browser, then exchanges the approved grant through the native transport. Native
+browser, then exchanges the approved grant through the native transport. A
+forgotten password is reset from that sign-in page, and the mailed link opens
+the server's web reset page in whichever browser reads the mail. Native
 session credentials are encrypted with an Android Keystore key and remain outside
 the JavaScript interface. Local sync, encryption keys, staged ciphertext, hints,
 recent items, and navigation preferences use scopes derived from the canonical

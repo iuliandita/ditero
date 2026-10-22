@@ -16,6 +16,7 @@ import { AppZeroProvider } from "./lib/zero.tsx";
 import { AcceptInvite } from "./routes/AcceptInvite.tsx";
 import { Login } from "./routes/Login.tsx";
 import { NativeAuthorize } from "./routes/NativeAuthorize.tsx";
+import { ResetPassword } from "./routes/ResetPassword.tsx";
 import { Workspace } from "./routes/Workspace.tsx";
 
 // The provider sits above every route because Workspace itself calls useConfirm
@@ -25,7 +26,13 @@ export function App() {
 	return (
 		<ConfirmProvider>
 			<SnackbarProvider>
-				<Routes />
+				{window.location.pathname.replace(/\/+$/, "") === "/reset-password" ? (
+					<DisplayPreferencesProvider userId={null}>
+						<ResetPassword />
+					</DisplayPreferencesProvider>
+				) : (
+					<Routes />
+				)}
 			</SnackbarProvider>
 		</ConfirmProvider>
 	);

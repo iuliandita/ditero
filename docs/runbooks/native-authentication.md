@@ -41,12 +41,40 @@ per-IP ceiling checked before any email bucket is created; see
 Google appears only when the server has both OAuth credentials configured. A
 registration-policy refusal returns to this page with the localized registration
 message and retains the grant ID; see [sign-in providers](sign-in-providers.md).
+When two first Google sign-ins for one Google account race, the second returns
+here with a localized sign-in-again message (`ACCOUNT_ALREADY_LINKED`).
 Preview exposes only the device label, expiry, and pending or approved status.
 An approved grant is visible only to its approving account while the original
 approving session remains live. Cancel leaves the request unapproved.
+"Forgot your password?" on that sign-in page starts a reset by email. The mailed
+link always opens the web reset page (`/reset-password`), never a native target
+supplied by the requesting client, so it works in any browser. It also works
+while a browser session is already signed in. The reset creates
+no session and the pending grant is not carried through it: start sign-in from
+the app again afterwards. A completed reset ends every browser and native session
+of the account and revokes its access tokens, calendar feed links, passkeys,
+linked provider sign-ins, other reset links and pending account-bound sign-in proofs
+(including two-factor challenges and trusted-device grants) in the same transaction.
+It also marks the email verified because the mailed token proves mailbox access.
+Existing two-factor enrollment and backup codes stay unchanged. Provider relinking
+still requires the server's linking policy to permit it; see
+[security](../security.md).
 Approval derives the user and approving session from the browser, not from
 request fields. A native session cannot approve another grant. There is no
 caller-supplied callback URL.
+
+Better Auth 1.7 keeps Google's `/api/auth/callback/google` redirect URI and the
+pending native approval URL. Registration refusals carry a stable `error` code
+and a readable `error_description`; clients localize the code. A registration-policy
+check that cannot run (for example during a database outage) returns the same way
+with `REGISTRATION_UNAVAILABLE`, so the system browser returns to the sign-in page
+with a localized error. The unapproved native grant still expires normally.
+TOTP enrollment explicitly requests the `totp` method
+and accepts setup keys from any response that carries them, including the method-less
+reply of a rolled-back 1.6 server.
+Before deploying 1.7, apply the additive JWT key migration described in
+[database roles](database-roles.md#better-auth-17-upgrade). Browser and native
+session credentials and the explicit approval step retain their existing format.
 
 Exchange consumes the approved grant before session creation. It releases its
 database transaction before calling the session adapter, then checks the live

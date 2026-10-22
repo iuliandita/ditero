@@ -1,11 +1,11 @@
 import { z } from "zod";
+import { isoDateTimeSchema } from "./iso-datetime.ts";
 import { PUBLIC_API_ID, PublicApiError } from "./public-api.ts";
 
 export const apiTaskCompleteSchema = z
 	.object({
 		listId: PUBLIC_API_ID,
-		expectedDueAt: z.iso
-			.datetime({ offset: true })
+		expectedDueAt: isoDateTimeSchema({ offset: true })
 			.transform((value) => new Date(value).toISOString())
 			.nullable(),
 	})

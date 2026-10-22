@@ -16,6 +16,7 @@ import {
 } from "../server/client-ip.ts";
 import { takeRateToken } from "../server/notifications/capability.ts";
 import { zeroJwtOptions } from "../server/zero-auth.ts";
+import { withAccountConflict } from "./account-conflict.ts";
 import { ensurePersonalWorkspace } from "./bootstrap.ts";
 import { normalizeDisplayName, signupDisplayName } from "./display-name.ts";
 import { withFieldEncryption } from "./encrypted-adapter.ts";
@@ -23,6 +24,13 @@ import { emailHasRedeemableInvite } from "./invite-bypass.ts";
 import { mailUnavailableResponse, sendAuthMail } from "./mail.ts";
 import { trustedAuthOrigins } from "./origins.ts";
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "./password-policy.ts";
+import {
+	assertPasswordResetScope,
+	RESET_PATH,
+	resetLinkWithWebCallback,
+	runPasswordReset,
+	withPasswordResetTransaction,
+} from "./password-reset.ts";
 import { socialProvidersFromEnv } from "./providers.ts";
 import {
 	assertRegistrationAllowed,
@@ -59,16 +67,18 @@ const encryptionKey = process.env.DITERO_ENCRYPTION_KEY;
 if (process.env.NODE_ENV === "production" && !encryptionKey) {
 	throw new Error("DITERO_ENCRYPTION_KEY is required in production");
 }
-const authAdapter = drizzleAdapter(db, { provider: "pg" });
-const authDatabase = encryptionKey
-	? withFieldEncryption(
-			authAdapter,
-			createFieldKeyRing({
-				current: encryptionKey,
-				next: process.env.DITERO_ENCRYPTION_KEY_NEXT,
-			}),
-		)
-	: authAdapter;
+const fieldKeyRing = encryptionKey
+	? createFieldKeyRing({
+			current: encryptionKey,
+			next: process.env.DITERO_ENCRYPTION_KEY_NEXT,
+		})
+	: null;
+const authDatabase = withPasswordResetTransaction((database) => {
+	const authAdapter = drizzleAdapter(database, { provider: "pg" });
+	return withAccountConflict(
+		fieldKeyRing ? withFieldEncryption(authAdapter, fieldKeyRing) : authAdapter,
+	);
+}, db);
 
 async function assertEmailRegistrationAllowed(email: string): Promise<void> {
 	const invited =
@@ -110,8 +120,12 @@ export const auth = betterAuth({
 		autoSignIn: false,
 		minPasswordLength: PASSWORD_MIN_LENGTH,
 		maxPasswordLength: PASSWORD_MAX_LENGTH,
+		// A reset means the old password may be compromised: end every session of
+		// the account, which also ends sync access (the Zero token path rechecks
+		// the live session). password-reset.ts revokes the other credentials.
+		revokeSessionsOnPasswordReset: true,
 		sendResetPassword: async ({ user, url }) => {
-			sendAuthMail("reset", user, url);
+			sendAuthMail("reset", user, resetLinkWithWebCallback(url));
 		},
 	},
 	// requireEmailVerification stays off deliberately. It is the one setting
@@ -134,6 +148,7 @@ export const auth = betterAuth({
 	}),
 	hooks: {
 		before: createAuthMiddleware(async (context) => {
+			if (context.path === "/reset-password") assertPasswordResetScope();
 			if (context.path !== "/sign-up/email") return;
 			if (!context.body || typeof context.body !== "object") return;
 			// Public signup accepts only identity and password. In particular, avatar,
@@ -159,7 +174,7 @@ export const auth = betterAuth({
 				await assertEmailRegistrationAllowed(email);
 			} catch (error) {
 				await context.context.password.hash(password);
-				throw registrationAPIError(error, context.path);
+				throw registrationAPIError(error);
 			}
 		}),
 		after: createAuthMiddleware(async (context) => {
@@ -194,7 +209,7 @@ export const auth = betterAuth({
 					try {
 						await assertEmailRegistrationAllowed(newUser.email);
 					} catch (error) {
-						throw registrationAPIError(error, context?.path);
+						throw registrationAPIError(error);
 					}
 					return { data: { ...newUser, name } };
 				},
@@ -276,10 +291,13 @@ export async function handleAuthRequest(
 	request: Request,
 	peerAddress?: string,
 ): Promise<Response> {
+	const path = new URL(request.url).pathname.replace(/\/+$/, "");
+	if (request.method === "POST" && path === RESET_PATH)
+		return runPasswordReset(() =>
+			handleAuthRequestInternal(request, peerAddress),
+		);
 	const signUp =
-		request.method === "POST" &&
-		new URL(request.url).pathname.replace(/\/+$/, "") ===
-			"/api/auth/sign-up/email";
+		request.method === "POST" && path === "/api/auth/sign-up/email";
 	const started = performance.now();
 	if (!signUp) return handleAuthRequestInternal(request, peerAddress);
 	const state: PublicSignUpState = { creating: false };

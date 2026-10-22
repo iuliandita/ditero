@@ -88,8 +88,12 @@ export function SecurityPanel() {
 
 	async function enableTwoFactor() {
 		setError(null);
-		const result = await authClient.twoFactor.enable({ password });
-		if (result.error) {
+		const result = await authClient.twoFactor.enable({
+			password,
+			method: "totp",
+		});
+		// A rolled-back 1.6 server omits `method`; the setup fields identify TOTP.
+		if (result.error || !("totpURI" in result.data)) {
 			setError(authErrorMessage(result.error, m.security_error_enable_2fa));
 			return;
 		}

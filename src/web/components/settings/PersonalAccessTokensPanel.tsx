@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { z } from "zod";
+import { isoDateTimeSchema } from "../../../domain/iso-datetime.ts";
 import { tokenCreateSchema } from "../../../domain/public-api.ts";
 import { m } from "../../../paraglide/messages.js";
 import { getLocale } from "../../../paraglide/runtime.js";
@@ -22,9 +23,9 @@ const metadataSchema = z.object({
 	name: z.string().max(80),
 	hint: z.string().max(4),
 	access: z.enum(["read", "write"]),
-	createdAt: z.iso.datetime(),
-	expiresAt: z.iso.datetime(),
-	revokedAt: z.iso.datetime().nullable(),
+	createdAt: isoDateTimeSchema(),
+	expiresAt: isoDateTimeSchema(),
+	revokedAt: isoDateTimeSchema().nullable(),
 });
 const createdSchema = metadataSchema.extend({
 	token: z.string().regex(/^ditero_pat_[A-Za-z0-9_-]{43}$/),

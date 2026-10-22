@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isoDateTimeSchema } from "./iso-datetime.ts";
 import { PUBLIC_API_ID, PublicApiError } from "./public-api.ts";
 
 const uniqueIds = (maximum: number) =>
@@ -14,8 +15,7 @@ export const apiTaskCreateSchema = z
 		listId: PUBLIC_API_ID,
 		title: z.string().trim().min(1).max(500),
 		notes: z.string().max(32_768).nullable().default(null),
-		dueAt: z.iso
-			.datetime({ offset: true })
+		dueAt: isoDateTimeSchema({ offset: true })
 			.transform((value) => new Date(value).toISOString())
 			.nullable()
 			.default(null),

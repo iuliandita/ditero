@@ -80,6 +80,17 @@ web, Android and desktop browser sign-in use this same server configuration.
   Google account's email address.
 - Refused Google sign-ups return to the sign-in page with the same localized
   invitation-required or registration-disabled message as email sign-up.
+- If the registration policy cannot be checked (for example the database is
+  unreachable), a new Google sign-up returns to the sign-in page with a
+  try-again message rather than an error page.
+- Each Google account links to one Ditero account. A second link request that
+  races the first is refused with `ACCOUNT_ALREADY_LINKED`. A racing first
+  sign-in returns to the sign-in page with a sign-in-again message. A racing
+  `/api/auth/link-social` call (no Ditero screen starts one) gets the code as a
+  `409` JSON reply instead: Better Auth 1.7.12 redirects link failures only for
+  its own refusals, not for a database conflict.
+- A password reset unlinks every Google sign-in of the account. Google sign-in
+  with the account's verified email links again on its next use.
 - Google sign-in links to an existing account only when that account's email is
   verified. Sign in with your password or passkey otherwise.
 - Android and desktop apps sign in through the system browser, so Google sign-in

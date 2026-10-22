@@ -596,6 +596,20 @@
       "when": 1792544034216,
       "tag": "0084_membership_leave_cleanup",
       "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "7",
+      "when": 1792608767876,
+      "tag": "0085_better_auth_jwks",
+      "breakpoints": true
+    },
+    {
+      "idx": 86,
+      "version": "7",
+      "when": 1792613619413,
+      "tag": "0086_account_provider_unique",
+      "breakpoints": true
     }
   ]
 }

@@ -37,6 +37,44 @@ compatible. Application rollback can restore the former TEMP requirement
 and the 403 response for foreign attachment downloads; current downloads return
 404 for both foreign and missing IDs. Rollback needs no data conversion.
 
+## Better Auth 1.7 upgrade
+
+Before upgrading, check for duplicate provider account keys. Resolve any results
+against the provider's verified identities; do not merge different users:
+
+```sql
+select provider_id, account_id, count(*) from account
+group by provider_id, account_id having count(*) > 1;
+```
+
+The `account_provider_unique` migration adds a unique index on
+`(provider_id, account_id)` so concurrent link flows cannot create the duplicates
+Better Auth 1.7 rejects. It runs this same check first and fails with a message
+pointing here, without changing or deleting any row; fix the rows and rerun
+`bun run db:migrate`. The index is additive: the 1.6.23 app ignores it, so leave it
+in place on application rollback.
+
+Stop app replicas and Zero, then take a coordinated database and attachment backup
+with the original authentication secret and encryption keys. Run `bun run db:migrate`
+using the migration owner before starting the updated app and then Zero. The
+`better_auth_jwks` migration adds nullable `alg` and `crv` text columns to `jwks`;
+it preserves existing key rows and needs no account-schema or key conversion.
+Keep the runtime login `NOSUPERUSER NOBYPASSRLS`; existing table DML grants cover
+the added columns. Verify sign-in and token issuance after the upgrade.
+
+The previous app version using Better Auth 1.6.23 tolerates both added columns
+on rollback: it ignores them and continues using the same Ed25519 keys and
+encrypted private-key format. Leave the additive migration in place when rolling
+back the app. Restore a database backup only with its matching service secrets
+and attachment backup; do not replace the original keys. An older database
+snapshot also discards newer sessions and other changes.
+
+Existing web, Android and desktop client versions retain their session and native
+consent protocols. Reload web clients to load the updated TOTP enrollment caller;
+the Google callback stays `/api/auth/callback/google`. Reload web clients after
+an app rollback too, so their TOTP caller matches the server's response format.
+Retain browser storage until queued edits sync, and verify sign-in again.
+
 ## Non-superuser Zero login and publication
 
 As an administrator connected to the `ditero` database, create a dedicated Zero
