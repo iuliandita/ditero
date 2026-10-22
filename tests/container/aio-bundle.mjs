@@ -81,6 +81,45 @@ check(() => {
 	assert.equal(config.env.BETTER_AUTH_SECRET, password);
 });
 check(() => {
+	const providers = {
+		...api,
+		GITHUB_CLIENT_ID: "gh-id",
+		GITHUB_CLIENT_SECRET_FILE: "/synthetic",
+		MICROSOFT_TENANT: "organizations",
+		DITERO_OIDC_PROVIDERS: "family",
+		DITERO_OIDC_FAMILY_ISSUER: "https://idp.example.com",
+		DITERO_OIDC_FAMILY_CLIENT_SECRET_FILE: "/run/secrets/family",
+	};
+	const config = buildConfiguration("api", providers, () =>
+		Buffer.from("gh-secret\n"),
+	);
+	assert.equal(config.env.GITHUB_CLIENT_ID, "gh-id");
+	assert.equal(config.env.GITHUB_CLIENT_SECRET, "gh-secret");
+	assert.equal(config.env.GITHUB_CLIENT_SECRET_FILE, undefined);
+	assert.equal(config.env.MICROSOFT_TENANT, "organizations");
+	assert.equal(config.env.DITERO_OIDC_PROVIDERS, "family");
+	assert.equal(config.env.DITERO_OIDC_FAMILY_ISSUER, "https://idp.example.com");
+	assert.equal(
+		config.env.DITERO_OIDC_FAMILY_CLIENT_SECRET_FILE,
+		"/run/secrets/family",
+	);
+	for (const role of ["postgres", "migrate", "zero"])
+		assert.throws(
+			() =>
+				buildConfiguration(role, {
+					...(role === "postgres" ? pg : {}),
+					...(role === "migrate"
+						? { DITERO_MIGRATION_DB_PASSWORD: pg.DITERO_MIGRATION_DB_PASSWORD }
+						: {}),
+					...(role === "zero"
+						? { ZERO_DATABASE_PASSWORD: "x", ZERO_ADMIN_PASSWORD: "y" }
+						: {}),
+					DITERO_OIDC_FAMILY_ISSUER: "https://idp.example.com",
+				}),
+			/not allowed for this role/,
+		);
+});
+check(() => {
 	const config = buildConfiguration("api", api);
 	for (const failed of ["none", "database", "health", "query", "mutate"]) {
 		const visited = [];
@@ -217,10 +256,11 @@ check(() => {
 	for (const [name, value] of Object.entries({
 		ZERO_IN_CONTAINER: "1",
 		ZERO_LITESTREAM_CONFIG_PATH: "/etc/litestream.yml",
+		ZERO_LITESTREAM_CONFIG_PATH_V5: "/etc/litestream-v5.yml",
 		ZERO_LITESTREAM_EXECUTABLE: "/usr/local/bin/litestream",
 		ZERO_LITESTREAM_EXECUTABLE_V5: "/usr/local/bin/litestream-v5",
 		ZERO_LOG_FORMAT: "json",
-		ZERO_SERVER_VERSION: "1.9.0",
+		ZERO_SERVER_VERSION: "1.11.1",
 		ZERO_REPLICA_FILE: "/var/lib/ditero/zero/replica.db",
 		ZERO_MUTATE_URL: "http://api:3000/api/zero/mutate",
 	}))

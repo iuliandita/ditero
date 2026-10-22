@@ -10,10 +10,12 @@ vi.mock("../components/ui/snackbar.tsx", () => ({
 }));
 function deferred<T>() {
 	let resolve!: (value: T) => void;
-	const promise = new Promise<T>((done) => {
+	let reject!: (error: unknown) => void;
+	const promise = new Promise<T>((done, fail) => {
 		resolve = done;
+		reject = fail;
 	});
-	return { promise, resolve };
+	return { promise, resolve, reject };
 }
 const tick = async () => {
 	for (let i = 0; i < 12; i++) await Promise.resolve();
@@ -116,6 +118,43 @@ test("unmount cancels deferred delivery and subscriptions", async () => {
 	expect(f.open).not.toHaveBeenCalled();
 	expect(f.navigation.dismiss).not.toHaveBeenCalled();
 	expect(f.reads).toHaveLength(1);
+});
+test("a read retired by the session ending stays silent when no link was lost", async () => {
+	for (const code of [
+		"no-session",
+		"unauthorized",
+		"stale-generation",
+		"cancelled",
+	]) {
+		const f = fixture();
+		f.ready();
+		f.reads[0]?.reject(Object.assign(new Error("retired"), { code }));
+		await tick();
+		f.delivery.flush();
+		expect(f.unavailable).not.toHaveBeenCalled();
+		expect(f.open).not.toHaveBeenCalled();
+		expect(f.navigation.dismiss).not.toHaveBeenCalled();
+		expect(f.recovery).not.toHaveBeenCalled();
+		f.delivery.dispose();
+	}
+});
+test("a link native reports lost shows unavailable once without navigation or retries", async () => {
+	const f = fixture();
+	f.ready();
+	f.reads[0]?.reject(
+		Object.assign(new Error("lost"), { code: "link-unavailable" }),
+	);
+	await tick();
+	f.delivery.flush();
+	expect(f.unavailable).toHaveBeenCalledTimes(1);
+	expect(f.open).not.toHaveBeenCalled();
+	expect(f.navigation.dismiss).not.toHaveBeenCalled();
+	expect(f.recovery).not.toHaveBeenCalled();
+	f.emit();
+	f.reads[1]?.resolve(null);
+	await tick();
+	expect(f.unavailable).toHaveBeenCalledTimes(1);
+	f.delivery.dispose();
 });
 test("a newer event invalidates an in-flight read and is read serially", async () => {
 	const f = fixture();

@@ -159,7 +159,11 @@ describe("user_pref read-permission isolation", () => {
 type MutCtx = { id: string };
 async function call<A>(
 	mutator: {
-		fn: (a: { tx: Transaction<Schema>; ctx: MutCtx; args: A }) => Promise<void>;
+		fn: (a: {
+			tx: Transaction<Schema>;
+			ctx: MutCtx;
+			args: A;
+		}) => Promise<unknown>;
 	},
 	c: MutCtx,
 	args: A,

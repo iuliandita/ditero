@@ -15,8 +15,8 @@ export function workspaceViewRowsLoading({
 	tasks: readonly { listId: string }[];
 	lists: readonly { id: string; workspaceId: string }[];
 	workspaces: readonly { id: string }[];
-	tasksType: "unknown" | "complete" | "error";
-	listsType: "unknown" | "complete" | "error";
+	tasksType: "unknown" | "cached" | "complete" | "error";
+	listsType: "unknown" | "cached" | "complete" | "error";
 }): boolean {
 	if (tasksType === "complete" && listsType === "complete") return false;
 	if (tasksType === "error" || listsType === "error" || tasks.length === 0)

@@ -1,0 +1,8 @@
+[global]
+    width = 420
+    height = 160
+    offset = (20, 20)
+    origin = top-right
+    mouse_left_click = do_action, close_current
+    follow = none
+    timeout = 0

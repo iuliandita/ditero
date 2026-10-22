@@ -39,7 +39,7 @@ Validation reports use codes and structural paths, without copying task titles,
 comments, or other source content into error messages. Input bytes, row counts,
 and nesting are bounded before validating recursive structures. The parser accepts
 at most 32 MiB, 50,000 rows, 50,000 entries in any nested array, two million values,
-and 32 levels of nesting. A graph report retains at most 1,000 findings, including
+and 32 levels of nesting, which is checked in the byte scan before `JSON.parse`. A graph report retains at most 1,000 findings, including
 a terminal limit error; exceeding the report limit fails validation, so a truncated
 report cannot authorize an incomplete import plan.
 
@@ -101,6 +101,38 @@ Version 1 cannot represent retained comment authors or template creators. If suc
 are visible, a version 1 export fails with HTTP 409 and `history-requires-v2` before
 returning a file. Use version 2 instead; no records are silently omitted or attributed
 to a local account. Native-only version 1 exports remain unchanged.
+
+## Provider content binding and upgrade
+
+The five content adapters described in [Data portability](data-portability.md#provider-imports-with-content)
+produce the existing native version 1 intermediate document and use planner 4.
+They do not add an application endpoint or a second content writer. The original
+file is submitted as `input.originalBase64` with `kind: "provider"`, `version: 2`,
+`adapter: "provider-content"`, `adapterVersion: 1`, the provider, snapshot hash and
+namespace, naming choices, timezone, the resolved Outlook `dateOrder` (`mdy`, `dmy` or
+null), the Todoist recurrence `anchorDay` (or null), and bounded `{code,path,count}`
+notices. Per-row notice paths use `row:N[:field]`, `card:N` or `item:N`, fold into
+one `more` entry after 300, and counts saturate at 50,000. The migration is edited
+in place because it has not shipped; a database that applied an earlier draft of it
+must be recreated.
+The server reparses the original bytes and requires an exact binding match before
+planning. Notices are also returned with the saved plan and require UI approval.
+The database validates immutable source/job bindings; the original file is not
+retained as a replacement backup. Existing native formats and legacy provider
+bindings keep their exact contracts.
+
+Upgrade: back up the database and run the additive provider-content binding
+migration before starting the updated server. Backup: retain coordinated database,
+attachment ciphertext and original encryption/authentication secrets as usual;
+keep original provider export files privately if another preview may be needed.
+Rollback: keep the additive migration and use the previous app only after stopping
+new provider imports. Older builds cannot parse these new saved bindings; use the
+updated app to resume or discard their plans. Do not restore an older database
+over newer content just to remove a picker. Client versions: updated browser
+bundles expose the new pickers; older browser clients retain their legacy import
+paths. Native Settings keeps its browser-import guard. Authentication, attachment
+formats, notification activation and permissions are unchanged; native runtime
+qualification remains separate.
 
 ## Saved dry runs
 

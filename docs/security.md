@@ -11,6 +11,17 @@
 
 Email/password, passkeys, TOTP, and recovery codes are supported. Cookie-authenticated mutations require an exact configured origin. Sensitive auth routes use PostgreSQL-backed rate limits. Proxy headers are ignored unless the direct peer is within `DITERO_TRUSTED_PROXIES`.
 
+Accounts with enrolled local TOTP must complete the local second factor on every
+sign-in path, including passkeys, all social providers, generic OpenID Connect,
+SAML and native sign-in through the system browser. A recovery code can complete
+the same local challenge. Provider-asserted MFA (including OIDC `acr`/`amr` or SAML
+AuthnContext) is not accepted as a substitute; there is no operator exemption.
+Remembered-device cookies do not bypass the challenge. Better Auth deletes the
+callback's provisional session and clears its cookies before returning the
+challenge; no authenticated session, Zero token or native bearer is returned.
+A password reset invalidates federated challenges through the same account-bound
+verification cleanup as password challenges, while keeping the enrollment.
+
 Email sign-in combines an atomic `rate_bucket` token bucket per client IP and
 trimmed, lowercased email (capacity five, refill five per minute) with Better Auth's
 30-per-minute per-IP ceiling. The bounded JSON body clone is limited to 4 KiB;
@@ -30,9 +41,22 @@ accounts; see [Trusted Proxy](runbooks/trusted-proxy.md) for NAT and VPN guidanc
 Production defaults to `DITERO_REGISTRATION_MODE=bootstrap`: only the first account
 can register without an invitation. `closed` disables uninvited registration,
 including the first account; eligible invitations can still admit accounts.
-Optional Google sign-in creates accounts through the same registration check, so
-a first Google sign-in needs the same admission as an email signup. See
+Optional provider sign-in (Google, generic OpenID Connect, Microsoft, GitHub,
+Discord, Apple, Facebook) creates accounts through the same registration check, so
+a first provider sign-in needs the same admission as an email signup. Every
+new Ditero account created through a provider also requires a provider-verified
+email, in every mode.
+Microsoft and Facebook emails are always treated as unverified, so account holders
+must link those providers explicitly. Only a provider-verified email can satisfy an
+invitation, and a provider account is never linked to an existing account by email: the signed-in owner links it explicitly.
+Provider accounts are keyed on the provider's immutable ID (issuer plus subject for
+OpenID Connect). See
 [Sign-in providers](runbooks/sign-in-providers.md).
+
+Provider callback account-existence and registration-policy refusals share a neutral
+code and omit the underlying description. Timing can still differ; allowed
+verified-email registration can reveal admission through success versus refusal.
+This does not claim to prevent every provider registration side channel.
 
 Email sign-up returns HTTP 200 with `{"token":null,"user":null}` for both a
 new account and an existing email when admission is allowed. Neither response
@@ -63,6 +87,55 @@ proof of mailbox ownership, SMTP-free registration cannot prevent an attacker
 from creating an unused address and subsequently proving that creation by signing
 in with their chosen password. Rate limits bound attempts; the neutral response
 does not claim to eliminate that active registration side channel.
+
+"Forgot your password?" on the sign-in page requests a reset link. The answer is
+the same whether or not the address has an account, and a server without SMTP
+refuses the request with an explanation instead. The mailed link always opens the
+web reset page (`/reset-password`), also for Android and desktop users, whose
+sign-in already runs in the system browser. The link works once and expires
+after an hour. The page keeps the token out of browser history, sets the new
+password, and then sends the user to sign in: the reset itself creates no
+session.
+
+A completed reset assumes the old password may be compromised. In one database
+transaction with the token use and the password change, it:
+
+- ends every session of the account, browser and native;
+- revokes every personal access token and calendar feed link;
+- deletes every passkey;
+- unlinks every Google or other provider sign-in, keeping only the password;
+- invalidates every other outstanding reset link and pending sign-in proof of the
+  account, including two-factor challenges, trusted-device grants, email OTPs and
+  magic links, and account-bound passkey and provider-link challenges;
+- marks the account email verified, since redeeming the emailed token proves
+  control of that mailbox, in the same transaction.
+
+If any step fails, none of them happen and the link stays usable. A reset also
+succeeds when there are no other credentials or sessions to revoke. A request
+that was already authenticated before the reset committed can still finish
+creating a credential, so review the lists after a reset if the account was
+actively in use by someone else. The reset page
+lists the kinds of credentials that were removed. Sync access ends within the
+revocation bound described below: new Zero tokens and requests are refused
+immediately and open subscriptions close at the next revalidation. A session
+started with the new password is unaffected. A provider sign-in can link again
+only when the server permits implicit account linking and the provider supplies
+a matching verified email for the verified local account. A server that disables implicit linking requires an explicit link from a
+new authenticated session; password reset does not override that policy.
+
+A reset does not touch inbound webhooks or notification channel credentials,
+which belong to lists and workspaces rather than to signing in, or workspace
+membership and encryption keys. It also keeps two-factor authentication (TOTP and
+backup codes). Removing it would let anyone who controls the mailbox defeat a
+second factor the owner set up. The cost: someone who had the old password could
+also have enrolled their own authenticator, and the owner is then asked for a
+code they don't have. Once the reset commits, a saved sign-in challenge or trusted
+device cannot bypass a fresh password and second-factor check. An attacker who
+knows only the old password cannot finish that pending sign-in. Password sign-in
+still needs the enrolled factor or operator recovery. An operator recovers the account
+after verifying the owner out of band, by deleting the account's `two_factor` row
+and setting `two_factor_enabled` to false for the user. After a reset, review
+inbound webhooks and channel settings for anything you did not create.
 
 Android and desktop use explicit system-browser consent to obtain a device-bound
 native session. Credentials remain in native storage. After sign-out or session/device

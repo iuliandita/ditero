@@ -1,4 +1,7 @@
-import type { PublicConfig } from "../../server/public-config.ts";
+import type {
+	PublicConfig,
+	PublicSsoProvider,
+} from "../../server/public-config.ts";
 import { fetchWithConnectionCheck } from "./connection-required.ts";
 
 // Fetched at startup rather than read from import.meta.env: the bundle is built
@@ -15,6 +18,22 @@ export async function fetchPublicConfig(): Promise<PublicConfig> {
 		zeroURL: body.zeroURL,
 		socialProviders: Array.isArray(body.socialProviders)
 			? body.socialProviders.filter((provider) => typeof provider === "string")
+			: [],
+		oidcProviders: Array.isArray(body.oidcProviders)
+			? body.oidcProviders.filter(
+					(provider) =>
+						typeof provider?.id === "string" &&
+						typeof provider.name === "string" &&
+						typeof provider.icon === "string",
+				)
+			: [],
+		ssoProviders: Array.isArray(body.ssoProviders)
+			? body.ssoProviders.filter(
+					(provider): provider is PublicSsoProvider =>
+						typeof provider?.id === "string" &&
+						typeof provider.name === "string" &&
+						provider.protocol === "saml",
+				)
 			: [],
 	};
 }

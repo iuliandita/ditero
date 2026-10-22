@@ -21,11 +21,16 @@ Native JSON export, validated saved import previews, resumable apply, assignment
 mapping, and explicit notification activation have landed. Task history and portable
 history archives preserve transitions and attribution. Settings accepts version 2
 archives through reviewed, resumable history import, with explicit source claims
-and retained replay identity. Ditero CSV, Todoist project CSV snapshots and plain
-Trello board JSON imports are available. Authenticated encrypted attachment archives
+and retained replay identity. Ditero and generic CSV, Todoist project CSV, TickTick
+backup CSV, Microsoft To Do via classic Outlook task CSV, and Trello board JSON
+imports are available with explicit exclusions, per-row notices, reuse of same-named workspace labels and immutable snapshot identity. Authenticated encrypted attachment archives
 and reviewed, resumable attachment migration with explicit parent mapping and durable
-replay have landed; broader runtime qualification remains pending. TickTick and
-Microsoft To Do import remain unfinished. Voice capture is pending final qualification.
+replay have landed; broader runtime qualification remains pending. Direct Microsoft
+PST import and provider account synchronization remain unsupported. Voice
+dictation in quick add is implemented, on-device where the browser supports it and
+behind a vendor-service notice otherwise and stops when the tab is hidden (see the
+voice capture guide); real-device
+qualification and native-app support are pending.
 
 The web app is installable as a PWA. Android and Tauri desktop application cores,
 scoped native authentication, encrypted file handling, and development artifact
@@ -173,6 +178,9 @@ discussion.
 
 ## Future
 
+- Opt-in offline saved copy for browser restore, with explicit freshness and account
+  ownership checks.
+
 Good ideas with no timeline yet.
 
 - **Broader operator-blind encryption.** The v1 envelope-key foundation and encrypted
@@ -182,6 +190,10 @@ Good ideas with no timeline yet.
   strong per-tenant isolation (shared-DB row-tenancy first, dedicated DB per tenant for
   customers paying for isolation) and the zero-knowledge story above as a genuine guarantee
   for hosted, sensitive data.
+- **Standalone terminal client binaries.** Single-file CLI, MCP and TUI executables that embed
+  the Bun runtime, so no Bun install is needed. They wait on complete embedded-runtime
+  license and source notices; until then the clients ship as JavaScript bundles for an
+  installed Bun.
 - Project-management tool integrations (Trello, Linear, and friends).
 - More list kinds unlocked by the typed-container model.
 

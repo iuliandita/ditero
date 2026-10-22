@@ -25,7 +25,44 @@ describe("publicConfig", () => {
 	it("serves the zero URL the client dials", () => {
 		expect(
 			publicConfig({ PUBLIC_ZERO_URL: "https://sync.example.test" }),
-		).toEqual({ zeroURL: "https://sync.example.test", socialProviders: [] });
+		).toEqual({
+			zeroURL: "https://sync.example.test",
+			ssoProviders: [],
+			socialProviders: [],
+			oidcProviders: [],
+		});
+	});
+
+	it("lists every configured provider with display data and no credentials", () => {
+		const config = publicConfig({
+			GOOGLE_CLIENT_ID: "id",
+			GOOGLE_CLIENT_SECRET: "google-secret",
+			GITHUB_CLIENT_ID: "id",
+			GITHUB_CLIENT_SECRET: "github-secret",
+			DITERO_OIDC_PROVIDERS: "family",
+			DITERO_OIDC_FAMILY_ISSUER: "https://id.example.test",
+			DITERO_OIDC_FAMILY_CLIENT_ID: "ditero",
+			DITERO_OIDC_FAMILY_CLIENT_SECRET: "oidc-secret",
+			DITERO_OIDC_FAMILY_NAME: "Family SSO",
+			DITERO_OIDC_FAMILY_ICON: "shield",
+		});
+		expect(config).toEqual({
+			zeroURL: DEFAULT_ZERO_URL,
+			socialProviders: ["google", "github", "family"],
+			oidcProviders: [{ id: "family", name: "Family SSO", icon: "shield" }],
+			ssoProviders: [],
+		});
+		expect(JSON.stringify(config)).not.toMatch(/secret/);
+	});
+
+	it("lists configured single sign-on providers by display data only", () => {
+		const sso = [{ id: "saml-0123", name: "Corp", protocol: "saml" as const }];
+		expect(publicConfig({ BETTER_AUTH_SECRET: "private" }, sso)).toEqual({
+			zeroURL: DEFAULT_ZERO_URL,
+			socialProviders: [],
+			ssoProviders: sso,
+			oidcProviders: [],
+		});
 	});
 
 	it.each([
@@ -38,6 +75,8 @@ describe("publicConfig", () => {
 		expect(publicConfig({ ...env, BETTER_AUTH_SECRET: "private" })).toEqual({
 			zeroURL: DEFAULT_ZERO_URL,
 			socialProviders,
+			oidcProviders: [],
+			ssoProviders: [],
 		});
 	});
 });

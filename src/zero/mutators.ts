@@ -34,6 +34,7 @@ import {
 	MAX_REPEAT_EVERY_MIN,
 	MAX_REPEATS_CAP,
 } from "../domain/escalation-policy.ts";
+import { FocusEarlyError, focusRequiredMs } from "../domain/focus-interval.ts";
 import type { ListKind } from "../domain/icon-map.ts";
 import { karmaForCompletion, karmaWrite } from "../domain/karma.ts";
 import { localDay } from "../domain/local-day.ts";
@@ -1357,12 +1358,44 @@ export const mutators = defineMutators({
 		),
 	},
 	focus: {
+		// Server-side start of an interval, observed with the server's own clock.
+		// A client-supplied time is never stored; replays keep the first start.
+		startInterval: defineMutator(
+			z.object({ intervalId: z.uuid() }),
+			async ({ tx, ctx, args }) => {
+				if (tx.location !== "server") return;
+				await tx.dbTransaction.query(
+					"select pg_advisory_xact_lock(hashtextextended($1, 1164))",
+					[ctx.id],
+				);
+				const existing = Array.from(
+					await tx.dbTransaction.query(
+						"select interval_id from focus_interval_start where user_id=$1 and interval_id=$2",
+						[ctx.id, args.intervalId],
+					),
+				);
+				if (existing.length) return;
+				await tx.dbTransaction.query(
+					"update server_private.focus_interval_clock set closed_at=clock_timestamp() where user_id=$1 and closed_at is null",
+					[ctx.id],
+				);
+				await tx.dbTransaction.query(
+					"insert into server_private.focus_interval_clock (user_id, interval_id, started_at) values ($1, $2, clock_timestamp())",
+					[ctx.id, args.intervalId],
+				);
+				await tx.dbTransaction.query(
+					"insert into focus_interval_start (user_id, interval_id) values ($1, $2)",
+					[ctx.id, args.intervalId],
+				);
+			},
+		),
 		// Record one finished focus/break interval for the caller. Keyed to
 		// ctx.id (never a client-supplied userId). No Karma.
 		logSession: defineMutator(
 			z
 				.object({
 					intervalId: z.uuid().optional(),
+					proof: z.enum(["server", "monotonic"]).optional(),
 					taskId: z.string().optional(),
 					kind: z.enum(["work", "break"]),
 					startedAt: z.number(),
@@ -1372,6 +1405,14 @@ export const mutators = defineMutators({
 						.int()
 						.min(1)
 						.max(24 * 60 * 60),
+					// Paused wall time the client measured; it can only raise the
+					// server's required span, never lower it.
+					pausedMs: z
+						.number()
+						.int()
+						.min(0)
+						.max(24 * 60 * 60 * 1000)
+						.optional(),
 				})
 				// durationSec cannot disagree wildly with the interval it claims to
 				// measure (small slack for rounding); guards a padded time-on-task sum.
@@ -1387,11 +1428,42 @@ export const mutators = defineMutators({
 				const id = args.intervalId
 					? `${ctx.id}:${args.intervalId}`
 					: randomId();
+				if (tx.location === "server" && args.intervalId)
+					await tx.dbTransaction.query(
+						"select pg_advisory_xact_lock(hashtextextended($1, 1164))",
+						[ctx.id],
+					);
 				if (
 					args.intervalId &&
 					(await tx.run(zql.focusSession.where("id", id).one()))
 				)
 					return;
+				if (tx.location === "server" && args.intervalId) {
+					const started = Array.from(
+						await tx.dbTransaction.query(
+							`select (extract(epoch from least(clock_timestamp(), closed_at) - started_at) * 1000)::float8 as elapsed_ms,
+						 closed_at is not null as closed from server_private.focus_interval_clock
+						 where user_id=$1 and interval_id=$2 and started_at >= now() - interval '14 days'`,
+							[ctx.id, args.intervalId],
+						),
+					)[0] as { elapsed_ms: number | string; closed: boolean } | undefined;
+					if (!started && args.proof !== "monotonic")
+						throw new Error(
+							"focus start is missing or expired [focus-unverified]",
+						);
+					if (started) {
+						const wait =
+							focusRequiredMs(args.durationSec, args.pausedMs) -
+							Number(started.elapsed_ms);
+						if (wait > 0) {
+							if (started.closed)
+								throw new Error(
+									"focus interval was superseded [focus-unverified]",
+								);
+							throw new FocusEarlyError(Math.ceil(wait));
+						}
+					}
+				}
 				await tx.mutate.focusSession.insert({
 					id,
 					userId: ctx.id,

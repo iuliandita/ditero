@@ -90,7 +90,10 @@ function fakeEngine(
 	return { engine, checks, starts };
 }
 
-const AVAILABLE: VoiceCapability = { status: "available" };
+const AVAILABLE: VoiceCapability = {
+	status: "available",
+	processing: "device",
+};
 const result = (...alternatives: unknown[]): VoiceEngineEvent => ({
 	type: "result",
 	alternatives,
@@ -102,6 +105,8 @@ function setup(
 		native?: boolean;
 		engine?: ReturnType<typeof fakeEngine>;
 		timeoutMs?: number;
+		acknowledged?: boolean;
+		onAcknowledge?: () => void;
 	} = {},
 ) {
 	const fe = over.engine ?? fakeEngine();
@@ -112,6 +117,8 @@ function setup(
 		locale: over.locale ?? "en",
 		timers: clock.timers,
 		timeoutMs: over.timeoutMs,
+		acknowledged: over.acknowledged,
+		onAcknowledge: over.onAcknowledge,
 	});
 	return { ...fe, clock, capture };
 }
@@ -396,7 +403,6 @@ describe("refusals and failures", () => {
 		["language-pack-downloading", "error"],
 		["language-pack-unavailable", "unsupported"],
 		["unsupported-insecure-context", "unsupported"],
-		["unsupported-no-local-processing", "unsupported"],
 		["availability-check-failed", "error"],
 	] as const)("check refusal %s lands in %s and never starts", async (reason, phase) => {
 		const s = setup();
@@ -871,4 +877,106 @@ test("cancellation from a listening notification prevents microphone start", asy
 	await flush();
 	expect(s.capture.getState().phase).toBe("idle");
 	expect(s.starts).toHaveLength(0);
+});
+
+describe("vendor-service disclosure", () => {
+	const VENDOR: VoiceCapability = { status: "available", processing: "vendor" };
+
+	async function probed(over: Parameters<typeof setup>[0] = {}) {
+		const s = setup(over);
+		s.capture.probe();
+		s.checks[0].resolve(VENDOR);
+		await flush();
+		return s;
+	}
+
+	test("start is refused until the notice is accepted", async () => {
+		const s = await probed();
+		expect(s.capture.getState()).toMatchObject({
+			phase: "idle",
+			ready: true,
+			vendor: true,
+			acknowledged: false,
+		});
+		s.capture.start();
+		expect(s.capture.getState().phase).toBe("idle");
+		expect(s.starts).toHaveLength(0);
+		expect(s.clock.size).toBe(0);
+	});
+
+	test("a start that needed the probe stops at the notice instead of listening", async () => {
+		const s = setup();
+		s.capture.start();
+		s.checks[0].resolve(VENDOR);
+		await flush();
+		expect(s.capture.getState()).toMatchObject({
+			phase: "idle",
+			vendor: true,
+			acknowledged: false,
+		});
+		expect(s.starts).toHaveLength(0);
+		expect(s.clock.size).toBe(0);
+	});
+
+	test("acknowledge records once and lets start listen inside the gesture", async () => {
+		let recorded = 0;
+		const s = await probed({ onAcknowledge: () => recorded++ });
+		s.capture.acknowledge();
+		s.capture.acknowledge();
+		expect(recorded).toBe(1);
+		expect(s.capture.getState()).toMatchObject({ acknowledged: true });
+		s.capture.start();
+		expect(s.capture.getState().phase).toBe("listening");
+		expect(s.starts).toHaveLength(1);
+	});
+
+	test("a previously accepted notice is honoured", async () => {
+		const s = await probed({ acknowledged: true });
+		expect(s.capture.getState()).toMatchObject({ acknowledged: true });
+		s.capture.start();
+		expect(s.starts).toHaveLength(1);
+	});
+
+	test("on-device engines need no notice", async () => {
+		const s = setup();
+		s.capture.probe();
+		s.checks[0].resolve(AVAILABLE);
+		await flush();
+		expect(s.capture.getState()).toMatchObject({
+			vendor: false,
+			acknowledged: true,
+		});
+		s.capture.start();
+		expect(s.starts).toHaveLength(1);
+	});
+
+	test("an engine that does not say it is on-device is treated as vendor", async () => {
+		const s = setup();
+		s.capture.probe();
+		s.checks[0].resolve({ status: "available" } as VoiceCapability);
+		await flush();
+		expect(s.capture.getState()).toMatchObject({ vendor: true });
+		s.capture.start();
+		expect(s.starts).toHaveLength(0);
+	});
+
+	test("review carries the vendor flag", async () => {
+		const s = await probed({ acknowledged: true });
+		s.capture.start();
+		s.starts[0].emit(result("buy milk"));
+		expect(s.capture.getState()).toMatchObject({
+			phase: "review",
+			vendor: true,
+		});
+	});
+
+	test("acknowledge after dispose or on a native shell does nothing", () => {
+		let recorded = 0;
+		const native = setup({ native: true, onAcknowledge: () => recorded++ });
+		native.capture.acknowledge();
+		const gone = setup({ onAcknowledge: () => recorded++ });
+		gone.capture.dispose();
+		gone.capture.acknowledge();
+		expect(recorded).toBe(0);
+	});
 });

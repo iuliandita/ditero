@@ -70,6 +70,7 @@ for (const kind of ["browser", "native"] as const) {
 			expect(response.status()).toBe(200);
 			const { token } = (await response.json()) as { token: string };
 			const clientID = randomUUID();
+			// v51 keeps JSON pokePart messages; current SDK clients use binary pokes.
 			const url = new URL(
 				"/sync/v51/connect",
 				configuredOrigin("E2E_PUBLIC_ZERO_URL"),

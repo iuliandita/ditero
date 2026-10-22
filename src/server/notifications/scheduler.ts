@@ -1012,6 +1012,12 @@ function readyEscalate(state: LockedReminder, now: Date): boolean {
 	);
 }
 
+// Fixed-size deletion is safe for the runtime role: the definer function can
+// remove only expired evidence, including dormant owners' rows.
+export async function pruneFocusIntervals(client: Pick<PoolClient, "query">) {
+	await client.query("select public.prune_focus_intervals()");
+}
+
 export function startScheduler(
 	_database: Database,
 	pool: Pool,
@@ -1034,16 +1040,17 @@ export function startScheduler(
 		},
 		async () => {
 			try {
-				await withLeaderLock(pool, SCHEDULER_LOCK_KEY, (client) =>
+				await withLeaderLock(pool, SCHEDULER_LOCK_KEY, async (client) => {
+					await pruneFocusIntervals(client);
 					// Left undefined when the seam is not armed, so the production
 					// enqueue path keeps short-circuiting on an absent option rather
 					// than awaiting a live no-op closure every transaction.
 					// The scan cannot reconnect behind a lost session lock.
-					scanTick(drizzle(client, { schema: tables }), {
+					return scanTick(drizzle(client, { schema: tables }), {
 						timing,
 						onBeforeEnqueue: crash && (() => crash("mid-scan")),
-					}),
-				);
+					});
+				});
 			} catch (error) {
 				console.error("scheduler: tick failed:", error);
 			}

@@ -82,8 +82,10 @@ templates use the name you enter, or the template name when you leave it blank.
 - Authenticated encrypted attachment archives and reviewed, resumable attachment
   migration with explicit parent mapping and durable replay
 - JSON export and reviewed, resumable native import, including version 2 history
-  and attribution, plus Ditero CSV, Todoist project CSV snapshots and plain Trello
-  board JSON imports; see
+  and attribution, plus Ditero and generic CSV, Todoist project CSV, TickTick backup
+  CSV, Microsoft To Do via classic Outlook task CSV, and Trello board JSON, with
+  located preview notices for skipped rows, bound Outlook date order and reuse of
+  same-named workspace labels; see
   [data portability](docs/runbooks/data-portability.md) for exclusions
 - Browser installation plus Android and desktop development apps; see
   [native app status](#browser-installation-and-native-development-apps)
@@ -95,21 +97,41 @@ templates use the name you enter, or the template name when you leave it blank.
   and task, list, folder, comment, relationship, placement and webhook workflows,
   plus an interactive
   [terminal UI](docs/tui.md) for task creation, completion, scalar updates, deletion
-  and reordering, with read-only comments
+  and reordering, with read-only comments; released as JavaScript bundles that run on
+  an installed Bun 1.3.14 or newer ([install](docs/cli.md#release-bundles))
 
-iOS, TickTick and Microsoft To Do import remain pending. Wider attachment migration
-runtime, terminal, native and deployment qualification remain pending. Voice capture is
-pending final qualification. Calendar subscriptions can be created and revoked
+iOS and direct Microsoft PST import remain pending. Provider imports require review
+of exclusions and exact snapshot identity; they are not account synchronization. Wider attachment migration
+runtime, terminal, native and deployment qualification remain pending. Quick add has
+[voice dictation](docs/runbooks/voice-capture.md) with review before use. It runs on-device
+where the browser supports it; browsers that only offer the standard Web Speech API may
+send audio to the browser vendor's speech service, so a notice must be accepted first.
+Dictation stops when the tab is hidden.
+It is unavailable in the native apps, and real-device qualification is pending. Calendar subscriptions can be created and revoked
 in web settings; a new subscription URL is shown only once.
 The [roadmap](docs/ROADMAP.md) distinguishes delivered capabilities from remaining work.
 
 Focus timers are stored locally for each account and shared by its tabs on the same
-browser or native server profile. Returning after an interval expires records that
-interval once and advances according to the auto-cycle setting; paused time is excluded.
-Stop discards the unfinished interval in every tab. Clearing site data removes local
-timer state. Timers do not follow you to another device. After reload, elapsed time
-relies on the device clock. Moving that clock forward can count unworked time,
-capped at the interval length.
+browser or native server profile. Paused time is excluded. Stop discards the
+unfinished interval in every tab. Clearing site data removes local timer state.
+Timers do not follow you to another device.
+
+Online starts use exclusive server-observed spans per account. Starting another
+interval closes the previous span; credit requires the full duration plus pauses
+within that span, without a per-interval time allowance. A forward clock change
+cannot multiply credit across overlapping intervals. Early completions retry;
+superseded intervals without enough time are rejected.
+
+After reload, a persisted acknowledgement alone is insufficient: the current
+server start must sync before it can establish credit. An observer without proof
+leaves the shared interval unresolved so another observing tab or a delayed sync
+can complete it. After ten seconds a notice explains the missing confirmation;
+the timer can still reconcile during the server's 14-day acceptance window.
+Offline intervals use the completing page's monotonic elapsed time and progress
+saved when paused. Pending completions retain whether they used that proof or a
+server start; a missing server start never silently falls back to offline proof.
+Focus totals are personal records, not tamper-proof time tracking: legacy and
+offline clients supply their own timing evidence.
 
 ## Tech stack
 
@@ -226,6 +248,8 @@ All configuration is environment-driven. The common variables:
 | `DITERO_IMAGE_TAG` | `nightly` | Image tag the Compose stack runs. The zero-cache image is that tag plus `-zero`. |
 | `DITERO_REGISTRATION_MODE` | `bootstrap` | `open`, `bootstrap` (first account plus eligible invitations), or `closed` (eligible invitations only). |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | empty | Optional Google sign-in from your own OAuth client; both are required. See [sign-in providers](docs/runbooks/sign-in-providers.md). |
+| `DITERO_OIDC_PROVIDERS`, `MICROSOFT_*`, `GITHUB_*`, `DISCORD_*`, `FACEBOOK_*`, `APPLE_*` | empty | Optional generic OpenID Connect providers (`DITERO_OIDC_<ID>_*`) and Microsoft, GitHub, Discord, Apple and Facebook sign-in; every secret also accepts `_FILE`. See [sign-in providers](docs/runbooks/sign-in-providers.md). |
+| `DITERO_SAML_IDP_METADATA_URL`, `DITERO_SAML_IDP_METADATA`, `DITERO_SAML_IDP_METADATA_FILE` | empty | Optional SAML single sign-on; set exactly one. See [SAML single sign-on](docs/runbooks/sign-in-providers.md#saml-single-sign-on). |
 
 > **Note:** the web client fetches `PUBLIC_ZERO_URL` from `/api/config` at
 > startup, so one built image serves any hostname. Set it to the address

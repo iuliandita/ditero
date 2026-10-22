@@ -2,6 +2,8 @@ import { z } from "zod";
 import { randomId } from "../../domain/random-id.ts";
 import { clampFocusConfig, type FocusConfig } from "./timer-core.ts";
 
+// Server cap on reported pauses (focus.logSession); longer pauses are clamped.
+export const MAX_PAUSED_MS = 86_400_000;
 const instant = z.number().finite().nonnegative().max(8.64e15);
 const sessionSchema = z
 	.object({
@@ -13,9 +15,13 @@ const sessionSchema = z
 		}),
 		plannedSec: z.number().int().min(1).max(10800),
 		running: z.boolean(),
+		waitingForCompletion: z.boolean().optional(),
 		startedAt: instant.nullable(),
 		endsAt: instant.nullable(),
 		remainingSec: z.number().int().nonnegative().max(10800),
+		provenMs: z.number().finite().nonnegative().max(10800000).default(0),
+		pausedMs: z.number().finite().nonnegative().max(MAX_PAUSED_MS).default(0),
+		serverStarted: z.boolean().default(false),
 		boundTaskId: z.string().max(1024).nullable(),
 		boundTaskTitle: z.string().max(10000).nullable(),
 		config: z.unknown().transform(clampFocusConfig),
@@ -23,6 +29,7 @@ const sessionSchema = z
 	.refine(
 		(s) =>
 			s.remainingSec <= s.plannedSec &&
+			s.provenMs <= s.plannedSec * 1000 &&
 			(s.running
 				? s.startedAt !== null && s.endsAt !== null && s.endsAt >= s.startedAt
 				: s.endsAt === null),
@@ -32,11 +39,13 @@ export type FocusSessionState = z.infer<typeof sessionSchema>;
 const completionSchema = z
 	.object({
 		intervalId: z.uuid(),
+		proof: z.enum(["server", "monotonic"]).optional(),
 		taskId: z.string().max(1024).optional(),
 		kind: z.enum(["work", "break"]),
 		startedAt: instant,
 		endedAt: instant,
 		durationSec: z.number().int().min(1).max(10800),
+		pausedMs: z.number().int().min(0).max(MAX_PAUSED_MS).optional(),
 	})
 	.refine(
 		(s) =>
@@ -58,7 +67,14 @@ export function focusStorageKey(userId: string, scope?: string): string {
 	return `ditero:focus:${JSON.stringify([scope ?? "browser", userId])}`;
 }
 export function intervalFields(config: FocusConfig) {
-	return { intervalId: randomId(), config };
+	return {
+		intervalId: randomId(),
+		config,
+		provenMs: 0,
+		pausedMs: 0,
+		serverStarted: false,
+		waitingForCompletion: false,
+	};
 }
 
 // A read/write transaction serializes actions across tabs, including completion

@@ -88,13 +88,21 @@ jobs:
           bun-version: 1.4.2
       - run: bun install --frozen-lockfile
       - run: bun run build:clients
-      - name: Validate the local candidate identity and exact contents
+      - name: Validate bundle identity, checksums and third-party notices
         run: python3 scripts/release.py clients --output out/clients
-      - name: Qualify extracted clients without Bun or a checkout
+      - name: Install the minimum supported Bun
+        run: |
+          minimum="$(sed -n 's/.*MINIMUM_BUN = "\([0-9.]*\)";.*/\1/p' src/clients/build-info.ts)"
+          test -n "$minimum"
+          mkdir "$RUNNER_TEMP/minimum-bun"
+          (cd "$RUNNER_TEMP/minimum-bun" && printf '{"private":true}\n' > package.json && bun add "bun@$minimum")
+          echo "CLIENT_BUN_MINIMUM=$RUNNER_TEMP/minimum-bun/node_modules/.bin/bun" >> "$GITHUB_ENV"
+      - name: Qualify the extracted bundles on current and minimum Bun
         env:
           DATABASE_URL: postgres://postgres:pass@localhost:${{ job.services.postgres.ports['5432'] }}/ditero_clients
         run: |
           bun run db:migrate
-          STANDALONE_CLIENT_ARCHIVE="$(find out/clients -maxdepth 1 -name '*-clients-linux-x64.tar.gz' -print)"
-          export STANDALONE_CLIENT_ARCHIVE
-          bunx vitest run tests/integration/standalone-clients.test.ts
+          CLIENT_ARCHIVE="$(find out/clients -maxdepth 1 -name '*-clients.tar.gz' -print)"
+          export CLIENT_ARCHIVE
+          bunx vitest run tests/integration/terminal-bundles.test.ts
+          CLIENT_BUN="$CLIENT_BUN_MINIMUM" bunx vitest run tests/integration/terminal-bundles.test.ts

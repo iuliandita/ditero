@@ -102,9 +102,30 @@ async function apply(plan: {
 	expect(response.status, await response.clone().text()).toBe(200);
 	return response.json();
 }
-async function count(table: string) {
+const countedTables = [
+	"task",
+	"folder",
+	"import_source",
+	"import_job",
+	"task_completion_event",
+	"imported_completion_event",
+	"karma_event",
+	"notification_outbox",
+	"reminder_state",
+	"task_assignee",
+	"comment",
+	"attachment",
+	"label",
+] as const;
+const baselineCounts = new Map<string, number>();
+async function rowCount(table: string) {
 	return (await admin.query(`select count(*)::int n from ${table}`)).rows[0]
 		.n as number;
+}
+async function addedRows(table: string) {
+	const baseline = baselineCounts.get(table);
+	if (baseline === undefined) throw new Error(`Missing baseline for ${table}`);
+	return (await rowCount(table)) - baseline;
 }
 async function cleanupRows() {
 	if (!guarded) return;
@@ -211,6 +232,9 @@ beforeEach(async () => {
 	await admin.query(
 		`insert into membership(id,user_id,workspace_id,role) values('todoist-seat','todoist-owner','todoist-target','owner')`,
 	);
+	baselineCounts.clear();
+	for (const table of countedTables)
+		baselineCounts.set(table, await rowCount(table));
 });
 afterAll(async () => {
 	const failures: { step: string; error: unknown }[] = [];
@@ -272,19 +296,25 @@ test("direct restricted LOGIN previews/applies open snapshots with section names
 		identityMode: "snapshot-rows",
 		snapshotSha256: value.input.snapshotSha256,
 	});
-	expect(await count("task")).toBe(0);
+	expect(await addedRows("task")).toBe(0);
 	expect((await apply(plan)).state).toBe("completed");
-	expect((await admin.query("select name from folder")).rows).toEqual([
-		{ name: "Imported project" },
-	]);
 	expect(
-		(await admin.query("select title from list order by sort_key")).rows.map(
-			(row) => row.title,
-		),
+		(
+			await admin.query(
+				"select name from folder where workspace_id='todoist-target'",
+			)
+		).rows,
+	).toEqual([{ name: "Imported project" }]);
+	expect(
+		(
+			await admin.query(
+				"select title from list where workspace_id='todoist-target' order by sort_key",
+			)
+		).rows.map((row) => row.title),
 	).toEqual(["Unsectioned", "Same section", "Same section", "Empty section"]);
 	const tasks = (
 		await admin.query(
-			"select id,title,notes,priority,done,due_at,parent_id from task order by list_id,sort_key",
+			"select id,title,notes,priority,done,due_at,parent_id from task where list_id in (select id from list where workspace_id='todoist-target') order by list_id,sort_key",
 		)
 	).rows;
 	expect(tasks).toHaveLength(3);
@@ -305,7 +335,7 @@ test("direct restricted LOGIN previews/applies open snapshots with section names
 		"attachment",
 		"label",
 	])
-		expect(await count(table)).toBe(0);
+		expect(await addedRows(table)).toBe(0);
 	expect((await apply(plan)).state).toBe("completed");
 	const replay = await save({
 		...value,
@@ -313,7 +343,7 @@ test("direct restricted LOGIN previews/applies open snapshots with section names
 	});
 	expect(replay.documentDigest).toBe(plan.documentDigest);
 	expect((await apply(replay)).state).toBe("completed");
-	expect(await count("task")).toBe(3);
+	expect(await addedRows("task")).toBe(3);
 });
 test("every exact-byte or mapping change refuses existing-source reuse and requires an explicit new copy", async () => {
 	const value = await body();
@@ -351,11 +381,11 @@ test("every exact-byte or mapping change refuses existing-source reuse and requi
 			})
 		).status,
 	).toBe(409);
-	expect(await count("import_job")).toBe(1);
-	expect(await count("task")).toBe(0);
+	expect(await addedRows("import_job")).toBe(1);
+	expect(await addedRows("task")).toBe(0);
 	const separate = await save(await body(changed[2]));
 	expect(separate.sourceId).not.toBe(value.source.id);
-	expect(await count("import_source")).toBe(2);
+	expect(await addedRows("import_source")).toBe(2);
 });
 test("forged digest, policy and ownership cannot create a plan or content", async () => {
 	const value = await body();
@@ -385,9 +415,9 @@ test("forged digest, policy and ownership cannot create a plan or content", asyn
 	expect(await unauthorized.json()).toEqual({
 		code: "invalid-workspace-mapping",
 	});
-	expect(await count("import_source")).toBe(0);
-	expect(await count("import_job")).toBe(0);
-	expect(await count("task")).toBe(0);
+	expect(await addedRows("import_source")).toBe(0);
+	expect(await addedRows("import_job")).toBe(0);
+	expect(await addedRows("task")).toBe(0);
 });
 test("database validates exact bindings, pins immutable source/job proof and rejects raw forgery", async () => {
 	const value = await body();
@@ -490,9 +520,9 @@ test("current role loss and outsider access refuse saved apply without content e
 		counts: plan.report.counts,
 	});
 	expect(response.status).toBe(403);
-	expect(await count("task")).toBe(0);
-	expect(await count("folder")).toBe(0);
-	expect(await count("notification_outbox")).toBe(0);
+	expect(await addedRows("task")).toBe(0);
+	expect(await addedRows("folder")).toBe(0);
+	expect(await addedRows("notification_outbox")).toBe(0);
 });
 test("existing CSV predicate remains exact and accepts only its unchanged version1 binding shape", async () => {
 	const old = readFileSync(

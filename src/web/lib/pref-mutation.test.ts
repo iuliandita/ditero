@@ -43,6 +43,19 @@ function boundary(storage: Storage, generation: string) {
 }
 
 describe("mutationServerSucceeded", () => {
+	test.each([
+		success,
+		{ type: "success", data: undefined },
+		{ type: "success", data: { saved: true } },
+	])("accepts successful mutation results %j", async (value) => {
+		await expect(
+			mutationServerSucceeded({
+				client: Promise.resolve(value),
+				server: Promise.resolve(value),
+			}),
+		).resolves.toBe(true);
+	});
+
 	test("does not report success before both local and server results arrive", async () => {
 		const client = deferred();
 		const server = deferred();

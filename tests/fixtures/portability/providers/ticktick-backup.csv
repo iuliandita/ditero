@@ -1,0 +1,10 @@
+"Date: 2026-01-15 +0000"
+"Version: 7.2"
+"Status: 0 Normal, 1 Completed, 2 Archived"
+Folder Name,List Name,Title,Kind,Tags,Content,Is Check list,Start Date,Due Date,Reminder,Repeat,Priority,Status,Created Time,Completed Time,Order,Timezone,Is All Day,Is Floating,Column Name,Column Order,View Mode,taskId,parentId,projectKind
+Home,Routine,Reset kitchen,CHECKLIST,"home, weekly","Weekly reset
+▫ Wipe table
+▪ Empty bin",Y,,2026-01-18T00:00:00+0000,TRIGGER:P0DT9H0M0S,FREQ=WEEKLY;INTERVAL=1,5,0,,,,UTC,true,,Weekend,,kanban,kitchen,,TASK
+Home,Routine,Sort cupboard,TEXT,,,,,,,,3,0,,,,UTC,,,Weekend,,,cupboard,kitchen,
+Home,Routine,Sort cups,TEXT,,,,,,,,1,0,,,,UTC,,,Weekend,,,cups,cupboard,
+Home,Errands,Return book,TEXT,town,Completed example,,,2026-01-15T18:15:00+0100,,,0,1,,2026-01-15T17:00:00+0000,,Europe/Berlin,false,,,,,book,,

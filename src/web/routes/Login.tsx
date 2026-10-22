@@ -1,4 +1,4 @@
-import { KeyRound } from "lucide-react";
+import { Building2, KeyRound } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
 	DISPLAY_NAME_MAX_LENGTH,
@@ -8,8 +8,10 @@ import {
 	PASSWORD_MAX_LENGTH,
 	PASSWORD_MIN_LENGTH,
 } from "../../auth/password-policy.ts";
+import type { SignInProviderOption } from "../../auth/provider-names.ts";
 import { m } from "../../paraglide/messages.js";
-import { GoogleMark } from "../components/auth/GoogleMark.tsx";
+import type { PublicSsoProvider } from "../../server/public-config.ts";
+import { ProviderMark } from "../components/auth/ProviderMark.tsx";
 import { BrandLogo } from "../components/BrandLogo.tsx";
 import { LanguageSwitcher } from "../components/settings/LanguageSwitcher.tsx";
 import { Button } from "../components/ui/button.tsx";
@@ -19,7 +21,10 @@ import { authErrorMessage, totpErrorMessage } from "../lib/auth-messages.ts";
 import { signInEmail } from "../lib/email-sign-in.ts";
 import { fetchPublicConfig } from "../lib/public-config.ts";
 import { passkeysAvailable } from "../lib/secure-context.ts";
+import { signInProviderOptions } from "../lib/sign-in-providers.ts";
+import { signInReturnPath } from "../lib/sign-in-return.ts";
 import {
+	retirementErrorMessage,
 	runAfterZeroRetirement,
 	ZeroRetirementError,
 } from "../lib/zero-lifecycle.ts";
@@ -41,9 +46,13 @@ export function AuthShell({ children }: { children: ReactNode }) {
 	);
 }
 
-// `callbackURL` only carries a same-origin return path through the Google
-// redirect; the caller builds it, and the other sign-in flows ignore it.
-export function Login({ callbackURL }: { callbackURL?: string } = {}) {
+export function Login({
+	callbackURL,
+	twoFactor = false,
+}: {
+	callbackURL?: string;
+	twoFactor?: boolean;
+} = {}) {
 	const [mode, setMode] = useState<"signin" | "signup">("signin");
 	const [email, setEmail] = useState("");
 	const [displayName, setDisplayName] = useState("");
@@ -53,13 +62,15 @@ export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 	const [callbackError, setCallbackError] = useState(() =>
 		new URLSearchParams(window.location.search).get("error"),
 	);
-	const [googleEnabled, setGoogleEnabled] = useState(false);
+	const [providers, setProviders] = useState<SignInProviderOption[]>([]);
+	const [ssoProviders, setSsoProviders] = useState<PublicSsoProvider[]>([]);
 	useEffect(() => {
 		let active = true;
 		void fetchPublicConfig().then(
 			(config) => {
-				if (active)
-					setGoogleEnabled(config.socialProviders?.includes("google") === true);
+				if (!active) return;
+				setProviders(signInProviderOptions(config));
+				setSsoProviders(config.ssoProviders ?? []);
 			},
 			() => {
 				// Email and passkeys remain usable when config is unavailable.
@@ -69,7 +80,7 @@ export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 			active = false;
 		};
 	}, []);
-	const [needsTwoFactor, setNeedsTwoFactor] = useState(false);
+	const [needsTwoFactor, setNeedsTwoFactor] = useState(twoFactor);
 	const [twoFactorCode, setTwoFactorCode] = useState("");
 	const [backupCode, setBackupCode] = useState("");
 	const [pending, setPending] = useState(false);
@@ -96,7 +107,7 @@ export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 		} catch (error) {
 			setError(
 				error instanceof ZeroRetirementError
-					? m.sync_save_pending_failed()
+					? retirementErrorMessage(error)
 					: fallback(),
 			);
 		} finally {
@@ -143,19 +154,38 @@ export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 			const res = await authClient.signIn.passkey();
 			if (res.error)
 				setError(authErrorMessage(res.error, m.login_error_passkey_failed));
+			else if (
+				(res.data as { twoFactorRedirect?: boolean } | null)?.twoFactorRedirect
+			)
+				setNeedsTwoFactor(true);
 		}, m.login_error_passkey_failed);
 	}
 
-	function signInGoogle() {
+	function signInWith(provider: string) {
 		void runAction(async () => {
 			const errorURL = new URL(window.location.href);
 			errorURL.searchParams.delete("error");
 			errorURL.searchParams.delete("error_description");
 			errorURL.hash = "";
 			const res = await authClient.signIn.social({
-				provider: "google",
+				provider,
 				errorCallbackURL: errorURL.href,
 				...(callbackURL ? { callbackURL } : {}),
+			});
+			if (res.error)
+				setError(authErrorMessage(res.error, m.login_error_sign_in_failed));
+		}, m.login_error_sign_in_failed);
+	}
+
+	function signInSso(provider: PublicSsoProvider) {
+		void runAction(async () => {
+			// The server accepts only a few app routes as return addresses, so a deep
+			// link falls back to the root rather than failing the sign-in.
+			const returnTo = callbackURL ?? "/";
+			const res = await authClient.signIn.sso({
+				providerId: provider.id,
+				callbackURL: returnTo,
+				errorCallbackURL: returnTo,
 			});
 			if (res.error)
 				setError(authErrorMessage(res.error, m.login_error_sign_in_failed));
@@ -168,6 +198,7 @@ export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 				code: twoFactorCode,
 			});
 			if (res.error) setError(totpErrorMessage(res.error));
+			else finishTwoFactor();
 		}, m.login_error_totp_network);
 	}
 
@@ -180,7 +211,14 @@ export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 				setError(
 					authErrorMessage(res.error, m.login_error_invalid_backup_code),
 				);
+			else finishTwoFactor();
 		}, m.login_error_invalid_backup_code);
+	}
+
+	function finishTwoFactor() {
+		window.location.assign(
+			signInReturnPath(callbackURL ?? null, window.location.origin),
+		);
 	}
 
 	const visibleError =
@@ -391,7 +429,16 @@ export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 				</Button>
 			</form>
 			{mode === "signin" && (
-				<details className="mt-3 text-sm text-muted-foreground">
+				<a
+					data-testid="login-forgot-password"
+					href="/reset-password"
+					className="mt-3 inline-flex min-h-11 items-center rounded-sm text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+				>
+					{m.login_forgot_password()}
+				</a>
+			)}
+			{mode === "signin" && (
+				<details className="text-sm text-muted-foreground">
 					<summary
 						data-testid="login-recovery"
 						className="min-h-11 cursor-pointer content-center rounded-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
@@ -421,19 +468,36 @@ export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 					<KeyRound aria-hidden="true" />
 					{m.login_signin_passkey()}
 				</Button>
-				{googleEnabled && (
+				{providers.map((provider) => (
 					<Button
-						data-testid="signin-google"
+						key={provider.id}
+						data-testid={`signin-${provider.id}`}
 						type="button"
 						variant="outline"
 						className="h-11 w-full"
-						onClick={signInGoogle}
+						onClick={() => signInWith(provider.id)}
 						disabled={pending}
 					>
-						<GoogleMark />
-						{m.login_continue_google()}
+						<ProviderMark provider={provider} />
+						{provider.id === "google"
+							? m.login_continue_google()
+							: m.login_continue_with({ provider: provider.name })}
 					</Button>
-				)}
+				))}
+				{ssoProviders.map((provider) => (
+					<Button
+						key={provider.id}
+						data-testid="signin-sso"
+						type="button"
+						variant="outline"
+						className="h-11 w-full"
+						onClick={() => signInSso(provider)}
+						disabled={pending}
+					>
+						<Building2 aria-hidden="true" />
+						{m.login_continue_sso({ name: provider.name })}
+					</Button>
+				))}
 			</div>
 			<p className="mt-6 text-center text-sm text-muted-foreground">
 				{mode === "signup" ? m.login_existing_account() : m.login_new_here()}{" "}

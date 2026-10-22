@@ -107,7 +107,7 @@ test("defers timezone detection until stored-locale retirement reloads the accou
 	const old = generation(userID, () => durable.promise);
 	try {
 		flushEffects();
-		expect(old.retired).toHaveBeenCalledOnce();
+		expect(old.retired).not.toHaveBeenCalled();
 		expect(old.mutate).not.toHaveBeenCalled();
 		expect(fixture.applyLocale).not.toHaveBeenCalled();
 	} finally {
@@ -116,6 +116,7 @@ test("defers timezone detection until stored-locale retirement reloads the accou
 	}
 	// Let reconciliation apply the locale after the shared retirement settles.
 	await new Promise<void>((resolve) => setImmediate(resolve));
+	expect(old.retired).toHaveBeenCalledOnce();
 	expect(fixture.applyLocale).toHaveBeenCalledExactlyOnceWith("ar");
 	const replacement = generation(userID);
 	flushEffects();

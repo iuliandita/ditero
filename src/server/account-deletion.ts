@@ -351,6 +351,7 @@ async function removeAccount(
 		["karma", "user_id"],
 		["karma_event", "user_id"],
 		["focus_session", "user_id"],
+		["focus_interval_start", "user_id"],
 		["view", "owner_id"],
 		["dashboard", "owner_id"],
 		["managed_account", "user_id"],

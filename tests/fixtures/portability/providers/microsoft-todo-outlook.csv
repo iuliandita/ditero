@@ -1,0 +1,4 @@
+Subject,Start Date,Due Date,Reminder On/Off,Reminder Date,Reminder Time,Date Completed,% Complete,Total Work,Actual Work,Billing Information,Categories,Companies,Contacts,Mileage,Notes,Priority,Private,Role,Schedule+ Priority,Sensitivity,Status
+Prepare weekend list,,1/18/2026,True,1/18/2026,9:00:00 AM,,0,,,,Household;Weekend,,,,"First line
+Second line with ""quotes""",High,,,,,Not Started
+Return library book,,1/15/2026,,,,1/15/2026,100,,,,Errands,,,,+Literal text,Normal,,,,,Completed

@@ -10,6 +10,9 @@ use std::sync::{
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot, Notify};
 
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+mod native;
+
 #[derive(Clone)]
 pub struct Owner {
     pub registration: DesktopRegistration,
@@ -193,9 +196,29 @@ pub async fn supported() -> bool {
         .await
         .is_ok_and(|r| r.is_ok())
 }
-#[cfg(not(target_os = "linux"))]
-pub async fn supported() -> bool {
-    false
+pub async fn permission(request: bool) -> Result<()> {
+    #[cfg(target_os = "linux")]
+    {
+        let _ = request;
+        if supported().await {
+            Ok(())
+        } else {
+            Err("unsupported")
+        }
+    }
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    {
+        native::permission(request).await
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
+    {
+        let _ = request;
+        Err("unsupported")
+    }
+}
+pub fn initialize() {
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    native::initialize();
 }
 pub fn start(
     owner: Owner,
@@ -214,7 +237,12 @@ pub fn start(
         }
         #[cfg(all(not(test), target_os = "linux"))]
         linux::run(captured, http, events, fences).await;
-        #[cfg(all(not(test), not(target_os = "linux")))]
+        #[cfg(all(not(test), any(target_os = "windows", target_os = "macos")))]
+        native::run(captured, http, events, fences).await;
+        #[cfg(all(
+            not(test),
+            not(any(target_os = "linux", target_os = "windows", target_os = "macos"))
+        ))]
         {
             let _ = (http, fences);
             let _ = events.send(Event::State(captured, "unsupported")).await;

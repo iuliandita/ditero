@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import release from "../../release.json";
+import { MINIMUM_BUN } from "../clients/build-info.ts";
 import { CliError, canonicalServer, parseArguments } from "./arguments.ts";
 import {
 	discover,
@@ -282,9 +283,15 @@ it("prints release identity without credentials or a network request", async () 
 	const stderr = vi.fn();
 	const fetcher = vi.fn();
 	expect(await runCli(["--version"], {}, { stdout, stderr }, fetcher)).toBe(0);
-	expect(stdout).toHaveBeenCalledWith(
-		`ditero ${release.version} (development+modified; source)\n`,
-	);
+	expect(JSON.parse(stdout.mock.calls[0][0])).toEqual({
+		name: "ditero",
+		version: release.version,
+		commit: "development",
+		dirty: true,
+		target: "source",
+		minimumBun: MINIMUM_BUN,
+		bun: process.versions.bun ?? null,
+	});
 	expect(stderr).not.toHaveBeenCalled();
 	expect(fetcher).not.toHaveBeenCalled();
 	expect(

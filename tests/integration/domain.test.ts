@@ -23,7 +23,7 @@ const users = ["owner", "member", "viewer", "outsider"] as const;
 type Ctx = { id: string };
 async function call<A>(
 	mutator: {
-		fn: (a: { tx: Transaction<Schema>; ctx: Ctx; args: A }) => Promise<void>;
+		fn: (a: { tx: Transaction<Schema>; ctx: Ctx; args: A }) => Promise<unknown>;
 	},
 	ctx: Ctx,
 	args: A,

@@ -65,7 +65,13 @@ export const account = pgTable(
 			.$onUpdate(() => /* @__PURE__ */ new Date())
 			.notNull(),
 	},
-	(table) => [index("account_userId_idx").on(table.userId)],
+	(table) => [
+		index("account_userId_idx").on(table.userId),
+		uniqueIndex("account_provider_account_uidx").on(
+			table.providerId,
+			table.accountId,
+		),
+	],
 );
 
 export const verification = pgTable(
@@ -90,6 +96,8 @@ export const jwks = pgTable("jwks", {
 	privateKey: text("private_key").notNull(),
 	createdAt: timestamp("created_at").notNull(),
 	expiresAt: timestamp("expires_at"),
+	alg: text("alg"),
+	crv: text("crv"),
 });
 
 export const passkey = pgTable(

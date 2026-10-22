@@ -24,6 +24,11 @@ alter database ditero owner to ditero_migrator;
 alter schema public owner to ditero_migrator;
 grant connect on database ditero to ditero_runtime;
 grant usage on schema public to ditero_runtime;
+create schema server_private authorization ditero_migrator;
+revoke all on schema server_private from public;
+grant usage on schema server_private to ditero_runtime;
+alter default privileges for role ditero_migrator in schema server_private
+  grant select, insert, update on tables to ditero_runtime;
 alter default privileges for role ditero_migrator in schema public
   grant select, insert, update, delete on tables to ditero_runtime;
 alter default privileges for role ditero_migrator in schema public
@@ -36,6 +41,152 @@ this fix. Existing coordinated database/blob backups and client versions remain
 compatible. Application rollback can restore the former TEMP requirement
 and the 403 response for foreign attachment downloads; current downloads return
 404 for both foreign and missing IDs. Rollback needs no data conversion.
+
+## Better Auth 1.7 upgrade
+
+Before upgrading, check for duplicate provider account keys. Resolve any results
+against the provider's verified identities; do not merge different users:
+
+```sql
+select provider_id, account_id, count(*) from account
+group by provider_id, account_id having count(*) > 1;
+```
+
+The `account_provider_unique` migration adds a unique index on
+`(provider_id, account_id)` so concurrent link flows cannot create the duplicates
+Better Auth 1.7 rejects. It runs this same check first and fails with a message
+pointing here, without changing or deleting any row; fix the rows and rerun
+`bun run db:migrate`. The index is additive: the 1.6.23 app ignores it, so leave it
+in place on application rollback.
+
+Stop app replicas and Zero, then take a coordinated database and attachment backup
+with the original authentication secret and encryption keys. Run `bun run db:migrate`
+using the migration owner before starting the updated app and then Zero. The
+`better_auth_jwks` migration adds nullable `alg` and `crv` text columns to `jwks`;
+it preserves existing key rows and needs no account-schema or key conversion.
+Keep the runtime login `NOSUPERUSER NOBYPASSRLS`; existing table DML grants cover
+the added columns. Verify sign-in and token issuance after the upgrade.
+
+The previous app version using Better Auth 1.6.23 tolerates both added columns
+on rollback: it ignores them and continues using the same Ed25519 keys and
+encrypted private-key format. Leave the additive migration in place when rolling
+back the app. Restore a database backup only with its matching service secrets
+and attachment backup; do not replace the original keys. An older database
+snapshot also discards newer sessions and other changes.
+
+Existing web, Android and desktop client versions retain their session and native
+consent protocols. Reload web clients to load the updated TOTP enrollment caller;
+the Google callback stays `/api/auth/callback/google`. Reload web clients after
+an app rollback too, so their TOTP caller matches the server's response format.
+Retain browser storage until queued edits sync, and verify sign-in again.
+
+## Zero 1.11 upgrade and rollback
+
+Zero is pinned to 1.11.1 across the client and cache runtime. Upstream publishes
+this patch under its staging npm dist-tag; the latest dist-tag is 1.11.0.
+Read the [1.11 release notes](https://zero.rocicorp.dev/docs/release-notes/1.11)
+and [1.10 notes](https://zero.rocicorp.dev/docs/release-notes/1.10) before upgrading
+from 1.9.
+
+Before replacing any client bundle, bring every browser, Android and desktop
+client online and verify its pending edits reach PostgreSQL. The 1.9-to-1.11
+client upgrade creates a new local database and does not carry unsent mutations
+forward. Keep offline clients on their existing bundle until they reconnect and
+sync; preserving browser storage alone cannot transfer those queued edits. Do
+not force a reload, clear site data, or uninstall an offline native client.
+
+Native clients carry their bundle: an Android or desktop update installs the new
+client immediately, so sync each device before installing it. The web bundle
+comes from the app image, so browsers change when the server does.
+
+Zero names each local IndexedDB database after the account, storage scope and
+client schema version (`rep:zero-<user>-<key>:7:<schema>`). 1.9 used schema
+`51.<hash>` and 1.11 uses `52.<hash>`; the hash also changes whenever a release
+changes the synced schema, which creates the same boundary. Zero runs without
+mutation recovery, so it never sends edits left in an earlier database, and its
+collector deletes an earlier database about five minutes after each start, and
+every 12 hours after that, once that database has had no client heartbeat for 48
+hours. Pending edits do not prevent this.
+
+On start, the app reads Zero's database registry and any earlier database for
+the same account and scope, without writing or creating databases. If an earlier
+database still holds unacknowledged edits, it shows a persistent warning asking
+the user to close the app, keep its data, and contact the operator. The check
+cannot run in browsers without `indexedDB.databases()` and logs that failure.
+Recovering those edits requires running the previous client against a server it
+can sync with, which means the rollback procedure below on that device's
+deployment. There is no in-place transfer. Without that, the edits are lost once
+the collector runs.
+
+Stop the app and Zero and take coordinated PostgreSQL, attachment and Zero replica
+backups with the original service secrets and encryption keys. Run application
+migrations, start the healthy app, and start the 1.11 Zero server before serving
+1.11 clients. Keep ingress in maintenance mode until both services are ready;
+the app image also serves the new browser bundle. New clients cannot connect to
+the old server. Allow startup time for replica migration and replication catch-up before declaring
+readiness. Keep the
+existing replication slot, app ID, shard and ZERO_APP_PUBLICATIONS configuration.
+Healthy 1.9 server replicas have incremental SQLite and upstream shard migrations;
+this upgrade does not require deleting the replica or resnapshotting PostgreSQL.
+Missing slots, incompatible publications or corrupt replicas can still require a
+reset. Monitor startup logs and verify both existing data and a new write sync.
+Queries rehydrate once after upgrade and again after rollback; allow for a burst
+of requests to the app query endpoint.
+
+Zero 1.11 mutation success results include a `data` field, including `undefined`
+for mutators without a return value. Preference saves and the export journal
+accept this result shape and still wait for both local and server success before
+reporting Saved or clearing pending-write markers.
+
+Keep the restricted runtime and migration role grants described below. CVR and
+CDC schema migrations run under Zero's privileged service login. Use a direct
+connection, and budget at least five change-database connections plus one per
+view-syncer; `ZERO_CHANGE_MAX_CONNS` no longer caps all these connections.
+
+Litestream V5 is now the default backup format. Custom backup configurations need
+`ZERO_LITESTREAM_CONFIG_PATH_V5` path and V5 format; retain the legacy
+configuration for legacy restores. Backup URLs need a trailing slash. Give each replica its own folder and
+retain both formats through the rollback window. Fork commands use `-fork-to-url`;
+removed VFS options must be removed from custom configuration. Test a restore
+before replacing an established backup workflow.
+
+For rollback, first stop serving 1.11 clients and deploy the previous client
+bundle, then stop the cache. Back up current data before changing server versions.
+Keep the retained replica together with its upstream shard and slot state. Test
+the exact downgrade against a restored copy first; a fresh 1.9 cache is not proof
+that an older binary can use a migrated upstream shard. If the retained downgrade
+fails, restore the coordinated pre-upgrade backup, or qualify Zero's documented
+shard/slot reset against a separate copy before using it. Never delete live
+PostgreSQL data or browser queues as a guessed repair. A full backup restoration
+needs the matching PostgreSQL,
+attachments, replica and secrets, and discards changes made after that snapshot.
+Verify sign-in, fresh-client sync and queued-write replay after rollback. Rolling
+back the client also has a local-database version boundary, so drain its queue
+first. Do not assume an old client can recover unsent 1.11 edits.
+
+## Private server clocks
+
+Migrations move focus timing evidence to `server_private.focus_interval_clock`.
+The migration owner owns this schema and table. The runtime needs schema `USAGE`
+and table `SELECT`, `INSERT`, `UPDATE`, with owner-scoped RLS; it needs no `DELETE`,
+`CREATE`, or ownership. The bounded expiry function deletes expired rows with the
+migration owner's privileges. For custom runtime role names, apply after migration:
+
+```sql
+grant usage on schema server_private to ditero_runtime;
+revoke all on server_private.focus_interval_clock from ditero_runtime;
+grant select, insert, update on server_private.focus_interval_clock to ditero_runtime;
+```
+
+Do not grant Zero access to this schema or include it in any publication. Both the
+default Zero publication and `ditero_public` below publish only `public`. Before
+upgrading, back up the full database, stop Zero, apply migrations and verify role
+grants. Deployments upgrading from develop need no cache rebuild: develop never
+had these focus tables. Only local caches built from earlier branch rounds that
+copied the public clock table need rebuilding; a schema move does not erase those
+old cache files. Verify fresh-client sync and absence from `pg_publication_tables`. Preserve PostgreSQL and pending
+browser edits. Intermediate builds querying the old public table need a matching
+database rollback from backup; the preceding published release ignores the table.
 
 ## Non-superuser Zero login and publication
 
@@ -79,6 +230,10 @@ PostgreSQL backups or guarantee repair of every failed initial sync.
 Run application migrations and wait for app `/health` before starting Zero.
 Without superuser DDL event triggers, Zero uses degraded schema-change detection;
 keep automatic reset enabled and verify fresh-client sync after migrations.
+`MissingEventTriggerSupport` with a tables-created-or-dropped diagnostic means
+Zero observed schema changes it cannot replicate incrementally. Capture its
+previous log, stop Zero, finish migrations, and restart using the documented reset
+setting. Do not grant the app runtime superuser access to repair this failure.
 
 ## Zero's shard schema
 
@@ -116,21 +271,54 @@ Clients retry temporary API and database failures and replay queued edits when t
 stack recovers. Invalid or revoked sessions still require sign-in; permission and
 protocol errors are not treated as successful writes.
 
-Zero 1.9.0 stops its client reconnect loop on `PushFailed` and `TransformFailed`,
-even after the cache's four API attempts fail with a network error or HTTP 5xx.
-The bundled package patch keeps those transport failures, database transaction
-failures and recognized cache database-connectivity errors on Zero's existing
-reconnect loop. It preserves authentication refusals,
-malformed-request failures and the durable-close patch. Persistent database faults
+The bundled Zero 1.11.1 package patch keeps temporary PushFailed and
+TransformFailed transport errors, database transaction failures and recognized
+cache database-connectivity errors on Zero's reconnect loop. It preserves
+authentication refusals and malformed-request failures. Persistent database faults
 still need operator repair; retrying does not grant missing privileges.
 
-Upgrade the app and reload open clients to load the corrected bundle. Existing
-clients running an older bundle can remain stopped until reloaded; their queued
-edits remain in browser storage. Take the usual database and attachment backup
-before an upgrade, and keep browser storage until pending edits sync. This change
-does not alter storage formats or require a database migration. A rollback to an
-older client version restores the outage-recovery defect; reload clients after a
-rollback and verify pending edits reach the server.
+The durable-close patch blocks new writes immediately, waits for accepted local
+commits and forces persistence before closing storage. Network shutdown follows
+that preflight on the first successful close attempt; callbacks still cannot
+accept reentrant mutations. Failed persistence retains handles for explicit retry
+and blocks account navigation. Zero 1.11's paused background persistence does not
+bypass that final durability check.
+
+Zero reports local storage failures once per client through `onStorageFailure`:
+`cannot-open` and `full` when the database cannot open, after which the client
+runs in memory for the session, and `io-error` or `full` after opening, after
+which it stops persisting. The package patch also classifies native IndexedDB
+quota and transaction DOMExceptions after a successful open. The sync indicator
+then shows that changes are not saved on this device and are kept only once they
+reach the server. Storage warnings take precedence over rejection and expired
+session messages; none promises device saving in this state. While the client is
+offline in that state, new edits are refused rather than accepted into memory.
+
+Accepted edits stay in the running client and continue to sync. Sign-out,
+sign-in-again, language changes and account switches are blocked while storage
+has failed and the actual local mutation queue remains unacknowledged. The
+localized warning gives the queue count and asks the user to keep the app open,
+let the server acknowledge the edits, then retry. Reconnection alone is not proof
+of acknowledgement. The close barrier also checks failures first discovered
+while persisting, before stopping sync. After the queue drains, retirement can
+close a memory-only client without requiring its unavailable storage.
+Initialization and memory fallback retries wait only for a predecessor client
+to close. Closing during a slow initial open still settles. With no accepted
+edits it closes;
+unacknowledged accepted edits retain the same storage-failure refusal. Pending
+queue inspection also settles or rejects if initialization fails. There is
+no discard action. Closing a tab or terminating a process can still lose
+memory-only edits; free storage, let pending edits sync, then restart.
+
+The earlier-data scan checks at most 20 databases, with a five-second limit per
+request and a 30-second overall budget. Findings appear incrementally. Blocked,
+unreadable or timed-out data produces an incomplete-check warning; a clean result
+is not claimed for data that could not be inspected. Scan connections yield to
+version changes and close even if an open finishes after its timeout.
+
+Follow the upgrade and rollback procedure above when moving from 1.9; that client
+storage boundary applies even though the retry patch itself does not change data
+formats. Verify pending edits reach the server after an outage.
 
 ## Bundled secrets and incomplete initialization
 
@@ -178,7 +366,8 @@ for upstream details; managed providers may impose additional replication limits
 
 Start the application and wait for `/health` before starting Zero. Compose gates
 Zero on app health; the AIO bundle additionally waits for its migration service.
-The Helm chart waits for the app belonging to the current release revision.
+The Helm chart waits for the app belonging to the current release revision, and
+the Kustomize base waits for the app serving the current image reference.
 When migrating manually, stop Zero first and wait for app migrations to finish.
 
 `ZERO_AUTO_RESET=true` handles supported replication/schema-change resets; it is

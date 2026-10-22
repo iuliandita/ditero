@@ -2,8 +2,9 @@
 // assertions read the DATA bytes the sink received, over a fixture that
 // deliberately contains everything the mail must not carry: a task title, a list
 // title, another member's address, and the invitee's role.
+import { randomUUID } from "node:crypto";
 import { createServer, type Server, type Socket } from "node:net";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import {
@@ -28,11 +29,17 @@ if (!databaseURL) throw new Error("DATABASE_URL is required");
 const pool = new Pool({ connectionString: databaseURL });
 const db = drizzle(pool, { schema: tables });
 
-// Every string here must be absent from the mail, and each is distinctive enough
-// that a substring assertion cannot pass by accident.
+const fixtureId = `invite-mail-${randomUUID()}`;
+const ownerId = `${fixtureId}-owner`;
+const bystanderId = `${fixtureId}-bystander`;
+const workspaceId = `${fixtureId}-workspace`;
+const listId = `${fixtureId}-list`;
+const taskId = `${fixtureId}-task`;
+
+// Distinctive canaries make the mail's omission assertions meaningful.
 const SECRET_TASK = "PLUTONIUM-SMUGGLING-ROUTE";
 const SECRET_LIST = "OPERATION-QUIET-BADGER";
-const SECRET_MEMBER_EMAIL = "bystander@leak-canary.invalid";
+const SECRET_MEMBER_EMAIL = `bystander-${fixtureId}@leak-canary.invalid`;
 
 const sinks: SmtpSink[] = [];
 const blackHoles: Array<() => void> = [];
@@ -86,47 +93,55 @@ const ENV = { DITERO_PUBLIC_URL: "https://todo.example" };
 
 async function seed() {
 	await db.insert(tables.user).values([
-		{ id: "owner", name: "Ada Lovelace", email: "owner@test.invalid" },
-		{ id: "bystander", name: "Bystander", email: SECRET_MEMBER_EMAIL },
+		{ id: ownerId, name: "Ada Lovelace", email: `${fixtureId}@test.invalid` },
+		{ id: bystanderId, name: "Bystander", email: SECRET_MEMBER_EMAIL },
 	]);
 	await db.insert(tables.workspace).values({
-		id: "shared",
+		id: workspaceId,
 		name: "Renovation",
-		ownerId: "owner",
+		ownerId,
 		kind: "shared",
 	});
 	await db.insert(tables.membership).values([
-		{ id: "m-owner", userId: "owner", workspaceId: "shared", role: "owner" },
+		{ id: `${fixtureId}-m-owner`, userId: ownerId, workspaceId, role: "owner" },
 		{
-			id: "m-bystander",
-			userId: "bystander",
-			workspaceId: "shared",
+			id: `${fixtureId}-m-bystander`,
+			userId: bystanderId,
+			workspaceId,
 			role: "member",
 		},
 	]);
 	await db.insert(tables.list).values({
-		id: "shared-list",
-		workspaceId: "shared",
-		ownerId: "owner",
+		id: listId,
+		workspaceId,
+		ownerId,
 		title: SECRET_LIST,
 		sortKey: "a0",
 	});
 	await db.insert(tables.task).values({
-		id: "shared-task",
-		listId: "shared-list",
+		id: taskId,
+		listId,
 		title: SECRET_TASK,
 		sortKey: "a0",
 	});
 }
 
 async function clean() {
-	await db.delete(tables.taskAssignee);
-	await db.delete(tables.invite);
-	await db.delete(tables.task);
-	await db.delete(tables.list);
-	await db.delete(tables.membership);
-	await db.delete(tables.workspace);
-	await db.delete(tables.user);
+	await db
+		.delete(tables.taskAssignee)
+		.where(eq(tables.taskAssignee.taskId, taskId));
+	await db
+		.delete(tables.invite)
+		.where(eq(tables.invite.workspaceId, workspaceId));
+	await db.delete(tables.task).where(eq(tables.task.id, taskId));
+	await db.delete(tables.list).where(eq(tables.list.id, listId));
+	await db
+		.delete(tables.membership)
+		.where(eq(tables.membership.workspaceId, workspaceId));
+	await db.delete(tables.workspace).where(eq(tables.workspace.id, workspaceId));
+	await db
+		.delete(tables.user)
+		.where(inArray(tables.user.id, [ownerId, bystanderId]));
 }
 
 beforeEach(async () => {
@@ -139,8 +154,6 @@ afterEach(async () => {
 	await Promise.all(sinks.splice(0).map((s) => s.close()));
 });
 
-// Left behind, this fixture's list rows break any later file whose own cleanup
-// deletes `workspace` before `list`.
 afterAll(async () => {
 	await clean();
 	await pool.end();
@@ -153,8 +166,8 @@ async function createAndMail(
 	extra: Partial<Parameters<typeof createInvite>[0]> = {},
 ) {
 	const invite = await createInvite(
-		{ workspaceId: "shared", role: "member", email, ...extra },
-		"owner",
+		{ workspaceId, role: "member", email, ...extra },
+		ownerId,
 		db,
 		ENV,
 	);
@@ -162,8 +175,8 @@ async function createAndMail(
 		{
 			email,
 			token: invite.token,
-			workspaceId: "shared",
-			inviterId: "owner",
+			workspaceId,
+			inviterId: ownerId,
 		},
 		{
 			database: db,
@@ -197,7 +210,7 @@ describe("invite mail", () => {
 	test("the mail carries no task, list, member or role detail", async () => {
 		const started = await sink();
 		const { mail } = await createAndMail(started, "invitee@example.test", {
-			attachTaskId: "shared-task",
+			attachTaskId: taskId,
 			attachKind: "assign",
 		});
 		expect(mail).toEqual({ status: "sent" });
@@ -208,8 +221,8 @@ describe("invite mail", () => {
 			SECRET_TASK,
 			SECRET_LIST,
 			SECRET_MEMBER_EMAIL,
-			"shared-task",
-			"shared-list",
+			taskId,
+			listId,
 		]) {
 			expect(message, secret).not.toContain(secret);
 		}
@@ -259,8 +272,8 @@ describe("invite mail", () => {
 	test("a dead SMTP server cannot hold the invite request open", async () => {
 		const mailer = await blackHoleMailer();
 		const invite = await createInvite(
-			{ workspaceId: "shared", role: "member", email: "invitee@example.test" },
-			"owner",
+			{ workspaceId, role: "member", email: "invitee@example.test" },
+			ownerId,
 			db,
 			ENV,
 		);
@@ -270,8 +283,8 @@ describe("invite mail", () => {
 			{
 				email: "invitee@example.test",
 				token: invite.token,
-				workspaceId: "shared",
-				inviterId: "owner",
+				workspaceId,
+				inviterId: ownerId,
 			},
 			{ database: db, env: ENV, mailer },
 		);
@@ -297,8 +310,8 @@ describe("invite mail", () => {
 			{
 				email: hijack,
 				token: "tok",
-				workspaceId: "shared",
-				inviterId: "owner",
+				workspaceId,
+				inviterId: ownerId,
 			},
 			{ database: db, env: ENV, mailer: mailerFor(started) },
 		);

@@ -371,11 +371,8 @@ describe("restoreChannelConfig", () => {
 		const restored = restoreChannelConfig("ntfy", incoming, null);
 		expect(Object.hasOwn(restored, "__proto__")).toBe(true);
 		expect(Object.getPrototypeOf(restored)).toBe(null);
-		// Zod skips `__proto__` rather than rejecting it as an unknown key, so
-		// `.strict()` is not what keeps this contained.
-		expect(
-			Object.keys(channelConfigSchema.ntfy.parse(restored) as object),
-		).toEqual(["serverUrl", "topic"]);
+		// Strict validation rejects the ordinary unknown property.
+		expect(channelConfigSchema.ntfy.safeParse(restored).success).toBe(false);
 	});
 
 	// Same key, but masked: it must be looked up with hasOwn on the previous

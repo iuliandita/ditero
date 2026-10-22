@@ -38,15 +38,59 @@ That browser sign-in uses separate IP-plus-email buckets and a household-sized
 per-IP ceiling checked before any email bucket is created; see
 [Trusted Proxy](trusted-proxy.md) for NAT and VPN limits.
 
-Google appears only when the server has both OAuth credentials configured. A
-registration-policy refusal returns to this page with the localized registration
-message and retains the grant ID; see [sign-in providers](sign-in-providers.md).
+Each social or OpenID Connect provider appears only when the operator has
+configured it; the page reads the same server-driven list as the web sign-in. A
+provider sign-in is the system browser's ordinary sign-in, so the approval step and
+the grant ID are unchanged. A registration-policy refusal returns to this page with
+the neutral localized `PROVIDER_SIGN_IN_REFUSED` message and retains the grant ID.
+New provider accounts require a provider-verified email in every registration mode.
+A provider email is never linked to an existing account automatically; link providers from browser
+settings. See [sign-in providers](sign-in-providers.md).
+SAML single sign-on, when configured, appears on the same page and returns to it
+with the grant ID intact; it uses the browser flow described in
+[SAML single sign-on](sign-in-providers.md#saml-single-sign-on) and adds no native
+credential path. A refused or unlinked identity returns here with a readable error.
+When local TOTP is enrolled, every sign-in provider requires the local second
+factor in the system browser before a session is returned. Provider-asserted MFA
+is not accepted in its place. The `/two-factor` page preserves the same-origin
+native approval URL and grant ID; the grant remains pending until verification
+and explicit device approval succeed. No native bearer or Zero token is available
+from the pending challenge. Keep the server and web bundle together when upgrading;
+reload open sign-in pages. Backup and rollback guidance is in
+[local second factor](sign-in-providers.md#local-second-factor-after-provider-sign-in).
 Preview exposes only the device label, expiry, and pending or approved status.
 An approved grant is visible only to its approving account while the original
 approving session remains live. Cancel leaves the request unapproved.
+"Forgot your password?" on that sign-in page starts a reset by email. The mailed
+link always opens the web reset page (`/reset-password`), never a native target
+supplied by the requesting client, so it works in any browser. It also works
+while a browser session is already signed in. The reset creates
+no session and the pending grant is not carried through it: start sign-in from
+the app again afterwards. A completed reset ends every browser and native session
+of the account and revokes its access tokens, calendar feed links, passkeys,
+linked provider sign-ins, other reset links and pending account-bound sign-in proofs
+(including two-factor challenges and trusted-device grants) in the same transaction.
+It also marks the email verified because the mailed token proves mailbox access.
+Existing two-factor enrollment and backup codes stay unchanged. Provider relinking
+still requires the server's linking policy to permit it; see
+[security](../security.md).
 Approval derives the user and approving session from the browser, not from
 request fields. A native session cannot approve another grant. There is no
 caller-supplied callback URL.
+
+Better Auth 1.7 keeps Google's `/api/auth/callback/google` redirect URI and the
+pending native approval URL; the other providers use `/api/auth/callback/<provider>`.
+Account-existence and registration-policy refusals share `PROVIDER_SIGN_IN_REFUSED`
+and omit `error_description`; clients localize the code. Other errors may retain a
+readable description. A registration-policy check that cannot run (for example during a database outage) returns the same way
+with `REGISTRATION_UNAVAILABLE`, so the system browser returns to the sign-in page
+with a localized error. The unapproved native grant still expires normally.
+TOTP enrollment explicitly requests the `totp` method
+and accepts setup keys from any response that carries them, including the method-less
+reply of a rolled-back 1.6 server.
+Before deploying 1.7, apply the additive JWT key migration described in
+[database roles](database-roles.md#better-auth-17-upgrade). Browser and native
+session credentials and the explicit approval step retain their existing format.
 
 Exchange consumes the approved grant before session creation. It releases its
 database transaction before calling the session adapter, then checks the live
@@ -208,6 +252,10 @@ still applies.
 
 The native client must retire its local sync client before changing account
 ownership and report network or local credential-cleanup failures truthfully.
+If local storage has failed, retirement waits for the actual pending mutation
+queue to reach the server. A blocked transition keeps the current sync client
+and its credentials active, reports the unsynced count, and permits retry after
+acknowledgement. It must not restart the provider or clear key material on failure.
 Local forgetting alone does not prove server revocation. The endpoint retains
 the same admission, no-store, and empty-body contract as native bootstrap.
 

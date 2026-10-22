@@ -26,6 +26,7 @@ import { mutationServerSucceeded } from "../lib/pref-mutation.ts";
 import { timeZoneToDetect } from "../lib/timezone-detection.ts";
 import {
 	isZeroClientOwnerActive,
+	retirementErrorMessage,
 	retireZeroClients,
 } from "../lib/zero-lifecycle.ts";
 
@@ -252,9 +253,9 @@ export function useUserPref(): {
 				applyDocumentLocale(locale);
 				setLocale(locale);
 			},
-			onError: (retry) =>
+			onError: (retry, error) =>
 				show({
-					message: m.sync_save_pending_failed(),
+					message: retirementErrorMessage(error),
 					action: { label: m.action_retry(), run: retry },
 				}),
 		});

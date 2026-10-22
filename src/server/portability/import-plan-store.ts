@@ -23,6 +23,10 @@ import {
 } from "../../domain/portability/import-plan-v2.ts";
 import { validateProviderConversion } from "../../domain/portability/providers/common.ts";
 import {
+	CONTENT_ADAPTER,
+	validateContentConversion,
+} from "../../domain/portability/providers/content-common.ts";
+import {
 	type ProviderInputBinding,
 	parseProviderBinding,
 	providerDocumentDigest,
@@ -358,31 +362,39 @@ export async function saveImportPlan(
 			options.historyApply
 		)
 			fail("invalid-provider-plan", 400);
-		validateProviderConversion(
-			{
-				adapter: binding.adapter,
-				adapterVersion: binding.adapterVersion,
-				sourceNamespace: binding.sourceNamespace,
-				identityMode: binding.identityMode,
-				document: input,
-				findings: [{ code: "untrusted-migration-owner", path: "sourceUserId" }],
-				...(binding.adapter === "todoist-project-csv"
-					? {
-							snapshotSha256: binding.snapshotSha256,
-							projectFolderName: binding.projectFolderName,
-							unsectionedListName: binding.unsectionedListName,
-						}
-					: binding.adapter === "trello-board-json"
+		if (binding.adapter === CONTENT_ADAPTER)
+			validateContentConversion({ ...binding, document: input }, options);
+		else
+			validateProviderConversion(
+				{
+					adapter: binding.adapter,
+					adapterVersion: binding.adapterVersion,
+					sourceNamespace: binding.sourceNamespace,
+					identityMode: binding.identityMode,
+					document: input,
+					findings: [
+						{ code: "untrusted-migration-owner", path: "sourceUserId" },
+					],
+					...(binding.adapter === "todoist-project-csv"
 						? {
 								snapshotSha256: binding.snapshotSha256,
-								boardIdSha256: binding.boardIdSha256,
+								projectFolderName: binding.projectFolderName,
+								unsectionedListName: binding.unsectionedListName,
 							}
-						: {}),
-			},
-			options,
-		);
+						: binding.adapter === "trello-board-json"
+							? {
+									snapshotSha256: binding.snapshotSha256,
+									boardIdSha256: binding.boardIdSha256,
+								}
+							: {}),
+				},
+				options,
+			);
 	}
-	const sourceFormat = binding?.adapter ?? input.format;
+	const sourceFormat =
+		binding?.adapter === CONTENT_ADAPTER
+			? `${CONTENT_ADAPTER}:${binding.provider}`
+			: (binding?.adapter ?? input.format);
 	const archive = input.schemaVersion === 2 ? input : null;
 	const document = archive
 		? ordinaryArchiveContent(archive)
@@ -504,6 +516,7 @@ export async function saveImportPlan(
 						deadline,
 						plannerVersion: options.plannerVersion,
 						v4Authority,
+						reuseProviderLabels: binding?.adapter === CONTENT_ADAPTER,
 					},
 				);
 				plan = await sealImportApplyPlan(frozen.items, frozen.snapshots, {

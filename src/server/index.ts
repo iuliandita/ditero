@@ -9,7 +9,7 @@ import { zeroNodePg } from "@rocicorp/zero/server/adapters/pg";
 import { APIError } from "better-auth";
 import type { Cron } from "croner";
 import { Elysia } from "elysia";
-import { auth, handleAuthRequest } from "../auth/auth.ts";
+import { auth, handleAuthRequest, ssoProviders } from "../auth/auth.ts";
 import { ensurePersonalWorkspace } from "../auth/bootstrap.ts";
 import {
 	acceptInvite,
@@ -320,15 +320,18 @@ const routes = new Elysia()
 	})
 	// `replica` echoes DITERO_REPLICA_ID verbatim (null when unset) rather than
 	// minting an identity here: startWorker resolves its own, and a second
-	// random one would name a process nothing else answers to.
+	// random one would name a process nothing else answers to. `revision` is
+	// the build commit baked into the image (null for unlabeled builds); the
+	// Kustomize migration gate compares it with the Zero image's own.
 	.get("/health", () => ({
 		ok: true,
 		replica: process.env.DITERO_REPLICA_ID ?? null,
+		revision: process.env.DITERO_GIT_SHA || null,
 	}))
 	// Runtime config for the web bundle. Unauthenticated because it carries only
 	// the zero-cache origin, which the CSP header already publishes to anyone
 	// who fetches the page.
-	.get("/api/config", () => publicConfig(process.env))
+	.get("/api/config", () => publicConfig(process.env, ssoProviders()))
 	// Better Auth catch-all: serves JWKS (GET) and all auth POSTs.
 	.all("/api/auth/*", ({ request, server }) =>
 		handleAuthRequest(request, server?.requestIP(request)?.address),

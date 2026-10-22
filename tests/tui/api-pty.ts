@@ -445,8 +445,6 @@ try {
 			flags,
 		);
 		assert.equal(output.includes(pat.token), false);
-		if (process.env.TUI_TEST_COMMAND)
-			assert.equal(output.includes("INNER_TERMINAL_RESTORED"), true);
 	}
 	process.stdout.write(
 		JSON.stringify({

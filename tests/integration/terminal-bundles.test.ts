@@ -1,6 +1,8 @@
-import { execFile, execFileSync, spawn } from "node:child_process";
+import { execFile, execFileSync, spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { readFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { Client } from "@modelcontextprotocol/client";
@@ -20,17 +22,13 @@ import {
 	createPersonalAccessToken,
 	revokePersonalAccessToken,
 } from "../../src/server/public-api/tokens.ts";
-import {
-	cleanupContainers,
-	containerCommand,
-	extractClients,
-} from "../clients/packaging.ts";
+import { bundleNames, bundlePath, extractBundles } from "../clients/bundles.ts";
 
-let packaged: Awaited<ReturnType<typeof extractClients>>;
+let packaged: Awaited<ReturnType<typeof extractBundles>>;
 const databaseURL = process.env.DATABASE_URL;
 if (!databaseURL) throw new Error("DATABASE_URL is required");
 const admin = new Pool({ connectionString: databaseURL });
-const role = `standalone_${randomUUID().replaceAll("-", "")}`;
+const role = `bundles_${randomUUID().replaceAll("-", "")}`;
 const runtimePassword = randomUUID();
 const runtimeURL = new URL(databaseURL);
 runtimeURL.username = role;
@@ -85,7 +83,7 @@ const server = createServer(async (incoming, outgoing) => {
 	}
 });
 beforeAll(async () => {
-	packaged = await extractClients();
+	packaged = await extractBundles();
 	await admin.query(
 		`create role "${role}" login password '${runtimePassword}' nosuperuser nocreatedb nocreaterole noinherit nobypassrls`,
 	);
@@ -141,11 +139,7 @@ beforeEach(async () => {
 	tokenId = pat.id;
 });
 afterEach(async () => {
-	try {
-		for (const client of clients.splice(0)) await client.close();
-	} finally {
-		cleanupContainers(packaged.extracted);
-	}
+	for (const client of clients.splice(0)) await client.close();
 	await admin.query("delete from task where list_id=$1", [list]);
 	await admin.query("delete from list where id=$1", [list]);
 	await admin.query("delete from membership where workspace_id=$1", [
@@ -178,9 +172,8 @@ async function cli(
 	operation = "complete-task",
 ) {
 	const child = spawn(
-		"docker",
+		bundlePath(packaged.extracted, "ditero"),
 		[
-			...containerCommand(packaged.extracted, "ditero"),
 			operation,
 			...(operation === "complete-task" ? ["--task", task] : []),
 			"--request-id",
@@ -189,7 +182,8 @@ async function cli(
 			"--allow-loopback-http",
 		],
 		{
-			env: { PATH: process.env.PATH, DITERO_URL: origin, DITERO_TOKEN: secret },
+			cwd: packaged.extracted,
+			env: { PATH: packaged.path, DITERO_URL: origin, DITERO_TOKEN: secret },
 			stdio: ["pipe", "pipe", "pipe"],
 		},
 	);
@@ -201,7 +195,6 @@ async function cli(
 	child.stderr.on("data", (chunk) => {
 		stderr += chunk.toString();
 	});
-	let originalFailure: unknown;
 	const timer = setTimeout(() => child.kill("SIGKILL"), 12_000);
 	try {
 		child.stdin.end(JSON.stringify(body));
@@ -209,10 +202,8 @@ async function cli(
 			child.once("error", reject);
 			child.once("close", resolve);
 		});
+		expect(stderr).not.toContain("HOSTILE_PRELOAD");
 		return { code, stdout, stderr };
-	} catch (error) {
-		originalFailure = error;
-		throw error;
 	} finally {
 		clearTimeout(timer);
 		if (child.exitCode === null && child.signalCode === null) {
@@ -221,20 +212,19 @@ async function cli(
 				child.once("close", () => resolve()),
 			);
 		}
-		cleanupContainers(packaged.extracted, originalFailure);
 	}
 }
 async function mcp(secret = token) {
 	const transport = new StdioClientTransport({
-		command: "docker",
-		args: [
-			...containerCommand(packaged.extracted, "ditero-mcp"),
-			"--allow-loopback-http",
-		],
-		env: { DITERO_URL: origin, DITERO_TOKEN: secret },
+		command: bundlePath(packaged.extracted, "ditero-mcp"),
+		args: ["--allow-loopback-http"],
+		cwd: packaged.extracted,
+		env: { PATH: packaged.path, DITERO_URL: origin, DITERO_TOKEN: secret },
 		stderr: "pipe",
 	});
-	transport.stderr?.on("data", () => {});
+	transport.stderr?.on("data", (chunk) => {
+		expect(chunk.toString()).not.toContain("HOSTILE_PRELOAD");
+	});
 	const client = new Client(
 		{ name: "actual-completion", version: "1" },
 		{ versionNegotiation: { mode: { pin: "2026-07-28" } } },
@@ -244,7 +234,7 @@ async function mcp(secret = token) {
 	return client;
 }
 const once = { history: 1, karma: 1, receipts: 1 };
-test("packaged no-Bun CLI completes undated task and replays without duplicate effects", async () => {
+test("packaged bundle CLI completes undated task and replays without duplicate effects", async () => {
 	const body = { listId: list, expectedDueAt: null },
 		key = randomUUID();
 	const first = await cli(body, key);
@@ -264,7 +254,7 @@ test("packaged no-Bun CLI completes undated task and replays without duplicate e
 		),
 	).toBe(true);
 }, 30_000);
-test("packaged no-Bun CLI preserves committed recurring occurrence across uncertain retry and stale refusal", async () => {
+test("packaged bundle CLI preserves committed recurring occurrence across uncertain retry and stale refusal", async () => {
 	const due = "2026-10-04T12:00:00.000Z";
 	await admin.query(
 		"update task set due_at=$1,rrule='FREQ=DAILY' where id=$2",
@@ -298,7 +288,7 @@ test("packaged no-Bun CLI preserves committed recurring occurrence across uncert
 		JSON.stringify(body),
 	]);
 }, 30_000);
-test("packaged no-Bun CLI refuses read PAT, revocation, and deleted receipt target", async () => {
+test("packaged bundle CLI refuses read PAT, revocation, and deleted receipt target", async () => {
 	const body = { listId: list, expectedDueAt: null };
 	const read = await createPersonalAccessToken(runtime, actor, {
 		name: "read",
@@ -314,7 +304,7 @@ test("packaged no-Bun CLI refuses read PAT, revocation, and deleted receipt targ
 	expect((await cli(body, key)).code).toBe(3);
 	expect(wires).toHaveLength(4);
 }, 30_000);
-test("packaged no-Bun MCP stdio uses inspected due, commits once after lost response, and refuses fresh stale key", async () => {
+test("packaged bundle MCP stdio uses inspected due, commits once after lost response, and refuses fresh stale key", async () => {
 	const due = "2026-10-04T12:00:00.000Z";
 	await admin.query(
 		"update task set due_at=$1,rrule='FREQ=DAILY' where id=$2",
@@ -361,7 +351,7 @@ test("packaged no-Bun MCP stdio uses inspected due, commits once after lost resp
 	expect(wires).toHaveLength(3);
 	expect(wires[0]).toEqual(wires[1]);
 }, 30_000);
-test("packaged no-Bun MCP stdio rejects strict inputs before HTTP and rechecks revoked authority", async () => {
+test("packaged bundle MCP stdio rejects strict inputs before HTTP and rechecks revoked authority", async () => {
 	const client = await mcp();
 	const args = {
 		taskId: task,
@@ -391,63 +381,78 @@ test("packaged no-Bun MCP stdio rejects strict inputs before HTTP and rechecks r
 	expect(await counts()).toEqual({ history: 0, karma: 0, receipts: 0 });
 }, 30_000);
 
-test("archive identity and hostile local config refusal in a no-Bun/no-Node container", () => {
-	const script = `! command -v bun && ! command -v node && for binary in ditero ditero-mcp ditero-tui; do /clients/bin/$binary --version || exit; done; set +e; /clients/bin/ditero profile --json; status=$?; set -e; test "$status" = 2`;
-	const result = execFileSync(
-		"docker",
-		[
-			...containerCommand(packaged.extracted, "ditero").slice(0, -1),
-			"bash",
-			"-euc",
-			script,
-		],
-		{
-			env: { PATH: process.env.PATH },
-			encoding: "utf8",
-			stdio: ["ignore", "pipe", "pipe"],
-		},
+test("every package bundled into a client has a license notice and the build records its Bun", async () => {
+	const notices = await readFile(
+		join(packaged.extracted, "THIRD_PARTY_NOTICES.txt"),
+		"utf8",
 	);
-	expect(result).toContain(`ditero ${release.version}`);
-	expect(result).toContain(`ditero-mcp ${release.version}`);
-	expect(result).toContain(`ditero-tui ${release.version}`);
-	expect(result).not.toContain("HOSTILE_PRELOAD");
-});
-
-test("an interrupted Docker client cannot leave its named fixture behind", async () => {
-	const args = [
-		...containerCommand(packaged.extracted, "ditero").slice(0, -1),
-		"bash",
-		"-c",
-		"trap '' HUP INT TERM; echo FIXTURE_RUNNING; sleep 60",
-	];
-	const name = args[args.indexOf("--name") + 1];
-	const child = spawn("docker", args, { stdio: ["pipe", "pipe", "pipe"] });
-	try {
-		await new Promise<void>((resolve, reject) => {
-			const timer = setTimeout(
-				() => reject(new Error("Timeout control did not start")),
-				5000,
-			);
-			child.stdout.once("data", () => {
-				clearTimeout(timer);
-				resolve();
-			});
-			child.once("error", reject);
-		});
-		child.kill("SIGKILL");
-		await new Promise<void>((resolve) => child.once("close", () => resolve()));
-		expect(
-			JSON.parse(
-				execFileSync("docker", ["inspect", name], { encoding: "utf8" }),
-			)[0].State.Running,
-		).toBe(true);
-	} finally {
-		cleanupContainers(packaged.extracted);
+	const listed = new Set(
+		[...notices.matchAll(/^={72}\n(\S+) \(.*\)\n={72}$/gm)].map(
+			(match) => match[1],
+		),
+	);
+	expect(new Set(packaged.info.dependencies)).toEqual(listed);
+	const bundled = new Set<string>();
+	for (const file of Object.values(bundleNames)) {
+		const text = await readFile(join(packaged.extracted, file), "utf8");
+		const marked = [...text.matchAll(/\/\*! ditero-package: (\S+) \*\//g)];
+		expect(marked.length, file).toBeGreaterThan(0);
+		for (const match of marked) {
+			bundled.add(match[1]);
+			expect(listed, `${file} ${match[1]}`).toContain(match[1]);
+		}
 	}
-	expect(() =>
-		execFileSync("docker", ["inspect", name], { stdio: "pipe" }),
-	).toThrow();
-}, 10000);
+	for (const name of ["ajv", "fast-uri", "json-schema-traverse"])
+		expect(
+			[...bundled].some((id) => id.startsWith(`${name}@`)),
+			name,
+		).toBe(true);
+	expect(packaged.info.buildBun).toBe(
+		execFileSync("bun", ["--version"], { encoding: "utf8" }).trim(),
+	);
+}, 30_000);
+
+test("bundles report JSON identity, ignore hostile working-directory config, and refuse an unsupported Bun", async () => {
+	const base = { cwd: packaged.extracted, env: { PATH: packaged.path } };
+	for (const [name, file] of Object.entries(bundleNames)) {
+		const result = spawnSync(join(packaged.extracted, file), ["--version"], {
+			...base,
+			encoding: "utf8",
+		});
+		expect(result.stderr).toBe("");
+		expect(JSON.parse(result.stdout)).toMatchObject({
+			name,
+			version: release.version,
+			commit: packaged.info.sourceSha,
+			target: "bun",
+			minimumBun: packaged.info.minimumBun,
+		});
+	}
+	const missing = spawnSync(
+		bundlePath(packaged.extracted, "ditero"),
+		["profile", "--json"],
+		{ ...base, encoding: "utf8" },
+	);
+	expect(missing.status).toBe(2);
+	expect(missing.stderr).not.toContain("HOSTILE_PRELOAD");
+	expect(missing.stderr).not.toContain("poison.example.test");
+	const source = await readFile(
+		bundlePath(packaged.extracted, "ditero"),
+		"utf8",
+	);
+	const minimum = packaged.info.minimumBun.replaceAll(".", ",");
+	const future = source.replace(`m=[${minimum}]`, "m=[99,0,0]");
+	expect(future).not.toBe(source);
+	const futureFile = join(packaged.extracted, "future.js");
+	await writeFile(futureFile, future, { mode: 0o755 });
+	const unsupported = spawnSync(futureFile, ["--version"], {
+		...base,
+		encoding: "utf8",
+	});
+	expect(unsupported.status).toBe(2);
+	expect(unsupported.stderr).toContain("or newer is required");
+	expect(unsupported.stdout).toBe("");
+}, 30_000);
 
 const execute = promisify(execFile);
 test.each([
@@ -458,24 +463,19 @@ test.each([
 	"read",
 	"arabic",
 	"notty",
-])("packaged no-Bun terminal/API journey: %s", async (mode) => {
+])("packaged bundle terminal/API journey: %s", async (mode) => {
 	const { stdout } = await execute(
 		"bun",
 		[fileURLToPath(new URL("../tui/api-pty.ts", import.meta.url)), mode],
 		{
 			env: {
-				PATH: process.env.PATH,
+				PATH: packaged.path,
 				HOME: process.env.HOME,
 				NODE_ENV: "test",
 				DATABASE_URL: databaseURL,
 				TUI_TEST_COMMAND: JSON.stringify([
-					"docker",
-					...containerCommand(
-						packaged.extracted,
-						"ditero-tui",
-						mode !== "notty",
-					),
-					...(mode === "notty" ? ["--allow-loopback-http"] : []),
+					bundlePath(packaged.extracted, "ditero-tui"),
+					"--allow-loopback-http",
 				]),
 				TUI_TEST_CWD: packaged.extracted,
 			},
@@ -532,51 +532,3 @@ test("packaged CLI and MCP plan/create/replay use real API and one explicit rece
 		).rows[0].count,
 	).toBe(2);
 }, 30000);
-
-test("a timed-out PTY fixture preserves its failure and retires the exact container", async () => {
-	const args = [
-		...containerCommand(packaged.extracted, "ditero").slice(0, -1),
-		"bash",
-		"-c",
-		"trap '' HUP INT TERM; echo FIXTURE_RUNNING; sleep 60",
-	];
-	args.splice(args.indexOf("-i"), 1, "-it");
-	const name = args[args.indexOf("--name") + 1];
-	let original: unknown;
-	try {
-		await execute(
-			"bun",
-			[fileURLToPath(new URL("../tui/api-pty.ts", import.meta.url)), "create"],
-			{
-				env: {
-					PATH: process.env.PATH,
-					HOME: process.env.HOME,
-					NODE_ENV: "test",
-					DATABASE_URL: databaseURL,
-					TUI_TEST_COMMAND: JSON.stringify(["docker", ...args]),
-					TUI_TEST_CWD: packaged.extracted,
-				},
-				timeout: 20000,
-				maxBuffer: 1024 * 1024,
-			},
-		);
-	} catch (error) {
-		original = error;
-	}
-	try {
-		expect(original).toBeDefined();
-		expect((original as { stderr: string }).stderr).toContain(
-			"Terminal startup did not finish",
-		);
-		expect(
-			JSON.parse(
-				execFileSync("docker", ["inspect", name], { encoding: "utf8" }),
-			)[0].State.Running,
-		).toBe(true);
-	} finally {
-		cleanupContainers(packaged.extracted);
-	}
-	expect(() =>
-		execFileSync("docker", ["inspect", name], { stdio: "pipe" }),
-	).toThrow();
-}, 25000);

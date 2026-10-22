@@ -357,3 +357,18 @@ describe("versioned task CSV", () => {
 		}
 	});
 });
+
+test("CSV dates preserve minute, second and millisecond precision with offset and Z", () => {
+	for (const zone of ["+02:00", "-05:30", "Z"]) {
+		for (const time of ["12:30", "12:30:45", "12:30:45.123"]) {
+			const value = `2026-10-22T${time}${zone}`;
+			const result = parse(
+				csv([row({ done: "true", due_at: value, completed_at: value })]),
+			);
+			expect(result.document.data.tasks[0]).toMatchObject({
+				dueAt: new Date(value).toISOString(),
+				completedAt: new Date(value).toISOString(),
+			});
+		}
+	}
+});

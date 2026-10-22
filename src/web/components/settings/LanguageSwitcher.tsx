@@ -13,7 +13,10 @@ import {
 	localeOptions,
 } from "../../lib/language-switcher.ts";
 import { applyDocumentLocale, type Locale } from "../../lib/locale.ts";
-import { captureZeroClientOwner } from "../../lib/zero-lifecycle.ts";
+import {
+	captureZeroClientOwner,
+	retirementErrorMessage,
+} from "../../lib/zero-lifecycle.ts";
 import { Button } from "../ui/button.tsx";
 import { useSnackbar } from "../ui/snackbar.tsx";
 
@@ -29,7 +32,7 @@ export function LanguageSwitcher({
 }) {
 	const [value, setValue] = useState<Locale>(getLocale() as Locale);
 	const [pending, setPending] = useState(false);
-	const [failed, setFailed] = useState(false);
+	const [failure, setFailure] = useState<string | null>(null);
 	const pendingRef = useRef(false);
 	const mounted = useRef(true);
 	const { show } = useSnackbar();
@@ -55,13 +58,13 @@ export function LanguageSwitcher({
 			onPending: (busy) => {
 				pendingRef.current = busy;
 				setPending(busy);
-				if (busy) setFailed(false);
+				if (busy) setFailure(null);
 			},
 			onApplied: setValue,
-			onInlineError: () => setFailed(true),
-			onGlobalError: (retry) =>
+			onInlineError: (error) => setFailure(retirementErrorMessage(error)),
+			onGlobalError: (retry, error) =>
 				show({
-					message: m.sync_save_pending_failed(),
+					message: retirementErrorMessage(error),
 					action: { label: m.action_retry(), run: retry },
 				}),
 		});
@@ -85,7 +88,7 @@ export function LanguageSwitcher({
 			<Select
 				value={value}
 				onValueChange={onChange}
-				disabled={pending || failed}
+				disabled={pending || failure !== null}
 			>
 				<SelectTrigger
 					aria-labelledby={labelId}
@@ -106,9 +109,9 @@ export function LanguageSwitcher({
 					))}
 				</SelectContent>
 			</Select>
-			{failed && (
+			{failure !== null && (
 				<div className="flex flex-col items-start gap-2">
-					<p role="alert">{m.sync_save_pending_failed()}</p>
+					<p role="alert">{failure}</p>
 					<Button disabled={pending} onClick={() => void choice.current?.run()}>
 						{m.action_retry()}
 					</Button>

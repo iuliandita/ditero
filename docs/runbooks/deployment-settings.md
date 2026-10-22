@@ -27,5 +27,15 @@ Service name when overlays add a name prefix or suffix. This is an internal
 service reference, not the browser's public Zero URL.
 
 `DITERO_GIT_SHA` and `DITERO_CHANNEL` are Docker build arguments for source and
-channel image labels. They are build metadata, not runtime application settings;
-release workflows supply them from the checked source and release version.
+channel image labels; release workflows supply them from the checked source and
+release version. The app and Zero images also bake the commit into the
+`DITERO_GIT_SHA` environment variable, which the app reports as `revision` in
+`/health` and the Kustomize Zero init container compares. Do not set it in
+deployment configuration. A build without it reports `revision: null`.
+
+Compose uses `DITERO_IMAGE_TAG` for the app and defaults Zero to that tag with
+`-zero` appended. For a commit-pinned nightly pair, set both `DITERO_IMAGE_TAG`
+and `DITERO_ZERO_IMAGE_TAG`: for example, `nightly-<commit>` and
+`nightly-zero-<commit>`. Release pairs keep the default suffix convention.
+Always select matching app and Zero revisions; changing either tag does not
+restore a database or roll back its migrations.

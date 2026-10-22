@@ -12,6 +12,8 @@ type Probe = {
 type Container = {
 	name: string;
 	image: string;
+	command?: string[];
+	args?: string[];
 	env: { name: string; value: string }[];
 	envFrom?: { configMapRef?: { name: string }; secretRef?: { name: string } }[];
 	ports: { name: string; containerPort: number; protocol: string }[];
@@ -166,7 +168,7 @@ function bindings(manifests: Manifest[], namespace: string) {
 		assert.equal(spec.hostNetwork ?? false, false);
 		assert.equal(spec.hostPID ?? false, false);
 		assert.equal(spec.hostIPC ?? false, false);
-		assert.equal(spec.initContainers?.length ?? 0, 0);
+		assert.equal(spec.initContainers?.length ?? 0, name === "zero" ? 1 : 0);
 		assert.equal(spec.securityContext.runAsNonRoot, true);
 		assert.equal(spec.securityContext.runAsUser, 1000);
 		assert.equal(spec.securityContext.runAsGroup, 1000);
@@ -332,6 +334,133 @@ assert.equal(pod(defaults, "zero").container.image, `${defaultImage}-zero`);
 assert.equal(defaultConfig.data?.BETTER_AUTH_URL, "http://localhost:3000");
 assert.equal(defaultConfig.data?.PUBLIC_ZERO_URL, "http://localhost:4848");
 assert.equal(defaultConfig.data?.DITERO_REGISTRATION_MODE, "bootstrap");
+function gateOf(items: Manifest[]) {
+	const gate = pod(items, "zero").template.spec.initContainers?.[0];
+	assert.ok(gate);
+	return gate;
+}
+function assertMigrationGate(items: Manifest[], appService: string) {
+	const gate = gateOf(items);
+	assert.equal(gate.name, "wait-for-app");
+	assert.equal(gate.image, pod(items, "zero").container.image);
+	assert.equal(
+		gate.env.find((e) => e.name === "DITERO_APP_SERVICE")?.value,
+		appService,
+	);
+	assert.equal(
+		gate.env.find((e) => e.name === "APP_HEALTH_URL")?.value,
+		"http://$(DITERO_APP_SERVICE):3000/health",
+	);
+	assert.equal(gate.securityContext.readOnlyRootFilesystem, true);
+	assert.equal(gate.securityContext.allowPrivilegeEscalation, false);
+	assert.deepEqual(gate.securityContext.capabilities.drop, ["ALL"]);
+	assert.ok(gate.resources.requests.cpu && gate.resources.limits.memory);
+}
+// The gate script is the production artifact: run it against a stub /health.
+// A gate that holds keeps polling and a gate that opens exits, so counting
+// requests avoids wall-clock timing under load.
+async function runGate(
+	script: string,
+	env: Record<string, string>,
+	before: unknown,
+	after?: unknown,
+) {
+	let current = before;
+	let requests = 0;
+	let stopped = false;
+	const server = Bun.serve({
+		port: 0,
+		fetch: () => {
+			requests += 1;
+			return Response.json(current);
+		},
+	});
+	const child = Bun.spawn(["node", "--input-type=module", "-e", script], {
+		env: {
+			PATH: process.env.PATH ?? "",
+			APP_HEALTH_URL: `http://127.0.0.1:${server.port}/health`,
+			...env,
+		},
+		stdout: "ignore",
+		stderr: "ignore",
+	});
+	const exited = child.exited.then((code) => code === 0);
+	const polledTwice = async () => {
+		const deadline = Date.now() + 60_000;
+		while (requests < 2 && !stopped) {
+			assert.ok(Date.now() < deadline, "gate never polled twice");
+			await Bun.sleep(25);
+		}
+		return false;
+	};
+	try {
+		const releasedEarly = await Promise.race([exited, polledTwice()]);
+		if (after === undefined || releasedEarly) return { releasedEarly };
+		current = after;
+		const released = await Promise.race([
+			exited,
+			Bun.sleep(60_000).then(() => false),
+		]);
+		return { releasedEarly, released };
+	} finally {
+		stopped = true;
+		child.kill();
+		await child.exited;
+		server.stop(true);
+	}
+}
+async function assertGateBehavior(items: Manifest[]) {
+	const script = gateOf(items).args?.[0];
+	assert.ok(script);
+	const labeled = { DITERO_GIT_SHA: "new1234" };
+	const health = (revision: string | null) => ({
+		ok: true,
+		replica: "image-ref",
+		revision,
+	});
+	const [
+		stale,
+		nullRevision,
+		emptyRevision,
+		missingRevision,
+		missingCommit,
+		emptyCommit,
+		rollout,
+	] = await Promise.all([
+		runGate(script, labeled, health("old5678")),
+		runGate(script, labeled, health(null)),
+		runGate(script, labeled, health("")),
+		runGate(script, labeled, { ok: true, replica: "image-ref" }),
+		runGate(script, { APP_REPLICA_ID: "image-ref" }, health("old5678")),
+		runGate(
+			script,
+			{ DITERO_GIT_SHA: "", APP_REPLICA_ID: "image-ref" },
+			health("old5678"),
+		),
+		runGate(script, labeled, health("old5678"), health("new1234")),
+	]);
+	assert.equal(stale.releasedEarly, false);
+	assert.equal(nullRevision.releasedEarly, false);
+	assert.equal(emptyRevision.releasedEarly, false);
+	assert.equal(missingRevision.releasedEarly, false);
+	assert.equal(
+		missingCommit.releasedEarly,
+		false,
+		"missing commit opened gate",
+	);
+	assert.equal(emptyCommit.releasedEarly, false, "empty commit opened gate");
+	assert.deepEqual(rollout, { releasedEarly: false, released: true });
+	const revisionIgnored = await runGate(
+		script.replace("health.revision === own", "true"),
+		labeled,
+		health("old5678"),
+	);
+	assert.equal(revisionIgnored.releasedEarly, true, "mutation not detected");
+}
+assertMigrationGate(defaults, "ditero-app");
+await assertGateBehavior(defaults);
+
+const defaultTag = defaultImage.slice(defaultImage.indexOf(":") + 1);
 const temporary = await mkdtemp(join(tmpdir(), "ditero-kustomize-"));
 try {
 	await cp(base, join(temporary, "base"), { recursive: true });
@@ -346,9 +475,12 @@ resources:
 namespace: household
 namePrefix: home-
 images:
-- name: ghcr.io/iuliandita/ditero
+- name: ghcr.io/iuliandita/ditero:${defaultTag}
   newName: docker.io/iuliandita/ditero
   newTag: 0.0.2-alpha.1
+- name: ghcr.io/iuliandita/ditero:${defaultTag}-zero
+  newName: docker.io/iuliandita/ditero
+  newTag: 0.0.2-alpha.1-zero
 configMapGenerator:
 - name: ditero-app-config
   behavior: merge
@@ -356,14 +488,6 @@ configMapGenerator:
   - BETTER_AUTH_URL=https://tasks.example.com
   - PUBLIC_ZERO_URL=https://sync.example.com
   - DITERO_REGISTRATION_MODE=closed
-patches:
-- target:
-    kind: Deployment
-    name: ditero-zero
-  patch: |-
-    - op: replace
-      path: /spec/template/spec/containers/0/image
-      value: docker.io/iuliandita/ditero:0.0.2-alpha.1-zero
 `,
 	);
 	const configured = render(overlay);
@@ -382,6 +506,7 @@ patches:
 		pod(configured, "zero").container.image,
 		"docker.io/iuliandita/ditero:0.0.2-alpha.1-zero",
 	);
+	assertMigrationGate(configured, "home-ditero-app");
 	assert.deepEqual(config.data, {
 		BETTER_AUTH_URL: "https://tasks.example.com",
 		PUBLIC_ZERO_URL: "https://sync.example.com",

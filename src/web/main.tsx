@@ -12,7 +12,10 @@ import {
 import { applyDocumentLocale } from "./lib/locale.ts";
 import { activatePwaUpdate, registerPwa } from "./lib/pwa.ts";
 import { applyTheme, readLocalTheme } from "./lib/theme.ts";
-import { retireZeroClients } from "./lib/zero-lifecycle.ts";
+import {
+	retirementErrorMessage,
+	retireZeroClients,
+} from "./lib/zero-lifecycle.ts";
 
 applyDocumentLocale(getLocale());
 applyTheme(readLocalTheme(), document.documentElement);
@@ -20,10 +23,24 @@ applyDisplayPreferences(DEFAULT_DISPLAY_PREFERENCES, document.documentElement);
 // No-op outside dev and test; see the guard in dev/crypto-vectors.ts.
 installCryptoVectorHarness();
 
+// Compile-time gated: production bundles expose no retirement control.
+if (import.meta.env.MODE === "test") {
+	window.__diteroZeroLifecycle = { retireZeroClients, retirementErrorMessage };
+}
+
+declare global {
+	interface Window {
+		__diteroZeroLifecycle?: {
+			retireZeroClients: typeof retireZeroClients;
+			retirementErrorMessage: typeof retirementErrorMessage;
+		};
+	}
+}
+
 function PwaUpdate() {
 	const [waiting, setWaiting] = useState<ServiceWorker | null>(null);
 	const [busy, setBusy] = useState(false);
-	const [failed, setFailed] = useState(false);
+	const [failure, setFailure] = useState<string | null>(null);
 	useEffect(() => {
 		if (!import.meta.env.PROD || import.meta.env.MODE === "test") return;
 		let mounted = true;
@@ -42,7 +59,7 @@ function PwaUpdate() {
 			role="status"
 			className="fixed bottom-4 start-4 end-4 z-50 mx-auto max-w-md rounded-lg border bg-background p-4 text-foreground shadow-lg"
 		>
-			<p>{failed ? m.sync_save_pending_failed() : m.pwa_update_available()}</p>
+			<p>{failure ?? m.pwa_update_available()}</p>
 			<div className="mt-3 flex gap-3">
 				<button
 					type="button"
@@ -50,15 +67,15 @@ function PwaUpdate() {
 					className="rounded border px-3 py-2"
 					onClick={() => {
 						setBusy(true);
-						setFailed(false);
+						setFailure(null);
 						void activatePwaUpdate(
 							waiting,
 							() => retireZeroClients(),
 							navigator.serviceWorker,
 							() => window.location.reload(),
-						).catch(() => {
+						).catch((error: unknown) => {
 							setBusy(false);
-							setFailed(true);
+							setFailure(retirementErrorMessage(error));
 						});
 					}}
 				>

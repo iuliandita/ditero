@@ -5,6 +5,7 @@ import type {
 } from "../../domain/portability/import-apply-plan.ts";
 import type { HistoryPreviewItem } from "../../domain/portability/import-apply-plan-v2.ts";
 import { hashImportValue } from "../../domain/portability/import-digest.ts";
+import { CONTENT_ADAPTER } from "../../domain/portability/providers/content-common.ts";
 import { parseProviderBinding } from "../../domain/portability/providers/input.ts";
 import type { PortableJson } from "../../domain/portability/v1.ts";
 import { type Role, WRITE_ROLES } from "../../domain/role.ts";
@@ -162,9 +163,11 @@ export async function applyImportBatch(
 				)
 			).rows[0];
 			if (!job) fail("plan-not-found", 404);
+			let providerLabels = false;
 			if (job.input_binding !== null || job.source_binding !== null) {
 				try {
 					const binding = parseProviderBinding(job.input_binding);
+					providerLabels = binding.adapter === CONTENT_ADAPTER;
 					if (
 						JSON.stringify(binding) !==
 							JSON.stringify(parseProviderBinding(job.source_binding)) ||
@@ -708,6 +711,19 @@ export async function applyImportBatch(
 							)) !== pre.targetDigest
 						)
 							conflict("mapped-target-conflict");
+					} else if (pre.kind === "existing-label") {
+						if (
+							!providerLabels ||
+							collection !== "labels" ||
+							map ||
+							!target ||
+							target.workspace_id !== workspace ||
+							target.name !== payload.name ||
+							targetDigest !== pre.targetDigest ||
+							(await digestImportTarget("labels", target, checkpoint)) !==
+								pre.targetDigest
+						)
+							conflict("existing-label-conflict");
 					} else {
 						if (map || target) conflict("target-already-exists");
 						if (collection === "labels") {
@@ -784,7 +800,7 @@ export async function applyImportBatch(
 						item,
 						collection,
 						targetDigest,
-						noop: pre.kind === "mapped",
+						noop: pre.kind !== "absent",
 					});
 				}
 				for (const { item, collection, targetDigest, noop } of prepared) {
@@ -805,17 +821,18 @@ export async function applyImportBatch(
 								item.ordinal,
 							);
 					}
-					if (noop) {
+					if (noop && item.targetPrecondition?.kind === "mapped") {
 						await client.query(
 							`update import_source_map set last_plan_digest = $1, updated_at = now() where source_id = $2 and source_key = $3 and owner_user_id = $4 and last_plan_digest is distinct from $1`,
 							[job.plan_digest, job.source_id, item.sourceKey, ownerId],
 						);
 					} else {
 						const { table, fields } = IMPORT_TARGETS[collection];
-						await client.query(
-							`insert into "${table}" (${fields.map((field) => `"${column(field)}"`).join(",")}) values (${fields.map((_, index) => `$${index + 1}`).join(",")})`,
-							fields.map((field) => payload[field]),
-						);
+						if (!noop)
+							await client.query(
+								`insert into "${table}" (${fields.map((field) => `"${column(field)}"`).join(",")}) values (${fields.map((_, index) => `$${index + 1}`).join(",")})`,
+								fields.map((field) => payload[field]),
+							);
 						await client.query(
 							`insert into import_source_map (source_id, source_key, owner_user_id, collection, source_row_id, target_id, target_workspace_id, content_digest, last_target_digest, last_plan_digest) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
 							[

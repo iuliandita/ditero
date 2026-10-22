@@ -155,6 +155,7 @@ final class NativeSessionVault {
             deviceId=(String) record.get("deviceId"); expiresAt=(String) record.get("expiresAt");
             scope=context.scope(userId);
         }
+        LinkOwner linkOwner() {return new LinkOwner(this);}
         Request pushConfigRequest() { return request("/api/native/push/config").get().build(); }
         Request pushRegisterRequest(String body) {
             return request("/api/native/push/register").post(RequestBody.create(body, MediaType.get("application/json; charset=utf-8"))).build();
@@ -172,6 +173,26 @@ final class NativeSessionVault {
         private Request.Builder request(String path) {
             return new Request.Builder().url(context.url(path)).header("Accept", "application/json")
                     .header("Authorization", "Bearer " + token);
+        }
+    }
+
+    /** What a pending link keeps of its owner: identity and a token digest, never the bearer token. */
+    static final class LinkOwner {
+        final String scope, sessionId, deviceId, expiresAt;
+        private final byte[] tokenDigest;
+        private LinkOwner(CapturedOwner owner) {
+            scope=owner.scope; sessionId=owner.sessionId; deviceId=owner.deviceId; expiresAt=owner.expiresAt;
+            tokenDigest=digest(owner.token);
+        }
+        /** Same test as sameOwner, with the held token compared by digest. */
+        boolean matches(CapturedOwner stored) {
+            return stored!=null && scope.equals(stored.scope) && sessionId.equals(stored.sessionId)
+                    && deviceId.equals(stored.deviceId) && MessageDigest.isEqual(tokenDigest,digest(stored.token))
+                    && unexpired(expiresAt);
+        }
+        private static byte[] digest(String token) {
+            try {return MessageDigest.getInstance("SHA-256").digest(token.getBytes(StandardCharsets.UTF_8));}
+            catch(GeneralSecurityException e) {throw new IllegalStateException(e);}
         }
     }
 

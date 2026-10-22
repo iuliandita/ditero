@@ -135,6 +135,20 @@ mod tests {
 // A TLS handshake failure is never evidence of being offline, including when
 // reqwest also classifies it as a connect error.
 pub fn transport_error(error: &reqwest::Error) -> &'static str {
+    #[cfg(debug_assertions)]
+    {
+        eprintln!(
+            "Native transport: url={:?}, connect={}, timeout={}",
+            error.url(),
+            error.is_connect(),
+            error.is_timeout()
+        );
+        let mut cause = error.source();
+        while let Some(value) = cause {
+            eprintln!("Native transport cause: {value}");
+            cause = value.source();
+        }
+    }
     let mut source: Option<&(dyn Error + 'static)> = Some(error);
     while let Some(cause) = source {
         if cause.is::<native_tls::Error>() {

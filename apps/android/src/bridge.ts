@@ -178,6 +178,8 @@ type State = Hello & {
 };
 
 let state: State | undefined;
+// Same-page handshakes retire account authority, but can still report a refusal.
+let taskLinkRefusalGeneration: number | undefined;
 let refusalHandler:
 	| { gen: number; authHandle: string; run: () => void }
 	| undefined;
@@ -317,6 +319,7 @@ function adopt(next: Hello): void {
 		state?.session?.scope !== next.session?.scope ||
 		state?.session?.authHandle !== next.session?.authHandle;
 	state = { ...next, zeroUrl: generationChanged ? undefined : state?.zeroUrl };
+	taskLinkRefusalGeneration = next.taskLinks ? next.gen : undefined;
 	if (changed) {
 		rejectPending(new NativeError("stale-generation"));
 		abortSockets();
@@ -358,6 +361,14 @@ function sessionRefused(gen: unknown, authHandle: unknown): void {
 
 const notificationListeners = new Set<() => void>();
 const taskLinkListeners = new Set<() => void>();
+const taskLinkRefusalListeners = new Set<() => void>();
+
+export function subscribeTaskLinkRefusals(listener: () => void): () => void {
+	taskLinkRefusalListeners.add(listener);
+	return () => {
+		taskLinkRefusalListeners.delete(listener);
+	};
+}
 
 function onNative(event: MessageEvent): void {
 	let message: unknown;
@@ -367,6 +378,14 @@ function onNative(event: MessageEvent): void {
 		return;
 	}
 	if (!isRecord(message)) return;
+	if (
+		message.t === "link.refused" &&
+		taskLinkRefusalGeneration !== undefined &&
+		message.gen === taskLinkRefusalGeneration
+	) {
+		for (const listener of taskLinkRefusalListeners) listener();
+		return;
+	}
 	if (message.t === "push.open" && state && message.gen === state.gen) {
 		for (const listener of notificationListeners) listener();
 		return;
@@ -1242,7 +1261,8 @@ export function createNativeTaskLinkNavigation(
 		},
 		async dismiss(token) {
 			assertCurrent();
-			if (!validId(token)) throw new NativeError("invalid-message");
+			if (token !== "" && !validId(token))
+				throw new NativeError("invalid-message");
 			await request(
 				{ op: "link.dismiss", id: authHandle, body: { token } },
 				(reply) => {

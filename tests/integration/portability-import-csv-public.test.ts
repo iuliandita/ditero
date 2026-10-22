@@ -290,6 +290,7 @@ test("database binding shape rejects forged UUID variants and extra metadata und
 	const binding = prepareProviderImport(input(), {
 		exportedAt: "2026-01-15T00:00:00.000Z",
 	}).binding;
+	if (binding.adapter !== "ditero-csv") throw new Error("Wrong adapter");
 	for (const altered of [
 		{ ...binding, sourceNamespace: "11111111-1111-0111-0111-111111111111" },
 		{ ...binding, extra: true },

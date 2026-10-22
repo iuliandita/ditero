@@ -3,7 +3,7 @@
 // image would only ever work at the build's hostname. It is resolved here at
 // request time from the same environment variable that drives the CSP, so the
 // address the client dials and the address the CSP permits cannot drift.
-import { socialProvidersFromEnv } from "../auth/providers.ts";
+import { publicProvidersFromEnv } from "../auth/providers.ts";
 
 export const DEFAULT_ZERO_URL = "http://localhost:4848";
 
@@ -13,15 +13,30 @@ export function zeroPublicURL(env: PublicEnvironment): string {
 	return env.PUBLIC_ZERO_URL || DEFAULT_ZERO_URL;
 }
 
+export type PublicSsoProvider = { id: string; name: string; protocol: "saml" };
+
 export type PublicConfig = {
 	zeroURL: string;
 	// Optional for older servers and native sync adapters that only need Zero.
 	socialProviders?: string[];
+	// Display data for the providers above that are not built into the client.
+	ssoProviders?: PublicSsoProvider[];
+	oidcProviders?: { id: string; name: string; icon: string }[];
 };
 
-export function publicConfig(env: PublicEnvironment): PublicConfig {
+export function publicConfig(
+	env: PublicEnvironment,
+	ssoProviders: PublicSsoProvider[] = [],
+): PublicConfig {
+	const providers = publicProvidersFromEnv(env);
 	return {
+		ssoProviders,
 		zeroURL: zeroPublicURL(env),
-		socialProviders: Object.keys(socialProvidersFromEnv(env)),
+		socialProviders: providers.map((provider) => provider.id),
+		oidcProviders: providers.flatMap((provider) =>
+			provider.icon === null
+				? []
+				: [{ id: provider.id, name: provider.name, icon: provider.icon }],
+		),
 	};
 }

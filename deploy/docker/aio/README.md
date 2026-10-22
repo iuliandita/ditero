@@ -132,8 +132,14 @@ Add them only to the API environment in an operator-owned Compose override:
 - Identity/discovery: `DITERO_REGISTRATION_MODE`, `DITERO_MEMBER_INVITES`,
   `DITERO_DISCOVERY`, `DITERO_PUBLIC_URL`, `DITERO_PASSKEY_ORIGIN`,
   `DITERO_PASSKEY_RP_ID`, `DITERO_TRUSTED_PROXIES`, `TRUSTED_ORIGINS`,
-  `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` (your own OAuth client; see
-  [sign-in providers](../../../docs/runbooks/sign-in-providers.md)).
+  the sign-in provider settings (`GOOGLE_*`, `MICROSOFT_*`, `GITHUB_*`, `DISCORD_*`,
+  `FACEBOOK_*`, `APPLE_*`, `DITERO_OIDC_PROVIDERS` and `DITERO_OIDC_<ID>_*`; your
+  own OAuth clients, see
+  [sign-in providers](../../../docs/runbooks/sign-in-providers.md))., and the
+  single-line `DITERO_SAML_*` settings of the SAML guide in the same runbook. The
+  bundle forwards file forms only (`DITERO_SAML_IDP_METADATA_FILE`,
+  `DITERO_SAML_SP_PRIVATE_KEY_FILE`, `DITERO_SAML_SP_CERT_FILE`): mount the files
+  into the container and point the variables at them.
 - Attachments: `DITERO_ATTACHMENT_STORAGE_DRIVER`, `DITERO_ATTACHMENT_FS_PATH`,
   `DITERO_ATTACHMENT_QUOTA_BYTES`, `DITERO_ATTACHMENT_RETENTION_MS`,
   `DITERO_ATTACHMENT_SWEEP_BATCH_SIZE`, `DITERO_ATTACHMENT_SWEEP_MS`,
@@ -156,7 +162,8 @@ Add them only to the API environment in an operator-owned Compose override:
   `DITERO_WORKER_BATCH_SIZE`, `DITERO_WORKER_CONCURRENCY`,
   `DITERO_WORKER_LEASE_MS` and `DITERO_WORKER_TICK_MS`.
 
-Key rotation accepts `DITERO_ENCRYPTION_KEY_NEXT`. That key, `GOOGLE_CLIENT_SECRET`
+Key rotation accepts `DITERO_ENCRYPTION_KEY_NEXT`. That key, the provider client secrets
+(`GOOGLE_`, `MICROSOFT_`, `GITHUB_`, `DISCORD_` and `FACEBOOK_CLIENT_SECRET`)
 and both S3 credentials also accept their `_FILE` forms in the API's private
 directory. SMTP, Telegram and VAPID private secrets currently accept plain API
 environment values only; keep any override containing them private. Do not pass

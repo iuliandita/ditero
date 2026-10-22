@@ -206,7 +206,7 @@ async function mutate<Args>(
 			tx: Transaction<Schema>;
 			ctx: MutCtx;
 			args: Args;
-		}) => Promise<void>;
+		}) => Promise<unknown>;
 	},
 	callerId: string,
 	args: Args,
@@ -226,7 +226,7 @@ async function mutateWithoutCollector<Args>(
 			tx: Transaction<Schema>;
 			ctx: MutCtx;
 			args: Args;
-		}) => Promise<void>;
+		}) => Promise<unknown>;
 	},
 	callerId: string,
 	args: Args,

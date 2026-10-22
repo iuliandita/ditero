@@ -1,4 +1,5 @@
 import { passkeyClient } from "@better-auth/passkey/client";
+import { ssoClient } from "@better-auth/sso/client";
 import { twoFactorClient } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
 import { fetchWithConnectionCheck } from "./connection-required.ts";
@@ -8,7 +9,7 @@ function createBrowserClient() {
 	return createAuthClient({
 		baseURL: "",
 		fetchOptions: { customFetchImpl: fetchWithConnectionCheck },
-		plugins: [passkeyClient(), twoFactorClient()],
+		plugins: [passkeyClient(), twoFactorClient(), ssoClient()],
 	});
 }
 

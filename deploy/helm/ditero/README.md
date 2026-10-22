@@ -16,7 +16,8 @@ not a stable release. Breaking changes remain possible.
 - Three separate database logins: migration owner, restricted application runtime,
   and Zero with its required replication/schema privileges. Follow the
   [database role runbook](../../../docs/runbooks/database-roles.md), including the
-  `zero_0` schema grants and default privileges for both application roles.
+  `zero_0` schema grants and default privileges for both application roles, plus
+  the private server clock schema and restricted runtime grants.
 - An existing Secret in the release namespace, provisioned through your secret
   manager or another secure mechanism. This chart creates no Secrets.
 
@@ -150,7 +151,10 @@ Use `app.extraEnv` and `zero.extraEnv` for additional supported configuration.
 Use `valueFrom.secretKeyRef` for sensitive settings rather than literal values.
 For example, optional Google sign-in needs your own OAuth client (see
 [sign-in providers](https://github.com/iuliandita/ditero/blob/develop/docs/runbooks/sign-in-providers.md));
-add both keys to a Secret, which may be the existing one, and reference them:
+add both keys to a Secret, which may be the existing one, and reference them
+(the other providers use the same pattern with their own variable names; mount
+the Apple `.p8` key or a client secret file and point the matching `_FILE`
+variable at it):
 
 ```yaml
 app:
@@ -193,7 +197,10 @@ service.
 Back up PostgreSQL, the attachment claim, and the authentication/encryption
 Secrets. Preserve the Zero claim for normal restarts; it contains the replica
 cache and can be rebuilt from PostgreSQL if necessary. Test restore before
-relying on backups. Chart-created PVCs carry `helm.sh/resource-policy: keep` and
+relying on backups using the [Kubernetes logical restore procedure](../../../docs/runbooks/backup-restore.md#kubernetes-logical-backup-and-restore).
+A fresh target needs the original role passwords and service secrets, restored
+attachments and an empty Zero claim before the application starts.
+Chart-created PVCs carry `helm.sh/resource-policy: keep` and
 remain after uninstall. To reuse retained data, set the corresponding
 `existingClaim` before reinstalling. Delete retained claims manually only after
 backup and an explicit decision to discard that data. Use a suitable volume

@@ -77,6 +77,40 @@ describe("authErrorMessage", () => {
 		);
 	});
 
+	test("localizes a neutral provider refusal without revealing account existence", () => {
+		expect(
+			authErrorMessage(
+				{
+					code: "PROVIDER_SIGN_IN_REFUSED",
+					message: "Provider sign-in could not be completed",
+				},
+				fallback,
+			),
+		).toBe(
+			"Provider sign-in could not be completed. Use another sign-in method, then link this provider under Settings. New accounts may require an invitation and a provider-verified email.",
+		);
+	});
+
+	test("localizes the registration outage code", () => {
+		expect(
+			authErrorMessage({ code: "REGISTRATION_UNAVAILABLE" }, fallback),
+		).toBe("Registration is temporarily unavailable. Try again in a moment.");
+	});
+
+	test("explains a provider account linked by a concurrent sign-in", () => {
+		expect(
+			authErrorMessage(
+				{
+					code: "ACCOUNT_ALREADY_LINKED",
+					message: "This provider account is already linked",
+				},
+				fallback,
+			),
+		).toBe(
+			"This sign-in account was just linked in another window. Sign in again.",
+		);
+	});
+
 	test("distinguishes an untrusted origin from the registration gate", () => {
 		const origin = authErrorMessage(
 			{ code: "INVALID_ORIGIN", message: "Invalid origin" },

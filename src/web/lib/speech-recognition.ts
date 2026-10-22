@@ -85,6 +85,7 @@ const ERROR_REASONS: Readonly<Record<string, VoiceReason>> = {
 	"not-allowed": "permission-denied",
 	"service-not-allowed": "permission-denied",
 	"no-speech": "no-speech",
+	network: "network",
 	"audio-capture": "audio-capture",
 	"language-not-supported": "language-pack-unavailable",
 };
@@ -130,6 +131,14 @@ function readFinalAlternatives(event: unknown): unknown[] | null | undefined {
 	return found;
 }
 
+function supportsOnDevice(
+	ctor: LocalSpeechRecognitionConstructor,
+	instance: LocalSpeechRecognition,
+): ctor is LocalSpeechRecognitionConstructor &
+	Required<Pick<LocalSpeechRecognitionConstructor, "available">> {
+	return typeof ctor.available === "function" && "processLocally" in instance;
+}
+
 function detach(recognition: LocalSpeechRecognition) {
 	recognition.onresult = null;
 	recognition.onerror = null;
@@ -145,20 +154,19 @@ export function createBrowserVoiceEngine(
 			const resolved = resolveConstructor(env);
 			if (!resolved.ok) return { status: "refused", reason: resolved.reason };
 			const { ctor } = resolved;
-			if (typeof ctor.available !== "function") {
-				return { status: "refused", reason: "unsupported-no-local-processing" };
-			}
-			// Probe the instance for the property; assigning it blindly would
-			// "succeed" on browsers that do not implement on-device mode.
+			// On-device mode needs both the static available() and the instance
+			// processLocally property. Without them the standard API may send audio
+			// to the browser vendor's service, which the UI discloses before use.
+			// Probe the instance; assigning blindly would "succeed" where the
+			// browser does not implement on-device mode.
+			let probe: LocalSpeechRecognition;
 			try {
-				if (!("processLocally" in new ctor())) {
-					return {
-						status: "refused",
-						reason: "unsupported-no-local-processing",
-					};
-				}
+				probe = new ctor();
 			} catch {
 				return { status: "refused", reason: "unsupported-no-api" };
+			}
+			if (!supportsOnDevice(ctor, probe)) {
+				return { status: "available", processing: "vendor" };
 			}
 			let availability: unknown;
 			try {
@@ -169,7 +177,9 @@ export function createBrowserVoiceEngine(
 			} catch {
 				return { status: "refused", reason: "availability-check-failed" };
 			}
-			if (availability === "available") return { status: "available" };
+			if (availability === "available") {
+				return { status: "available", processing: "device" };
+			}
 			const reason =
 				typeof availability === "string" &&
 				Object.hasOwn(AVAILABILITY_REASONS, availability)
@@ -182,18 +192,17 @@ export function createBrowserVoiceEngine(
 			const resolved = resolveConstructor(env);
 			if (!resolved.ok) throw new VoiceEngineError(resolved.reason);
 			const recognition = new resolved.ctor();
-			if (!("processLocally" in recognition)) {
-				throw new VoiceEngineError("unsupported-no-local-processing");
-			}
 			recognition.lang = tag;
 			recognition.continuous = false;
 			recognition.interimResults = false;
 			recognition.maxAlternatives = VOICE_MAX_ALTERNATIVES;
-			recognition.processLocally = true;
-			// Verify before starting: a setter that silently ignores the value
-			// would leave the engine free to use a remote service.
-			if (recognition.processLocally !== true) {
-				throw new VoiceEngineError("local-processing-not-enforced");
+			if (supportsOnDevice(resolved.ctor, recognition)) {
+				recognition.processLocally = true;
+				// Verify before starting: a setter that silently ignores the value
+				// would leave the engine free to use a remote service.
+				if (recognition.processLocally !== true) {
+					throw new VoiceEngineError("local-processing-not-enforced");
+				}
 			}
 			if (recognition.lang !== tag)
 				throw new VoiceEngineError("locale-not-applied");

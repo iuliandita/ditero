@@ -7,6 +7,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import type { NoticeCode } from "../../../domain/portability/providers/content-common.ts";
 import type {
 	ProviderImportInput,
 	ProviderInputBinding,
@@ -32,6 +33,14 @@ import {
 	SelectValue,
 } from "../ui/select.tsx";
 import { ImportApplyPanel } from "./ImportApplyPanel.tsx";
+import {
+	collidingLabelNames,
+	contentError,
+	contentLimitError,
+	noticeField,
+	validZone,
+	ZONES,
+} from "./import-content-text.ts";
 
 type Status = {
 	id: string;
@@ -58,6 +67,72 @@ type Loaded = {
 // Radix Select reserves "" for "no value", so the empty choice needs a token.
 const NONE = "__none";
 const trigger = "w-full sm:w-72 pointer-coarse:data-[size=default]:h-11";
+const contentFormats = [
+	"todoist-content",
+	"trello-content",
+	"ticktick",
+	"microsoft",
+	"generic-csv",
+] as const;
+type ImportFormat =
+	| "native"
+	| "csv"
+	| "todoist"
+	| "trello"
+	| (typeof contentFormats)[number];
+
+function noticeText(code: NoticeCode): string {
+	switch (code) {
+		case "unsupported-field":
+			return m.import_content_unsupported_field();
+		case "unsupported-date":
+			return m.import_content_unsupported_date();
+		case "unsupported-recurrence":
+			return m.import_content_unsupported_recurrence();
+		case "flattened-subtasks":
+			return m.import_content_flattened();
+		case "duplicate-row":
+			return m.import_content_duplicate();
+		case "comments-as-notes":
+			return m.import_content_comments();
+		case "people-excluded":
+			return m.import_content_people();
+		case "attachments-excluded":
+			return m.import_content_attachments();
+		case "reminders-disabled":
+			return m.import_content_reminders();
+		case "history-excluded":
+			return m.import_content_history();
+		case "archive-state":
+			return m.import_content_archive();
+		case "partial-export":
+			return m.import_content_partial();
+		case "completion-unavailable":
+			return m.import_content_completion();
+		case "format-limits":
+			return m.import_content_format_limits();
+		case "timezone-recurrence":
+			return m.import_content_timed_recurrence();
+		case "unknown-state":
+			return m.import_content_unknown_state();
+		case "row-skipped":
+			return m.import_content_row_skipped();
+		case "field-truncated":
+			return m.import_content_field_truncated();
+		case "field-invalid":
+			return m.import_content_field_invalid();
+		case "archived-completed":
+			return m.import_content_archived_completed();
+		case "recurrence-anchor":
+			return m.import_content_recurrence_anchor();
+		case "date-order":
+			return m.import_content_date_order_used();
+		case "private-items":
+			return m.import_content_private_items();
+		case "row-ragged":
+			return m.import_content_row_ragged();
+	}
+}
 
 function Field({
 	label,
@@ -95,12 +170,23 @@ export function ImportPlanPanel() {
 	const [newId, setNewId] = useState(() => randomId());
 	const [label, setLabel] = useState("");
 	const [loaded, setLoaded] = useState<Loaded | null>(null);
-	const [format, setFormat] = useState<"native" | "csv" | "todoist" | "trello">(
-		"native",
-	);
+	const [format, setFormat] = useState<ImportFormat>("native");
 	const fileRef = useRef<File | undefined>(undefined);
 	const [projectFolderName, setProjectFolderName] = useState("");
 	const [unsectionedListName, setUnsectionedListName] = useState("");
+	const [timezone, setTimezone] = useState(
+		() => Intl.DateTimeFormat().resolvedOptions().timeZone,
+	);
+	const contentFormat = contentFormats.some((value) => value === format);
+	const [dateOrder, setDateOrder] = useState<"auto" | "mdy" | "dmy">("auto");
+	const [errorDetail, setErrorDetail] = useState<{
+		code?: string;
+		row?: number;
+	}>({});
+	const zoneTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+		undefined,
+	);
+	const [labels] = useQuery(queries.labels.mine());
 	const [policyAccepted, setPolicyAccepted] = useState(false);
 	const [fileName, setFileName] = useState<string | null>(null);
 	const limitsId = useId();
@@ -195,22 +281,27 @@ export function ImportPlanPanel() {
 			listing.current = null;
 			active.current?.abort();
 			worker.current?.terminate();
+			clearTimeout(zoneTimer.current);
 		};
 	}, [refresh]);
 	function changed() {
 		if (
-			["todoist-project-csv", "trello-board-json"].includes(
+			["todoist-project-csv", "trello-board-json", "provider-content"].includes(
 				(loaded?.input ?? report?.inputBinding)?.adapter ?? "",
 			)
 		)
 			setPolicyAccepted(false);
 		setReport(null);
 		setError(null);
+		setErrorDetail({});
 	}
 	function selectFile(
 		file: File | undefined,
 		names = { projectFolderName, unsectionedListName },
+		selectedTimezone = timezone,
+		selectedOrder = dateOrder,
 	) {
+		clearTimeout(zoneTimer.current);
 		fileRef.current = file;
 		worker.current?.terminate();
 		worker.current = null;
@@ -234,7 +325,12 @@ export function ImportPlanPanel() {
 		worker.current = parser;
 		parser.onmessage = (
 			event: MessageEvent<
-				Loaded | { error: "invalid" | "limit" | "unsupported" | "secure" }
+				| Loaded
+				| {
+						error: "invalid" | "limit" | "unsupported" | "secure";
+						code?: string;
+						row?: number;
+				  }
 			>,
 		) => {
 			if (worker.current !== parser) return;
@@ -243,6 +339,7 @@ export function ImportPlanPanel() {
 			worker.current = null;
 			if ("error" in event.data) {
 				setError(event.data.error);
+				setErrorDetail({ code: event.data.code, row: event.data.row });
 				return;
 			}
 			const result = event.data;
@@ -266,7 +363,13 @@ export function ImportPlanPanel() {
 				worker.current = null;
 			}
 		};
-		parser.postMessage({ file, format, ...names });
+		parser.postMessage({
+			file,
+			format,
+			timezone: selectedTimezone,
+			dateOrder: selectedOrder,
+			...names,
+		});
 	}
 	async function request(
 		path: string,
@@ -302,9 +405,11 @@ export function ImportPlanPanel() {
 					setError(
 						code === "source-binding-conflict" &&
 							requestInput?.kind === "provider" &&
-							["todoist-project-csv", "trello-board-json"].includes(
-								requestInput.adapter,
-							)
+							[
+								"todoist-project-csv",
+								"trello-board-json",
+								"provider-content",
+							].includes(requestInput.adapter)
 							? "binding"
 							: code === "unsupported-import-version"
 								? "unsupported"
@@ -393,6 +498,12 @@ export function ImportPlanPanel() {
 			: null;
 	const trelloBinding =
 		displayedBinding?.adapter === "trello-board-json" ? displayedBinding : null;
+	const contentBinding =
+		displayedBinding?.adapter === "provider-content" ? displayedBinding : null;
+	const collidingLabels =
+		contentBinding && loaded?.document
+			? collidingLabelNames(loaded.document.data.labels, labels, workspaceMap)
+			: [];
 	const ready =
 		loaded?.document.data.workspaces.every((w) =>
 			writable.some((target) => target.id === workspaceMap[w.id]),
@@ -421,7 +532,58 @@ export function ImportPlanPanel() {
 								(report?.inputBinding ?? loaded?.input)?.sourceNamespace ?? "",
 						})}
 					</p>
-					{todoistBinding ? (
+					{contentBinding ? (
+						<>
+							<p>{m.import_content_policy()}</p>
+							{contentBinding.provider === "ticktick" ? (
+								<p>
+									{m.import_content_mapping_list({
+										list: contentBinding.unsectionedListName,
+									})}
+								</p>
+							) : contentBinding.provider !== "trello" ? (
+								<p>
+									{m.import_todoist_mapping({
+										project: contentBinding.projectFolderName,
+										unsectioned: contentBinding.unsectionedListName,
+									})}
+								</p>
+							) : null}
+							<p>
+								{m.import_content_timezone()}: {contentBinding.timezone}
+							</p>
+							{collidingLabels.length > 0 && (
+								<p role="status" data-testid="import-label-collision">
+									{m.import_content_label_collision({
+										names: new Intl.ListFormat(getLocale(), {
+											type: "conjunction",
+										}).format(collidingLabels.slice(0, 10)),
+									})}
+								</p>
+							)}
+							<p className="break-all">
+								{m.import_todoist_snapshot({
+									digest: contentBinding.snapshotSha256,
+								})}
+							</p>
+							<ul
+								data-testid="import-content-notices"
+								className="space-y-1 break-words"
+							>
+								{contentBinding.notices.map((notice) => (
+									<li key={`${notice.code}:${notice.path}`}>
+										{m.import_content_notice({
+											message: noticeText(notice.code),
+											count: new Intl.NumberFormat(getLocale()).format(
+												notice.count,
+											),
+											field: noticeField(notice.code, notice.path),
+										})}
+									</li>
+								))}
+							</ul>
+						</>
+					) : todoistBinding ? (
 						<>
 							<p className="break-all">
 								{m.import_todoist_snapshot({
@@ -459,11 +621,13 @@ export function ImportPlanPanel() {
 								setPolicyAccepted(event.target.checked);
 							}}
 						/>
-						{todoistBinding
-							? m.import_todoist_acknowledge()
-							: trelloBinding
-								? m.import_trello_acknowledge()
-								: m.import_provider_acknowledge()}
+						{contentBinding
+							? m.import_content_acknowledge()
+							: todoistBinding
+								? m.import_todoist_acknowledge()
+								: trelloBinding
+									? m.import_trello_acknowledge()
+									: m.import_provider_acknowledge()}
 					</label>
 				</div>
 			)}
@@ -477,10 +641,16 @@ export function ImportPlanPanel() {
 									next !== "native" &&
 									next !== "csv" &&
 									next !== "todoist" &&
-									next !== "trello"
+									next !== "trello" &&
+									!contentFormats.some((value) => value === next)
 								)
 									return;
-								setFormat(next);
+								setFormat(next as ImportFormat);
+								setDateOrder("auto");
+								if (contentFormats.some((value) => value === next)) {
+									setProjectFolderName(m.import_content_folder_default());
+									setUnsectionedListName(m.import_content_list_default());
+								}
 								selectFile(undefined);
 							}}
 						>
@@ -492,6 +662,21 @@ export function ImportPlanPanel() {
 								<SelectValue />
 							</SelectTrigger>
 							<SelectContent>
+								<SelectItem value="todoist-content">
+									{m.import_content_todoist()}
+								</SelectItem>
+								<SelectItem value="ticktick">
+									{m.import_content_ticktick()}
+								</SelectItem>
+								<SelectItem value="microsoft">
+									{m.import_content_microsoft()}
+								</SelectItem>
+								<SelectItem value="trello-content">
+									{m.import_content_trello()}
+								</SelectItem>
+								<SelectItem value="generic-csv">
+									{m.import_content_csv()}
+								</SelectItem>
 								<SelectItem value="native">
 									{m.import_provider_native()}
 								</SelectItem>
@@ -506,27 +691,30 @@ export function ImportPlanPanel() {
 						</Select>
 					)}
 				</Field>
-				{format === "todoist" && (
+				{(format === "todoist" ||
+					(contentFormat && format !== "trello-content")) && (
 					<>
-						<Field label={m.import_todoist_project()}>
-							{(labelId) => (
-								<Input
-									aria-labelledby={labelId}
-									data-testid="import-todoist-project"
-									className={trigger}
-									maxLength={500}
-									value={projectFolderName}
-									onChange={(event) => {
-										const value = event.target.value;
-										setProjectFolderName(value);
-										selectFile(fileRef.current, {
-											projectFolderName: value,
-											unsectionedListName,
-										});
-									}}
-								/>
-							)}
-						</Field>
+						{format !== "ticktick" && (
+							<Field label={m.import_todoist_project()}>
+								{(labelId) => (
+									<Input
+										aria-labelledby={labelId}
+										data-testid="import-todoist-project"
+										className={trigger}
+										maxLength={500}
+										value={projectFolderName}
+										onChange={(event) => {
+											const value = event.target.value;
+											setProjectFolderName(value);
+											selectFile(fileRef.current, {
+												projectFolderName: value,
+												unsectionedListName,
+											});
+										}}
+									/>
+								)}
+							</Field>
+						)}
 						<Field label={m.import_todoist_unsectioned()}>
 							{(labelId) => (
 								<Input
@@ -547,22 +735,120 @@ export function ImportPlanPanel() {
 							)}
 						</Field>
 						<p className="text-xs text-muted-foreground">
-							{m.import_todoist_names_help()}
+							{contentFormat
+								? m.import_content_names_help()
+								: m.import_todoist_names_help()}
 						</p>
 					</>
 				)}
+				{contentFormat && (
+					<Field label={m.import_content_timezone()}>
+						{(labelId) => (
+							<>
+								<Input
+									aria-labelledby={labelId}
+									data-testid="import-content-timezone"
+									className={trigger}
+									value={timezone}
+									list="import-content-zones"
+									maxLength={100}
+									aria-invalid={!validZone(timezone)}
+									onChange={(event) => {
+										const value = event.target.value;
+										setTimezone(value);
+										clearTimeout(zoneTimer.current);
+										// A loaded conversion is bound to the previous zone.
+										worker.current?.terminate();
+										worker.current = null;
+										changed();
+										setLoaded(null);
+										setPolicyAccepted(false);
+										setParsing(false);
+										if (validZone(value))
+											zoneTimer.current = setTimeout(
+												() =>
+													selectFile(
+														fileRef.current,
+														{ projectFolderName, unsectionedListName },
+														value,
+													),
+												500,
+											);
+									}}
+								/>
+								<datalist id="import-content-zones">
+									{ZONES.map((zone) => (
+										<option key={zone} value={zone} />
+									))}
+								</datalist>
+								{!validZone(timezone) && (
+									<span role="alert" className="text-xs text-destructive">
+										{m.import_content_timezone_invalid()}
+									</span>
+								)}
+							</>
+						)}
+					</Field>
+				)}
+				{format === "microsoft" && (
+					<Field label={m.import_content_date_order()}>
+						{(labelId) => (
+							<Select
+								value={dateOrder}
+								onValueChange={(value) => {
+									const next = value as "auto" | "mdy" | "dmy";
+									setDateOrder(next);
+									selectFile(
+										fileRef.current,
+										{ projectFolderName, unsectionedListName },
+										timezone,
+										next,
+									);
+								}}
+							>
+								<SelectTrigger
+									aria-labelledby={labelId}
+									data-testid="import-content-date-order"
+									className={trigger}
+								>
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="auto">
+										{m.import_content_date_order_auto()}
+									</SelectItem>
+									<SelectItem value="mdy">
+										{m.import_content_date_order_mdy()}
+									</SelectItem>
+									<SelectItem value="dmy">
+										{m.import_content_date_order_dmy()}
+									</SelectItem>
+								</SelectContent>
+							</Select>
+						)}
+					</Field>
+				)}
+				{format === "microsoft" && (
+					<p className="text-xs text-muted-foreground">
+						{m.import_content_microsoft_help()}
+					</p>
+				)}
 				<FilePicker
 					label={
-						format === "trello"
-							? m.import_trello_file()
-							: format === "todoist"
-								? m.import_todoist_file()
-								: format === "csv"
-									? m.import_provider_file()
-									: m.import_plan_file()
+						contentFormat
+							? m.import_content_file()
+							: format === "trello"
+								? m.import_trello_file()
+								: format === "todoist"
+									? m.import_todoist_file()
+									: format === "csv"
+										? m.import_provider_file()
+										: m.import_plan_file()
 					}
 					accept={
-						format === "csv" || format === "todoist"
+						format === "csv" ||
+						format === "todoist" ||
+						(contentFormat && format !== "trello-content")
 							? "text/csv,.csv"
 							: "application/json,.json"
 					}
@@ -747,13 +1033,17 @@ export function ImportPlanPanel() {
 			{error && (
 				<p role="alert" className="mt-2 text-sm text-destructive">
 					{error === "secure"
-						? format === "trello"
-							? m.import_trello_secure_context()
-							: m.import_todoist_secure_context()
+						? contentFormat
+							? m.import_content_secure()
+							: format === "trello"
+								? m.import_trello_secure_context()
+								: m.import_todoist_secure_context()
 						: error === "binding"
-							? format === "trello"
-								? m.import_trello_binding_conflict()
-								: m.import_todoist_binding_conflict()
+							? contentFormat
+								? m.import_content_binding_conflict()
+								: format === "trello"
+									? m.import_trello_binding_conflict()
+									: m.import_todoist_binding_conflict()
 							: error === "unsupported"
 								? m.import_plan_history_unsupported()
 								: error === "retained"
@@ -763,15 +1053,19 @@ export function ImportPlanPanel() {
 										: error === "quota"
 											? m.import_plan_quota()
 											: error === "limit"
-												? m.import_plan_limits()
+												? contentFormat
+													? contentLimitError(errorDetail)
+													: m.import_plan_limits()
 												: error === "invalid"
-													? format === "trello"
-														? m.import_trello_invalid()
-														: format === "todoist"
-															? m.import_todoist_invalid()
-															: format === "csv"
-																? m.import_provider_invalid()
-																: m.import_plan_invalid()
+													? contentFormat
+														? contentError(errorDetail)
+														: format === "trello"
+															? m.import_trello_invalid()
+															: format === "todoist"
+																? m.import_todoist_invalid()
+																: format === "csv"
+																	? m.import_provider_invalid()
+																	: m.import_plan_invalid()
 													: m.import_plan_failed()}
 				</p>
 			)}

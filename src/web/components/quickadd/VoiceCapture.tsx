@@ -18,7 +18,6 @@ function reasonMessage(reason: VoiceReason): string {
 		case "unsupported-insecure-context":
 			return m.quickadd_voice_insecure();
 		case "unsupported-no-api":
-		case "unsupported-no-local-processing":
 			return m.quickadd_voice_unsupported();
 		case "language-pack-unavailable":
 			return m.quickadd_voice_unsupported_pack();
@@ -27,6 +26,8 @@ function reasonMessage(reason: VoiceReason): string {
 			return m.quickadd_voice_pack_pending();
 		case "permission-denied":
 			return m.quickadd_voice_permission();
+		case "network":
+			return m.quickadd_voice_network();
 		case "audio-capture":
 			return m.quickadd_voice_audio_capture();
 		case "no-speech":
@@ -41,11 +42,13 @@ function reasonMessage(reason: VoiceReason): string {
 
 function Review({
 	alternatives,
+	vendor,
 	onUse,
 	onRetry,
 	onCancel,
 }: {
 	alternatives: readonly string[];
+	vendor: boolean;
 	onUse: (index: number) => void;
 	onRetry: () => void;
 	onCancel: () => void;
@@ -65,7 +68,7 @@ function Review({
 				role="status"
 				className="relative text-xs text-muted-foreground"
 			>
-				{m.quickadd_voice_heard()}
+				{vendor ? m.quickadd_voice_heard_vendor() : m.quickadd_voice_heard()}
 				<span className="sr-only">: {alternatives[picked]}</span>
 			</p>
 			{alternatives.length > 1 ? (
@@ -147,6 +150,7 @@ export function VoiceCapture({
 	const state = voice.state;
 	const phase = state?.phase ?? null;
 	const ready = state?.phase === "idle" && state.ready;
+	const accepted = state?.phase === "idle" && state.acknowledged;
 	const stopRef = useRef<HTMLButtonElement>(null);
 	const cancelRef = useRef<HTMLButtonElement>(null);
 	const checkRef = useRef<HTMLButtonElement>(null);
@@ -155,6 +159,7 @@ export function VoiceCapture({
 	// Set by the user's own Dictate / Check again click. The automatic open-time
 	// probe and identity changes never set it, so they never move focus.
 	const explicit = useRef(false);
+	const accepting = useRef(false);
 
 	useEffect(() => {
 		const prev = before.current;
@@ -179,6 +184,18 @@ export function VoiceCapture({
 			explicit.current = false;
 	}, [phase, ready, onFocusInput]);
 
+	// Accepting the vendor notice enables the mic; move focus onto it.
+	useEffect(() => {
+		if (accepted && accepting.current) {
+			accepting.current = false;
+			startRef.current?.focus();
+		}
+	}, [accepted]);
+
+	const accept = () => {
+		accepting.current = true;
+		voice.acknowledge();
+	};
 	const cancel = () => {
 		voice.cancel();
 		onFocusInput();
@@ -199,6 +216,7 @@ export function VoiceCapture({
 			<Review
 				key={state.session}
 				alternatives={state.alternatives}
+				vendor={state.vendor}
 				onUse={onUse}
 				onRetry={voice.retryAfterReview}
 				onCancel={cancel}
@@ -272,9 +290,16 @@ export function VoiceCapture({
 				? m.quickadd_voice_stopping()
 				: state.phase === "checking"
 					? m.quickadd_voice_checking()
-					: m.quickadd_voice_privacy();
-	// The mic starts only from idle+ready, so start() stays inside the click.
-	const micReady = state.phase === "idle" && state.ready;
+					: state.phase === "idle" && state.ready && state.vendor
+						? state.acknowledged
+							? m.quickadd_voice_vendor_notice()
+							: `${m.quickadd_voice_vendor_notice()} ${m.quickadd_voice_vendor_blocked()}`
+						: m.quickadd_voice_privacy();
+	// The mic starts only from idle+ready (and, for a vendor-service engine,
+	// after the notice is accepted), so start() stays inside the click.
+	const needsNotice =
+		state.phase === "idle" && state.ready && !state.acknowledged;
+	const micReady = state.phase === "idle" && state.ready && state.acknowledged;
 
 	return (
 		<div
@@ -318,6 +343,17 @@ export function VoiceCapture({
 				>
 					<Mic aria-hidden="true" />
 					{m.quickadd_voice_start()}
+				</Button>
+			)}
+			{needsNotice && (
+				<Button
+					type="button"
+					variant="outline"
+					data-testid="quickadd-voice-accept"
+					className={TOUCH}
+					onClick={accept}
+				>
+					{m.quickadd_voice_vendor_accept()}
 				</Button>
 			)}
 			{state.phase === "idle" && !state.ready && (

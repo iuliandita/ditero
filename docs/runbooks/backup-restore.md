@@ -4,6 +4,10 @@
 
 1. Record the running Ditero and Zero versions and deployment configuration, including
    `DITERO_E2E_ENABLED` (defaults to `false`) and attachment storage settings.
+   Quiesce application writes and attachment garbage collection until the database
+   and blob snapshots are complete. A blob deleted after the database snapshot
+   can otherwise be missing from the restored backup set. Keep maintenance traffic
+   isolated; a running process alone does not establish a quiet backup window.
 2. Run `pg_dump --format=custom` with a role that can read the entire database.
    For the bundled stack, use its administrator login `postgres`. The app's
    `ditero_migrator` cannot read Zero's CDC/CVR schemas and is not a full backup
@@ -82,6 +86,73 @@ Never test a restore by pointing it at the production Zero replica or notificati
 Read [E2E Key Loss](e2e-key-loss.md) before treating a successful infrastructure restore as proof
 that encrypted files remain decryptable.
 
+## Kubernetes logical backup and restore
+
+The same logical path applies to Helm, bare Kustomize and CloudNativePG. Record
+an explicit context and namespace for every command. Provision a fresh namespace,
+original role passwords and service secrets, verified database connections, and
+empty application/Zero claims for the target. Use an administrator connection
+inside the database pod or an approved backup client; the application runtime
+connection cannot produce a complete backup.
+
+For a database pod with local administrator access, use the following pattern,
+substituting the recorded context, namespace and database pod:
+
+```sh
+(
+set -eC
+umask 077
+kubectl --context CONTEXT --namespace SOURCE exec DATABASE_POD -- \
+  pg_dump -U postgres -d ditero --format=custom > database.dump
+)
+```
+
+For CloudNativePG, this uses the database pod's local Unix socket; it does not
+require enabling remote access for the reserved `postgres` login. The operator
+and managed role passwords must reconcile before restoring. A logical dump does
+not contain cluster logins, replication slots, operator configuration or Secrets.
+A maintained backup plugin is required for continuous WAL archival/PITR; it is
+not required for this logical backup path.
+
+After the dump, snapshot the attachment claim. For a quiet qualification stack,
+stop Zero first and block user writes for the entire database/blob backup window.
+The running app can supply the archive through `kubectl exec` and `tar`; an
+operator may instead use its CSI snapshot mechanism. Retain and encrypt the
+matching configuration and original secrets separately. Decrypt the recovery
+archive and verify every recorded checksum before restoring.
+
+On the fresh target, keep app and Zero replicas at zero while restoring:
+
+```sh
+kubectl --context CONTEXT --namespace TARGET exec -i DATABASE_POD -- \
+  pg_restore -U postgres -d ditero --clean --if-exists --exit-on-error < database.dump
+```
+
+Restore the attachment archive into the app claim using a temporary pod with
+the app's UID/GID 1000, `fsGroup: 1000`, and explicit resource requests/limits.
+Wait for that writer to exit before starting the app. Keep the Zero claim empty.
+Start only the app, wait for migrations and `/health`, then start Zero. Both the
+Helm chart and the Kustomize base gate Zero on the current app's health through
+an init container, so scaling both Deployments up together is safe; Helm uses the
+release revision and Kustomize the app image reference.
+
+Before replacing or removing a failed pod, capture its current and previous
+logs, events and description. From a source checkout, the bounded read-only
+collector saves private files and records truncation, timeouts and command errors:
+
+```sh
+node tests/container/kubernetes-diagnostics.mjs CONTEXT NAMESPACE NEW_PRIVATE_DIRECTORY
+```
+
+A missing previous log is recorded as an error; it does not prove that the
+container never failed. Keep the first failing capture and inspect `capture.json`
+before cleanup. Readiness alone is insufficient: sign in as the original user,
+unlock the retained keys, decrypt the original attachment, and confirm a mutation
+reaches PostgreSQL and a fresh sync client. Retain the source until these checks
+pass. An image rollback does not reverse migrations; restore a matching backup
+set into an isolated target when database rollback is required. Existing clients
+keep the same data and attachment formats.
+
 ## Workspace Leave Upgrade
 
 Run the membership-leave cleanup migration before deploying the application that offers
@@ -91,3 +162,50 @@ Keep the usual coordinated database and attachment backup before migrating. Olde
 continue to work, but only updated clients offer Leave workspace. Application rollback
 can retain this additive migration; do not restore an older database over newer membership
 changes. Leaving and owner removal both require remaining members to rotate file keys.
+
+## Focus Interval Start Upgrade
+
+Run all focus-interval migrations before deploying the updated application.
+`focus_interval_start` is an IDs-only acknowledgement table;
+`server_private.focus_interval_clock`
+holds server timestamps outside Zero publications and has no client schema or named query. Only
+the owner's acknowledgement IDs sync read-only. The second migration invalidates
+older, potentially overlapping starts; it does not rewrite recorded sessions.
+Reload clients after upgrading and start a fresh interval. Keep the usual
+coordinated database and attachment backup before migrating. Attachment ciphertext
+and key envelopes are unchanged.
+
+Each new online start closes that account's preceding timing span. A completion
+needs the full duration plus pauses within its exclusive span, without a latency
+allowance. Evidence expires after 14 days. The scheduler deletes at most 500
+expired clock/acknowledgement pairs per leader tick, including dormant accounts;
+large backlogs drain over multiple ticks, so expiry is not an exact deletion time.
+The fixed-bound expiry function runs with the migration owner's privileges and
+can delete only expired evidence; runtime callers cannot choose owners or cutoffs.
+
+Restore both tables together, including the private schema and its grants.
+Follow the [database role upgrade procedure](database-roles.md#private-server-clocks)
+to preserve existing caches when upgrading from develop, which never had these
+focus tables. Only local caches built from earlier branch rounds that copied the
+public clock table need rebuilding. A browser's saved `serverStarted` flag does not
+establish that the restored database still has the start. Clients reconcile it
+against synced IDs; the server rejects a pending server-proof completion if its
+clock row is missing, expired, or superseded before enough time elapsed. It never
+converts that completion into an offline fallback. A genuinely offline completion
+records explicit monotonic proof from its observing page. Existing queued
+completions without that marker require server evidence; they may be rejected
+after an upgrade or restore. An unqualified observer leaves the shared interval
+unresolved for a fully observing tab or delayed sync, bounded by the acceptance
+window per observed interval; a notice appears after ten seconds. Expiry never
+authorizes an observer without proof to discard another tab's opportunity. Stop
+can discard that interval. Auto-cycle waits for completion replay to settle before
+starting its next phase, including server-clock early retries.
+
+Rollback to the preceding published release can retain these tables: that release
+ignores them. Rolling back to an intermediate focus implementation that expects
+`started_at` in `focus_interval_start` requires a matching schema rollback from a
+coordinated backup, and loses newer records. Do not restore an older database over
+newer focus sessions merely to roll back the application. Older released clients
+without interval IDs keep their legacy logging behavior; interval-ID clients must
+upgrade to send the explicit proof marker for offline completion. Personal focus
+records from legacy/offline clients are not tamper-proof time tracking.

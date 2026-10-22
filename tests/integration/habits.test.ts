@@ -233,7 +233,7 @@ describe("new recurrence task columns flow through tasks.mine", () => {
 type Ctx = { id: string };
 async function call<A>(
 	mutator: {
-		fn: (a: { tx: Transaction<Schema>; ctx: Ctx; args: A }) => Promise<void>;
+		fn: (a: { tx: Transaction<Schema>; ctx: Ctx; args: A }) => Promise<unknown>;
 	},
 	c: Ctx,
 	args: A,
@@ -893,6 +893,7 @@ describe("M2 habit/recurrence/focus/karma mutators", () => {
 		test("replaying a persisted interval records once per account", async () => {
 			const interval = {
 				intervalId: crypto.randomUUID(),
+				proof: "monotonic" as const,
 				kind: "work" as const,
 				startedAt: ANCHOR,
 				endedAt: ANCHOR + 1500000,
@@ -924,6 +925,7 @@ describe("M2 habit/recurrence/focus/karma mutators", () => {
 		])("clock-adjusted timestamps remain strict about duration (%i ms)", async (correction) => {
 			const interval = {
 				intervalId: crypto.randomUUID(),
+				proof: "monotonic" as const,
 				kind: "work" as const,
 				startedAt: ANCHOR + correction,
 				endedAt: ANCHOR + correction + 10000,

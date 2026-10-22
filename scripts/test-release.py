@@ -122,7 +122,7 @@ class ReleaseTests(unittest.TestCase):
                         assets[0]["digest"] = "sha256:" + "0" * 64
                     return json.dumps({"assets": assets})
                 env = {"TAG": f"v{version}", "REPO": "owner/repo", "RELEASE_SHA": sha}
-                with patch.dict(os.environ, env), patch.object(release, "command", side_effect=command), patch.object(release.subprocess, "run") as run:
+                with patch.dict(os.environ, env), patch.object(release, "command", side_effect=command), patch.object(release, "verify_clients"), patch.object(release.subprocess, "run") as run:
                     if corrupted:
                         with self.assertRaisesRegex(ValueError, "upload digests"):
                             release.publish(output)
@@ -130,6 +130,182 @@ class ReleaseTests(unittest.TestCase):
                         release.publish(output)
                     published = any("--draft=false" in call.args[0] for call in run.call_args_list)
                     self.assertEqual(published, not corrupted)
+
+    def test_publish_requires_the_clients_attestation_and_documents_the_same_check(self):
+        version = release.metadata()["version"]
+        sha = "a" * 40
+        archive_name = f"ditero-{version}-clients.tar.gz"
+        for attested in (False, True):
+            with self.subTest(attested=attested), tempfile.TemporaryDirectory() as directory:
+                output = Path(directory)
+                for name in release.expected_assets(version):
+                    (output / name).write_bytes(b"artifact")
+                notes = []
+                def command(*args):
+                    if args[0] == "git":
+                        return f"{sha}\trefs/tags/v{version}^{{}}" if args[1] == "ls-remote" else sha
+                    if args[1] == "api":
+                        return "[[]]"
+                    assets = [{"name": path.name, "size": path.stat().st_size, "digest": f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"} for path in output.iterdir()]
+                    return json.dumps({"assets": assets})
+                def run(args, **kwargs):
+                    if args[:3] == ["gh", "attestation", "verify"]:
+                        self.assertEqual(args, release.clients_attestation_args(str(output / archive_name), "owner/repo", sha))
+                        if not attested:
+                            raise subprocess.CalledProcessError(1, args)
+                    elif "--notes-file" in args:
+                        notes.append(Path(args[args.index("--notes-file") + 1]).read_text())
+                env = {"TAG": f"v{version}", "REPO": "owner/repo", "RELEASE_SHA": sha}
+                with patch.dict(os.environ, env), patch.object(release, "command", side_effect=command), patch.object(release, "verify_clients"), patch.object(release.subprocess, "run", side_effect=run) as mock_run:
+                    if not attested:
+                        with self.assertRaises(subprocess.CalledProcessError):
+                            release.publish(output)
+                        self.assertFalse(any(call.args[0][:3] == ["gh", "release", "create"] for call in mock_run.call_args_list))
+                        continue
+                    release.publish(output)
+                self.assertEqual(len(notes), 1)
+                documented = " ".join(release.clients_attestation_args(archive_name, "owner/repo", sha))
+                self.assertIn(f"`{documented}`", notes[0])
+                self.assertNotIn("no keyless signature", notes[0])
+
+    def test_release_workflow_attests_the_clients_archive_before_publish(self):
+        text = (release.ROOT / ".github/workflows/release.yml").read_text()
+        clients = text[text.index("\n  clients:\n"):text.index("\n  docker-zero:")]
+        self.assertIn("uses: actions/attest-build-provenance@", clients)
+        self.assertIn("subject-path: out/clients/*-clients.tar.gz", clients)
+        self.assertIn("id-token: write", clients)
+        self.assertIn("attestations: write", clients)
+        publish = text[text.index("\n  publish:\n"):]
+        self.assertRegex(publish, r"needs: \[[^\]]*\bclients\b[^\]]*\]")
+
+    def bundle_archive(self, path, source_sha, mutate=None, **changes):
+        version = "0.0.1-alpha.1"
+        prefix = f"ditero-{version}-clients"
+        minimum = release.minimum_bun()
+        banner = release.CLIENT_SHEBANG + f'{{const m=[{minimum.replace(".", ",")}];}}\n/*! ditero-package: zod@4.4.3 */\nconsole.log("bundle");\n'.encode()
+        notice = ("=" * 72 + "\nzod@4.4.3 (MIT)\n" + "=" * 72 + "\n\nLICENSE\n\nMIT License\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software.\n").encode()
+        info = {"version": version, "sourceSha": source_sha, "sourceDirty": False, "target": "bun",
+                "apiVersion": 1, "minimumBun": minimum, "buildBun": "1.4.2", "clients": list(release.CLIENT_BUNDLES),
+                "dependencies": ["zod@4.4.3"]}
+        info.update(changes)
+        files = {name: banner for name in release.CLIENT_BUNDLES}
+        files.update({"THIRD_PARTY_NOTICES.txt": notice, "LICENSE": b"license", "BUILDINFO.json": json.dumps(info).encode()})
+        files["SHA256SUMS"] = "".join(f"{hashlib.sha256(content).hexdigest()}  {name}\n" for name, content in files.items()).encode()
+        if mutate:
+            mutate(files)
+        with tarfile.open(path, "w:gz") as archive:
+            for name, content in files.items():
+                member = tarfile.TarInfo(f"{prefix}/{name}")
+                member.size = len(content)
+                member.mode = 0o755 if name in release.CLIENT_BUNDLES else 0o644
+                archive.addfile(member, io.BytesIO(content))
+
+    def test_client_bundles_require_every_bundle_checksum_and_notice(self):
+        sha = "a" * 40
+        banner = release.CLIENT_SHEBANG + b"{const m=[%s]}\n/*! ditero-package: zod@4.4.3 */\n" % release.minimum_bun().replace(".", ",").encode()
+        leaks = {
+            "home path": b'const d="/home/builder/ditero/src";\n',
+            "macOS home path": b'const d="/Users/builder/ditero";\n',
+            "private address": b'const u="http://192.168.1.20:3000";\n',
+            "private hostname": b'const u="https://db.corp.local/";\n',
+            "environment file": b"DATABASE_URL=postgres://u:pw@db/app\nDITERO_ENCRYPTION_KEY=abcdef0123\n",
+            "private key": b"-----BEGIN OPENSSH PRIVATE KEY-----\n",
+            "token": b'const t="ghp_' + b"a1" * 20 + b'";\n',
+        }
+        def rehash(files):
+            files["SHA256SUMS"] = "".join(f"{hashlib.sha256(files[name]).hexdigest()}  {name}\n" for name in release.CLIENT_FILES if name != "SHA256SUMS" and name in files).encode()
+        def drop(name, hashed=True):
+            def mutation(files):
+                del files[name]
+                if hashed:
+                    rehash(files)
+            return mutation
+        def replace(name, content):
+            def mutation(files):
+                files[name] = content
+                rehash(files)
+            return mutation
+        def sums_without(name):
+            def mutation(files):
+                files["SHA256SUMS"] = b"".join(line for line in files["SHA256SUMS"].splitlines(True) if not line.endswith(f"  {name}\n".encode()))
+            return mutation
+        def stale_sum(files):
+            files["ditero-cli.js"] += b"tampered"
+        info = lambda files: json.loads(files["BUILDINFO.json"])
+        def set_info(**changes):
+            def mutation(files):
+                files["BUILDINFO.json"] = json.dumps({**info(files), **changes}).encode()
+                rehash(files)
+            return mutation
+        rejected = {
+            "missing bundle": drop("ditero-mcp.js"),
+            "missing notices": drop("THIRD_PARTY_NOTICES.txt"),
+            "missing checksum list": drop("SHA256SUMS", hashed=False),
+            "checksum omits bundle": sums_without("ditero-tui.js"),
+            "checksum omits notices": sums_without("THIRD_PARTY_NOTICES.txt"),
+            "modified bundle": stale_sum,
+            "no shebang": replace("ditero-cli.js", b"console.log(1)\n"),
+            "unrestricted shebang": replace("ditero-cli.js", b"#!/usr/bin/env bun\n{const m=[%s]}\n" % release.minimum_bun().replace(".", ",").encode()),
+            "no minimum check": replace("ditero-cli.js", release.CLIENT_SHEBANG + b"console.log(1)\n"),
+            "source map": replace("ditero-cli.js", release.CLIENT_SHEBANG + b'{const m=[%s]}\n//# sourceMappingURL=x.map\n' % release.minimum_bun().replace(".", ",").encode()),
+            "notice without text": replace("THIRD_PARTY_NOTICES.txt", ("=" * 72 + "\nzod@4.4.3 (MIT)\n" + "=" * 72 + "\n\n").encode()),
+            "notice for another package": replace("THIRD_PARTY_NOTICES.txt", ("=" * 72 + "\nother@1.0.0 (MIT)\n" + "=" * 72 + "\n\n" + "MIT License permission " * 10).encode()),
+            "undeclared dependency": set_info(dependencies=["zod@4.4.3", "extra@1.0.0"]),
+            "dirty source": set_info(sourceDirty=True),
+            "wrong commit": set_info(sourceSha="b" * 40),
+            "wrong minimum": set_info(minimumBun="1.0.0"),
+            "wrong target": set_info(target="bun-linux-x64"),
+            "extra file": lambda files: files.update({"private.env": b"secret"}),
+            "no building Bun version": set_info(buildBun=None),
+            "bundle without package markers": replace("ditero-tui.js", release.CLIENT_SHEBANG + b"{const m=[%s]}\n" % release.minimum_bun().replace(".", ",").encode()),
+            "bundle with code from a package missing in the notices": replace("ditero-mcp.js", banner + b"/*! ditero-package: ajv@8.18.0 */\n"),
+            "bundle with a package missing from the dependency inventory": replace("ditero-cli.js", banner + b"/*! ditero-package: extra@1.0.0 */\n"),
+            **{f"{label} in a bundle": replace("ditero-cli.js", banner + leak) for label, leak in leaks.items()},
+            "absolute path in the build identity": set_info(note="/home/runner/work/ditero"),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "clients.tar.gz"
+            self.bundle_archive(path, sha)
+            release.verify_clients(path, "0.0.1-alpha.1", sha)
+            for name, mutation in rejected.items():
+                with self.subTest(name):
+                    self.bundle_archive(path, sha, mutation)
+                    with self.assertRaises(ValueError):
+                        release.verify_clients(path, "0.0.1-alpha.1", sha)
+            self.bundle_archive(path, sha, sourceDirty=True)
+            release.verify_clients(path, "0.0.1-alpha.1", sha, allow_dirty=True)
+
+    def test_client_bundle_archive_rejects_links_and_unexpected_paths(self):
+        sha = "a" * 40
+        with tempfile.TemporaryDirectory() as directory:
+            source, path = Path(directory) / "source.tar.gz", Path(directory) / "clients.tar"
+            self.bundle_archive(source, sha)
+            for name, kind in (("link", tarfile.SYMTYPE), ("nested/file", tarfile.REGTYPE), ("../escape", tarfile.REGTYPE), (".hidden", tarfile.REGTYPE), ("ditero-cli.js", tarfile.REGTYPE)):
+                with self.subTest(name=name), tarfile.open(source) as original, tarfile.open(path, "w") as archive:
+                    for member in original.getmembers():
+                        archive.addfile(member, original.extractfile(member))
+                    member = tarfile.TarInfo(f"ditero-0.0.1-alpha.1-clients/{name}")
+                    member.type = kind
+                    member.linkname = "outside"
+                    member.size = 1 if kind == tarfile.REGTYPE else 0
+                    archive.addfile(member, io.BytesIO(b"x") if member.size else None)
+                with self.assertRaises(ValueError):
+                    release.verify_clients(path, "0.0.1-alpha.1", sha)
+
+    def test_publish_refuses_a_release_with_an_invalid_client_archive(self):
+        version = release.metadata()["version"]
+        sha = "a" * 40
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory)
+            for name in release.expected_assets(version):
+                (output / name).write_bytes(b"artifact")
+            def command(*args):
+                return sha
+            env = {"TAG": f"v{version}", "REPO": "owner/repo", "RELEASE_SHA": sha}
+            with patch.dict(os.environ, env), patch.object(release, "command", side_effect=command), patch.object(release.subprocess, "run") as run:
+                with self.assertRaises(tarfile.ReadError):
+                    release.publish(output)
+                run.assert_not_called()
 
     def client_archive(self, path, source_sha, **changes):
         version = "0.0.1-alpha.1"
@@ -206,7 +382,7 @@ class ReleaseTests(unittest.TestCase):
                 info["runtimeNoticesManifestSha256"] = hashlib.sha256(raw).hexdigest()
                 files["BUILDINFO.json"] = json.dumps(info).encode()
             self.mutate_runtime_archive(original, candidate, include_notices)
-            release.verify_clients_candidate(candidate, "0.0.1-alpha.1", sha)
+            release.verify_standalone_candidate(candidate, "0.0.1-alpha.1", sha)
             destination = Path(directory) / "extracted"
             with tarfile.open(candidate) as archive:
                 archive.extractall(destination, filter="data")
@@ -222,14 +398,14 @@ class ReleaseTests(unittest.TestCase):
             path = Path(directory) / "clients.tar.gz"
             sha = "a" * 40
             self.client_archive(path, sha)
-            release.verify_clients_candidate(path, "0.0.1-alpha.1", sha)
+            release.verify_standalone_candidate(path, "0.0.1-alpha.1", sha)
             self.client_archive(path, sha, sourceDirty=True)
-            release.verify_clients_candidate(path, "0.0.1-alpha.1", sha)
+            release.verify_standalone_candidate(path, "0.0.1-alpha.1", sha)
             for changes in ({"runtimeNoticesComplete": True}, {"sourceDirty": 0}, {"sourceSha": "b" * 40}, {"bunRevision": "b" * 40}, {"runtimeArchiveSha256": "b" * 64}, {"target": "bun-linux-arm64"}, {"apiVersion": True}, {"dependencies": ["private.env"]}):
                 with self.subTest(changes=changes):
                     self.client_archive(path, sha, **changes)
                     with self.assertRaises(ValueError):
-                        release.verify_clients_candidate(path, "0.0.1-alpha.1", sha)
+                        release.verify_standalone_candidate(path, "0.0.1-alpha.1", sha)
 
     def test_client_archive_rejects_unexpected_paths_and_links(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -247,7 +423,7 @@ class ReleaseTests(unittest.TestCase):
                     member.size = 1 if kind == tarfile.REGTYPE else 0
                     archive.addfile(member, io.BytesIO(b"x") if member.size else None)
                 with self.assertRaises(ValueError):
-                    release.verify_clients_candidate(path, "0.0.1-alpha.1", sha)
+                    release.verify_standalone_candidate(path, "0.0.1-alpha.1", sha)
 
     def mutate_runtime_archive(self, source, destination, mutation):
         prefix = "ditero-0.0.1-alpha.1-clients-linux-x64/"
@@ -296,7 +472,7 @@ class ReleaseTests(unittest.TestCase):
                 with self.subTest(index=index):
                     self.mutate_runtime_archive(source, changed, lambda files: change(files, mutation))
                     with self.assertRaises(ValueError):
-                        release.verify_clients_candidate(changed, "0.0.1-alpha.1", "a" * 40)
+                        release.verify_standalone_candidate(changed, "0.0.1-alpha.1", "a" * 40)
 
     def test_runtime_archive_partition_and_duplicate_json_refusals(self):
         def duplicate(files, name):
@@ -321,7 +497,7 @@ class ReleaseTests(unittest.TestCase):
                 with self.subTest(index=index):
                     self.mutate_runtime_archive(source, changed, mutation)
                     with self.assertRaises(ValueError):
-                        release.verify_clients_candidate(changed, "0.0.1-alpha.1", "a" * 40)
+                        release.verify_standalone_candidate(changed, "0.0.1-alpha.1", "a" * 40)
 
     def test_deployment_requires_matching_kustomize_images(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(release, "ROOT", Path(directory)), patch.object(release, "metadata", return_value={"version": "0.0.1-alpha.1"}), patch.object(release.subprocess, "run") as run:
@@ -345,8 +521,10 @@ class ReleaseTests(unittest.TestCase):
             (guides[0], f"The chart version is `{version}`"),
             (guides[0], f"ghcr.io/iuliandita/ditero:{version}`"),
             (guides[0], f"ghcr.io/iuliandita/ditero:{version}-zero`"),
-            (guides[1], f"newTag: {version}"),
-            (guides[1], f"docker.io/iuliandita/ditero:{version}-zero"),
+            (guides[1], f"- name: ghcr.io/iuliandita/ditero:{version}\n"),
+            (guides[1], f"- name: ghcr.io/iuliandita/ditero:{version}-zero\n"),
+            (guides[1], f"newTag: {version}\n"),
+            (guides[1], f"newTag: {version}-zero\n"),
         )
         with tempfile.TemporaryDirectory() as directory, patch.object(release.subprocess, "run") as run:
             root = Path(directory)

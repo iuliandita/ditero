@@ -79,6 +79,14 @@ struct Socket {
     is_open: Arc<AtomicBool>,
     tx: mpsc::Sender<Message>,
     task: tauri::async_runtime::JoinHandle<()>,
+    handshake: oneshot::Receiver<()>,
+}
+async fn retire_socket(mut socket: Socket) {
+    if !socket.is_open.load(Ordering::SeqCst) {
+        // Let the existing 20-second handshake classify trust before cancellation.
+        let _ = tokio::time::timeout(Duration::from_secs(21), &mut socket.handshake).await;
+    }
+    socket.task.abort();
 }
 struct Actor {
     tx: mpsc::Sender<Work>,
@@ -120,7 +128,7 @@ struct Actor {
     #[cfg(test)]
     requests: std::sync::Mutex<Vec<(String, String, Option<String>)>>,
     #[cfg(test)]
-    push_supported: bool,
+    push_supported: Result<()>,
 }
 fn capture_link_ingress(epoch: &AtomicU64, verified: &AtomicBool) -> Option<u64> {
     let captured = epoch.load(Ordering::SeqCst);
@@ -280,7 +288,7 @@ pub fn run() {
         #[cfg(test)]
         requests: Default::default(),
         #[cfg(test)]
-        push_supported: true,
+        push_supported: Ok(()),
     };
 
     let builder = tauri::Builder::default();
@@ -334,7 +342,6 @@ pub fn run() {
                 .open(data.join("native-session.lock"))?;
             lock.try_lock().map_err(std::io::Error::other)?;
             app.manage(ProcessLock { _file: lock });
-            tauri::async_runtime::spawn(actor.run(rx));
             WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
                 .title("Ditero")
                 .inner_size(1100., 800.)
@@ -342,6 +349,10 @@ pub fn run() {
                 .on_new_window(|_, _| NewWindowResponse::Deny)
                 .on_download(|_, _| false)
                 .build()?;
+            notifications::initialize();
+            tauri::async_runtime::spawn(actor.run(rx));
+            #[cfg(all(debug_assertions, target_os = "macos"))]
+            crate::journeys::start(app.handle().clone())?;
             Ok(())
         })
         .run(tauri::generate_context!())
@@ -376,7 +387,7 @@ impl Actor {
                     let _ = ack.send(result);
                 }
                 Work::Drain(ack) => {
-                    self.drain();
+                    self.drain_gracefully().await;
                     if !notifications::drain(
                         std::mem::take(&mut self.push_tasks),
                         Duration::from_secs(3),
@@ -449,6 +460,11 @@ impl Actor {
     fn advance(&mut self) {
         let _guard = self.files.retirement();
         self.gen = self.clock.fetch_add(1, Ordering::SeqCst) + 1;
+    }
+    async fn drain_gracefully(&mut self) {
+        let sockets: Vec<_> = self.sockets.drain().map(|(_, socket)| socket).collect();
+        futures_util::future::join_all(sockets.into_iter().map(retire_socket)).await;
+        self.drain();
     }
     fn drain(&mut self) {
         self.clear_task_links();
@@ -825,14 +841,15 @@ impl Actor {
         }
         Ok(())
     }
-    async fn notification_supported(&self) -> bool {
+    async fn notification_permission(&self, request: bool) -> Result<()> {
         #[cfg(test)]
         {
+            let _ = request;
             self.push_supported
         }
         #[cfg(not(test))]
         {
-            notifications::supported().await
+            notifications::permission(request).await
         }
     }
     fn retire_in(next: &mut Registry, session: &Session) -> Result<()> {
@@ -1074,9 +1091,9 @@ impl Actor {
             self.push_state = "storage-failed";
             return Ok(self.push_reply());
         }
-        if !self.notification_supported().await {
+        if let Err(state) = self.notification_permission(op != "push.state").await {
             self.stop_notifications();
-            self.push_state = "unsupported";
+            self.push_state = state;
             return Ok(self.push_reply());
         }
         self.current()?;
@@ -1580,7 +1597,9 @@ impl Actor {
                 }
                 let socket = self.sockets.get(&cid).ok_or("invalid-socket")?;
                 if !socket.is_open.load(Ordering::SeqCst) {
-                    self.close_socket(cid);
+                    let socket = self.sockets.remove(&cid).ok_or("invalid-socket")?;
+                    retire_socket(socket).await;
+                    self.emit(json!({"t":"ws","gen":self.gen,"cid":cid,"e":"close","code":1006,"reason":"","clean":false}));
                     return Ok(json!({"ok":true}));
                 }
                 if socket
@@ -1997,6 +2016,7 @@ impl Actor {
                 json!({"ok":false,"code":"storage-failed","remoteRevoked":revoked,"alreadyUnusable":unusable}),
             );
         }
+        self.cleanup_notifications();
         Ok(json!({"ok":true,"remoteRevoked":revoked,"alreadyUnusable":unusable}))
     }
     fn close_socket(&mut self, cid: u64) {
@@ -2058,6 +2078,7 @@ impl Actor {
         let guard = self
             .fences
             .begin(self.session.as_ref().ok_or("no-session")?)?;
+        let (handshake_done, handshake) = oneshot::channel();
         let task = tauri::async_runtime::spawn(async move {
             let emit = |kind: &str, fields: Value| {
                 if clock.load(Ordering::SeqCst) == gen {
@@ -2084,7 +2105,9 @@ impl Actor {
                 Ok(Err(tokio_tungstenite::tungstenite::Error::Io(_))) => true,
                 _ => false,
             };
-            if guard.complete(safe).is_err() {
+            let completed = guard.complete(safe);
+            let _ = handshake_done.send(());
+            if completed.is_err() {
                 emit("error", json!({"kind":"storage-failed"}));
                 emit("close", json!({"code":1006,"reason":"","clean":false}));
                 let _ = owner.send(Work::Ended(gen, cid)).await;
@@ -2125,7 +2148,15 @@ impl Actor {
             emit("close", json!({"code":code,"reason":"","clean":clean}));
             let _ = owner.send(Work::Ended(gen, cid)).await;
         });
-        self.sockets.insert(cid, Socket { tx, task, is_open });
+        self.sockets.insert(
+            cid,
+            Socket {
+                tx,
+                task,
+                is_open,
+                handshake,
+            },
+        );
         Ok(json!({"ok":true}))
     }
 }
@@ -2320,7 +2351,7 @@ mod tests {
             #[cfg(test)]
             requests: Default::default(),
             #[cfg(test)]
-            push_supported: true,
+            push_supported: Ok(()),
         }
     }
     fn cached_host() -> Actor {
@@ -3159,12 +3190,43 @@ mod tests {
             &live.retired,
             &host.push.as_ref().unwrap().owner.retired
         ));
-        host.push_supported = false;
+        host.push_supported = Err("unsupported");
         let reply = host.push_post(&state).await.unwrap();
         assert_eq!(reply["state"], "unsupported");
         assert!(host.push.is_none());
         assert!(!live.current());
         host.stop_notifications();
+    }
+    #[tokio::test]
+    async fn notification_permission_refusal_preserves_reason_and_retires_live_callbacks() {
+        for state in ["denied", "unsupported", "temporary-unavailable"] {
+            for op in ["push.state", "push.permission", "push.enable"] {
+                let mut host = actor(false);
+                let owner = push_owner(&mut host);
+                host.start_notifications();
+                let live = host.push.as_ref().unwrap().owner.clone();
+                host.tap = Some(NotificationTap {
+                    owner,
+                    notification: "notification".into(),
+                    token: "tap-token".into(),
+                });
+                host.push_supported = Err(state);
+                let reply = host
+                    .push_post(
+                        &json!({"op":op,"rid":1,"gen":host.gen,"id":host.handle,"locale":"en"}),
+                    )
+                    .await
+                    .unwrap();
+                assert_eq!(reply["state"], state);
+                if state == "denied" {
+                    assert_eq!(reply["permission"], "denied");
+                }
+                assert!(!live.current());
+                assert!(host.push.is_none());
+                assert!(host.tap.is_none());
+                assert!(host.requests.lock().unwrap().is_empty());
+            }
+        }
     }
     #[tokio::test]
     async fn unavailable_receipt_retires_pending_but_retains_seen_only_for_current_owner() {
@@ -3502,6 +3564,7 @@ mod tests {
                 tx,
                 task,
                 is_open: Arc::new(AtomicBool::new(true)),
+                handshake: oneshot::channel().1,
             },
         );
         let result = host
@@ -3512,6 +3575,60 @@ mod tests {
             .await;
         assert_eq!(result, Err("send-failed"));
         assert!(host.sockets.is_empty());
+    }
+    #[tokio::test]
+    async fn normal_close_settles_pending_handshakes_without_clearing_refusals() {
+        for client_close in [false, true] {
+            for safe in [false, true] {
+                let mut host = cached_host();
+                let session = host.session.clone().unwrap();
+                let guard = host.fences.begin(&session).unwrap();
+                let (done, handshake) = oneshot::channel();
+                let (release, started) = oneshot::channel();
+                let (tx, _rx) = mpsc::channel(1);
+                let task = tauri::async_runtime::spawn(async move {
+                    if started.await.is_err() {
+                        return;
+                    }
+                    guard.complete(safe).unwrap();
+                    let _ = done.send(());
+                });
+                host.sockets.insert(
+                    1,
+                    Socket {
+                        tx,
+                        task,
+                        handshake,
+                        is_open: Arc::new(AtomicBool::new(false)),
+                    },
+                );
+                assert!(!host.fences.allowed(&session));
+                let mut closing = Box::pin(async {
+                    if client_close {
+                        host.post(
+                            &json!({"op":"ws.close","rid":1,"gen":host.gen,"cid":1}),
+                            100,
+                        )
+                        .await
+                        .unwrap();
+                    } else {
+                        host.drain_gracefully().await;
+                    }
+                });
+                assert!(
+                    futures_util::poll!(&mut closing).is_pending(),
+                    "normal close returns before handshake classification"
+                );
+                release.send(()).unwrap();
+                closing.await;
+                assert!(host.sockets.is_empty());
+                assert_eq!(
+                    host.fences.allowed(&session),
+                    safe,
+                    "client_close={client_close}, safe={safe}"
+                );
+            }
+        }
     }
     #[tokio::test]
     async fn native_refusals_survive_failed_credential_deletion_and_cold_offline_restart() {

@@ -13,6 +13,48 @@ The first beta is a `0.x` prerelease, not a stable release. Native device/platfo
 qualification, trusted Windows/macOS signing, deep links and automatic updates
 remain incomplete in [#346](https://github.com/iuliandita/ditero/issues/346).
 
+- Focus intervals use server timing evidence to reject forward-clock inflation and
+  wait for completion confirmation before starting the next phase. Upgrades from
+  develop require no cache rebuild.
+- Authentication updates to Better Auth 1.7.12. Password reset opens the browser
+  reset form and atomically revokes sessions, personal access tokens, calendar
+  feeds, passkeys and linked sign-in accounts. Two-factor enrollment remains.
+- Compatibility: operators must resolve duplicate provider account records before
+  applying the new unique index; see the database upgrade guide.
+- Optional sign-in adds generic OpenID Connect, Microsoft, GitHub, Discord, Apple
+  and Facebook, plus operator-configured SAML single sign-on. Provider accounts
+  must be explicitly linked to existing accounts from Settings.
+- File import adds content-aware Todoist, TickTick, Microsoft To Do, Trello and
+  generic CSV previews, with explicit loss notices. Trello attachment links stay
+  as text; attachment files are not migrated. Voice capture previews tasks before
+  adding them and uses the browser's supported speech service.
+- Android task links retain the correct task through startup and avoid duplicate
+  notification navigation.
+- Desktop CI exercises runtime journeys; platform qualification remains incomplete.
+- Kustomize deployments gate app startup on successful schema migrations and retain
+  the deployment qualification checks.
+- **Sync every device before upgrading from an alpha.** Sync moves to Zero 1.11.1,
+  which starts a new local database on every browser, Android and desktop client.
+  Edits made offline with an alpha that have not reached the server stay in the
+  old local database and this version cannot send them. Bring each client online
+  and wait until its sync indicator shows Synced before updating, especially
+  Android and desktop apps used offline. If such edits are found, the beta warns on
+  start; close it and follow the
+  [Zero upgrade guide](docs/runbooks/database-roles.md#zero-111-upgrade-and-rollback).
+- When this device cannot store changes, for example because storage is full or
+  unavailable, the sync indicator says so. Edits are then kept only once they
+  reach the server, and edits made while offline are refused instead of appearing
+  saved.
+
+- Releases include `ditero-VERSION-clients.tar.gz`: the CLI, stdio MCP server and
+  terminal UI as JavaScript bundles with third-party notices, checksums and a
+  build provenance attestation. They need a Bun you install (1.3.14 or newer) and
+  stop with exit status 2 and a message on an older Bun. Standalone executables
+  are not published; they remain on the roadmap.
+- Breaking for scripts: `--version` of the CLI, MCP server and terminal UI now
+  prints one JSON line (name, version, commit, dirty flag, target, minimum Bun and
+  running Bun) instead of `ditero 0.x (...)`. Parse the JSON, or read the
+  `version` field.
 - Task rows use icons for personal and shared workspaces while keeping workspace
   names, translated tooltips and screen-reader descriptions.
 - Google sign-in setup is documented for self-hosters. Compose now passes the

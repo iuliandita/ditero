@@ -1,7 +1,8 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import type { PortableExportV1 } from "./v1.ts";
 import {
 	PortableExportValidationError,
+	parseBoundedPortableJson,
 	parsePortableExportV1,
 } from "./validate.ts";
 
@@ -732,5 +733,20 @@ describe("portable v1 validation", () => {
 		const input = JSON.stringify(value);
 		expect(input.length).toBeLessThan(32 * 1024 * 1024);
 		expect(() => parsePortableExportV1(input)).toThrow("byte limit");
+	});
+});
+
+describe("parseBoundedPortableJson nesting", () => {
+	test("rejects deeply nested input without handing it to JSON.parse", () => {
+		const spy = vi.spyOn(JSON, "parse");
+		const deep = `${"[".repeat(200_000)}${"]".repeat(200_000)}`;
+		expect(() => parseBoundedPortableJson(deep)).toThrow("nesting limit");
+		expect(spy).not.toHaveBeenCalled();
+		spy.mockRestore();
+	});
+	test("ignores brackets inside strings", () => {
+		expect(parseBoundedPortableJson(`["${"[".repeat(500)}\\"{"]`)).toEqual([
+			`${"[".repeat(500)}"{`,
+		]);
 	});
 });

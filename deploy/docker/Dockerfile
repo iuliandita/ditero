@@ -28,14 +28,14 @@ COPY package.json bun.lock ./
 COPY patches ./patches
 RUN bun install --frozen-lockfile --production --omit=optional --omit=peer
 
-FROM rocicorp/zero:1.9.0@sha256:f80683bf3ddf08be26c68ddd94589fada29a0b8a4597668b090006c09041d4cd AS zero-base
+FROM rocicorp/zero:1.11.1@sha256:b27fe690d5873e97daf330bb883a2636688cbc65fe6d00a6c567c4cab28a26ba AS zero-base
 
 # Keep upstream's PostgreSQL patch, but rebuild its dependency tree
 # from the reviewed lock so the vulnerable packages are actually replaced.
 FROM node:22.23.3-alpine3.24@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS zero-node
 
-FROM zero-base AS zero-deps
-COPY --from=zero-node /usr/local/bin/node /usr/local/bin/node
+FROM zero-node AS zero-deps
+RUN corepack enable && corepack prepare pnpm@11.11.0 --activate
 WORKDIR /opt/zero-deps
 COPY deploy/docker/zero-runtime/package.json deploy/docker/zero-runtime/pnpm-lock.yaml deploy/docker/zero-runtime/pnpm-workspace.yaml ./
 COPY deploy/docker/zero-runtime/patches ./patches
@@ -49,21 +49,21 @@ ENV GOTOOLCHAIN=local
 WORKDIR /src
 
 FROM litestream-build AS litestream-legacy
-ADD --checksum=sha256:977ce9aa14a3d1e68e2b8cec6369dda7528c230401236c804543606c1d661d16 https://codeload.github.com/rocicorp/litestream/tar.gz/5efae7df64aebc3247a739360232f908d2bc47e2 /tmp/source.tar.gz
+ADD --checksum=sha256:63ada2afdc619a102d0abf97dd75eaf16765e51c840cf57217bb49f30bd50936 https://codeload.github.com/rocicorp/litestream/tar.gz/f82952e1b377d94199b0979081a5679dad1e0f3d /tmp/source.tar.gz
 RUN tar -xzf /tmp/source.tar.gz --strip-components=1 -C /src
 COPY deploy/docker/zero-runtime/litestream/legacy/go.mod deploy/docker/zero-runtime/litestream/legacy/go.sum ./
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \
-    go build -mod=readonly -trimpath -ldflags "-s -w -X main.Version=v0.3.13+z0.0.9-ditero.1 -extldflags '-static'" \
+    go build -mod=readonly -trimpath -ldflags "-s -w -X main.Version=v0.3.13-zero.11-ditero.1 -extldflags '-static'" \
     -tags osusergo,netgo,sqlite_omit_load_extension -o /out/litestream ./cmd/litestream
 
 FROM litestream-build AS litestream-v5
-ADD --checksum=sha256:6d5a3adaf237c2d60923f11a2d834b796ba6ab770aaa86fa10b61673fa243f4d https://codeload.github.com/benbjohnson/litestream/tar.gz/4e3f0c0f98a8808788c721b3637b41e7f9ce4a9c /tmp/source.tar.gz
+ADD --checksum=sha256:6775727e2bbf08d4be247365d796128e380f755b8a1f777629c6408825bd58a2 https://codeload.github.com/rocicorp/litestream/tar.gz/f4438c26c2d800fa7f2b952ab7b0e11232c194a9 /tmp/source.tar.gz
 RUN tar -xzf /tmp/source.tar.gz --strip-components=1 -C /src
 COPY deploy/docker/zero-runtime/litestream/v5/go.mod deploy/docker/zero-runtime/litestream/v5/go.sum ./
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \
-    go build -mod=readonly -trimpath -ldflags "-s -w -X main.Version=v0.5.15-ditero.1 -extldflags '-static'" \
+    go build -mod=readonly -trimpath -ldflags "-s -w -X main.Version=v0.5.18-zero.16-ditero.1 -extldflags '-static'" \
     -tags osusergo,netgo,sqlite_omit_load_extension -o /out/litestream-v5 ./cmd/litestream
 
 FROM alpine:3.24.2@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6 AS zero-runtime
@@ -74,15 +74,17 @@ COPY --from=zero-node /usr/local/bin/node /usr/local/bin/node
 COPY --from=litestream-legacy /out/litestream /usr/local/bin/litestream
 COPY --from=litestream-v5 /out/litestream-v5 /usr/local/bin/litestream-v5
 COPY --from=zero-base /etc/litestream.yml /etc/litestream.yml
+COPY --from=zero-base /etc/litestream-v5.yml /etc/litestream-v5.yml
 COPY --from=zero-deps /opt/zero-deps /opt/app
 WORKDIR /opt/app
 ENV PATH="/opt/app/node_modules/.bin:${PATH}" \
     ZERO_IN_CONTAINER=1 \
     ZERO_LITESTREAM_CONFIG_PATH=/etc/litestream.yml \
+    ZERO_LITESTREAM_CONFIG_PATH_V5=/etc/litestream-v5.yml \
     ZERO_LITESTREAM_EXECUTABLE=/usr/local/bin/litestream \
     ZERO_LITESTREAM_EXECUTABLE_V5=/usr/local/bin/litestream-v5 \
     ZERO_LOG_FORMAT=json \
-    ZERO_SERVER_VERSION=1.9.0
+    ZERO_SERVER_VERSION=1.11.1
 RUN node verify.mjs
 COPY --chmod=755 deploy/docker/secret-file.sh /usr/local/lib/ditero/secret-file.sh
 COPY --chmod=755 deploy/docker/zero-entrypoint.sh /usr/local/bin/ditero-zero-entrypoint
@@ -99,6 +101,7 @@ LABEL org.opencontainers.image.title="Ditero zero-cache" \
       org.opencontainers.image.revision="${DITERO_GIT_SHA}" \
       org.opencontainers.image.version="${DITERO_CHANNEL}" \
       ditero.channel="${DITERO_CHANNEL}"
+ENV DITERO_GIT_SHA=${DITERO_GIT_SHA}
 
 # --- runtime bases ----------------------------------------------------------
 FROM ${RUNTIME_IMAGE} AS runtime-alpine
@@ -119,7 +122,7 @@ RUN mkdir -p /rootfs/etc /rootfs/usr/bin /rootfs/usr/local/bin /rootfs/home/bun 
 	&& chown 1000:1000 /rootfs/home/bun /rootfs/data/attachments
 
 # gcr.io/distroless/base-debian13 (multi-arch index digest)
-FROM gcr.io/distroless/base-debian13@sha256:65be09d063b5d4737995ca5a17bb7e12ed990412751ec8ec212c9d74db257639 AS runtime-debian
+FROM gcr.io/distroless/base-debian13@sha256:44a80dc28b49f47396e72ab2dc644b3f849880335de09625762faed207bb891d AS runtime-debian
 COPY --from=debian-prep /rootfs/ /
 
 # --- runtime stage ----------------------------------------------------------
@@ -165,3 +168,4 @@ LABEL org.opencontainers.image.title="Ditero" \
       org.opencontainers.image.revision="${DITERO_GIT_SHA}" \
       org.opencontainers.image.version="${DITERO_CHANNEL}" \
       ditero.channel="${DITERO_CHANNEL}"
+ENV DITERO_GIT_SHA=${DITERO_GIT_SHA}

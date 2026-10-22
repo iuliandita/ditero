@@ -1,8 +1,8 @@
-function succeeded(value: unknown): boolean {
+export function mutationSucceeded(value: unknown): boolean {
 	return (
 		typeof value === "object" &&
 		value !== null &&
-		Object.keys(value).length === 1 &&
+		Object.keys(value).every((key) => key === "type" || key === "data") &&
 		(value as { type?: unknown }).type === "success"
 	);
 }
@@ -17,7 +17,7 @@ export async function mutationServerSucceeded(mutation: {
 			mutation.client,
 			mutation.server,
 		]);
-		return succeeded(client) && succeeded(server);
+		return mutationSucceeded(client) && mutationSucceeded(server);
 	} catch {
 		return false;
 	}

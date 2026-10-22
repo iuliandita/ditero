@@ -4,11 +4,13 @@ const mocks = vi.hoisted(() => ({
 	create: vi.fn(),
 	passkey: vi.fn(() => ({ id: "passkey" })),
 	twoFactor: vi.fn(() => ({ id: "two-factor" })),
+	sso: vi.fn(() => ({ id: "sso-client" })),
 }));
 vi.mock("better-auth/react", () => ({ createAuthClient: mocks.create }));
 vi.mock("@better-auth/passkey/client", () => ({
 	passkeyClient: mocks.passkey,
 }));
+vi.mock("@better-auth/sso/client", () => ({ ssoClient: mocks.sso }));
 vi.mock("better-auth/client/plugins", () => ({
 	twoFactorClient: mocks.twoFactor,
 }));
@@ -59,7 +61,7 @@ it.each([
 	expect(mocks.create).toHaveBeenCalledWith({
 		baseURL: "",
 		fetchOptions: { customFetchImpl: fetchWithConnectionCheck },
-		plugins: [{ id: "passkey" }, { id: "two-factor" }],
+		plugins: [{ id: "passkey" }, { id: "two-factor" }, { id: "sso-client" }],
 	});
 	vi.stubGlobal("NativeDitero", {});
 	expect(() => authClient.useSession()).toThrow("unavailable in native mode");

@@ -79,6 +79,7 @@ export async function freezeImportTargets(
 		deadline?: number;
 		plannerVersion?: 2 | 3 | 4;
 		v4Authority?: V4Authority | null;
+		reuseProviderLabels?: boolean;
 	} = {},
 ): Promise<{
 	items: ImportApplyCandidate[];
@@ -249,9 +250,12 @@ export async function freezeImportTargets(
 				: [];
 		if (!selected.length && !currentTaskIds.length) continue;
 		const { table, fields } = IMPORT_TARGETS[collection];
-		const ids = selected.map((item) => {
+		const ids = selected.flatMap((item) => {
 			if (!item.targetId) throw new ImportPlanError("invalid-mappings");
-			return item.targetId;
+			const mapped = maps.get(item.sourceKey);
+			return collection === "labels" && options.reuseProviderLabels && mapped
+				? [item.targetId, mapped.target_id]
+				: [item.targetId];
 		});
 		const parameters: unknown[] = [ids];
 		let predicate = "r.id = any($1::text[])";
@@ -336,6 +340,47 @@ export async function freezeImportTargets(
 				[batch],
 			);
 			for (const row of result.rows) rows.set(String(row.id), row);
+		}
+	}
+	const reusedLabels = new Set<string>();
+	if (options.reuseProviderLabels) {
+		const labels = targets.get("labels");
+		const byName = new Map(
+			[...(labels?.values() ?? [])].map((row) => [
+				JSON.stringify([row.workspace_id, row.name]),
+				row,
+			]),
+		);
+		const replacements = new Map<string, string>();
+		for (const item of items) {
+			checkpoint();
+			if (item.collection !== "labels" || item.disposition !== "ensure")
+				continue;
+			const row = payload(item);
+			const map = maps.get(item.sourceKey);
+			const existing = map
+				? labels?.get(map.target_id)
+				: byName.get(JSON.stringify([row.workspaceId, row.name]));
+			if (
+				!existing ||
+				existing.workspace_id !== row.workspaceId ||
+				existing.name !== row.name
+			)
+				continue;
+			if (!item.targetId) throw new ImportPlanError("invalid-mappings");
+			replacements.set(item.targetId, String(existing.id));
+			item.targetId = String(existing.id);
+			row.id = item.targetId;
+			// Reuse the exact label, including its chosen color; never overwrite it.
+			row.color = existing.color as string;
+			if (!map) reusedLabels.add(item.sourceKey);
+		}
+		for (const item of items) {
+			if (item.collection !== "taskLabels" || item.disposition !== "ensure")
+				continue;
+			const row = payload(item);
+			const replacement = replacements.get(textField(row, "labelId"));
+			if (replacement) row.labelId = replacement;
 		}
 	}
 	const snapshots = new Map<string, ImportTargetSnapshot>();
@@ -473,6 +518,20 @@ export async function freezeImportTargets(
 						rows: [],
 					},
 				});
+		} else if (target && reusedLabels.has(item.sourceKey)) {
+			snapshots.set(item.sourceKey, {
+				targetPrecondition: {
+					kind: "existing-label",
+					targetDigest: await digestImportTarget("labels", target, checkpoint),
+				},
+				dependencyProof: {
+					workspace: {
+						sourceId: sourceWorkspace(item),
+						targetId: targetWorkspace(item),
+					},
+					rows: [],
+				},
+			});
 		} else if (target) block(item, "target-id-collision");
 		else {
 			const row = payload(item);
