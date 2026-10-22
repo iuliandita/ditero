@@ -52,7 +52,8 @@ and language reloads preserve queued changes. Frozen installs apply it in both
 application Docker stages. Prepare changes with `bun patch` before editing installed
 runtime files, which may share hardlinks with the install cache. When upgrading
 Zero, keep the close/reopen and storage failure regression checks passing before
-removing or replacing the patch.
+removing or replacing the patch, and update the native sync socket pins described in
+`apps/android/README.md`.
 
 ## Before opening a PR
 

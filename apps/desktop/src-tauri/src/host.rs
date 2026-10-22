@@ -7,7 +7,10 @@ use crate::{
     request_fence::Fences,
     vault::{self, DesktopRegistration, Registry, Session, SystemVault, Vault},
 };
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+use base64::{
+    engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD},
+    Engine,
+};
 use futures_util::{SinkExt, StreamExt};
 use rand::{rngs::OsRng, RngCore};
 use serde_json::{json, Value};
@@ -2138,7 +2141,7 @@ impl Actor {
                             break;
                         }
                     },None=>break}},
-                     inbound=socket.next()=>{match inbound{Some(Ok(Message::Text(text)))=>emit("message",json!({"data":text.as_str()})),Some(Ok(Message::Close(frame)))=>{if bounded_write(socket.close(None), Duration::from_secs(5)).await.is_ok(){clean=true;code=frame.map(|f|u16::from(f.code)).unwrap_or(1000);}break;},Some(Ok(Message::Binary(_)))=>{let _=bounded_write(socket.close(Some(CloseFrame{code:CloseCode::Unsupported,reason:"text only".into()})), Duration::from_secs(5)).await;break;},Some(Ok(_))=>{},_=>break}}
+                     inbound=socket.next()=>{match inbound{Some(Ok(Message::Close(frame)))=>{if bounded_write(socket.close(None), Duration::from_secs(5)).await.is_ok(){clean=true;code=frame.map(|f|u16::from(f.code)).unwrap_or(1000);}break;},Some(Ok(message))=>{if let Some(fields)=message_fields(&message){emit("message",fields)}},_=>break}}
                     }
                 }
             }
@@ -2158,6 +2161,14 @@ impl Actor {
             },
         );
         Ok(json!({"ok":true}))
+    }
+}
+/// Zero sends poke chunks as binary frames; the page rebuilds them as ArrayBuffers.
+fn message_fields(message: &Message) -> Option<Value> {
+    match message {
+        Message::Text(text) => Some(json!({"data": text.as_str()})),
+        Message::Binary(bytes) => Some(json!({"binary": STANDARD.encode(bytes)})),
+        _ => None,
     }
 }
 async fn bounded_write<E>(
@@ -2417,6 +2428,19 @@ mod tests {
         assert!(host.vault.load().unwrap().evidence["https://a.example"]
             .ready(host.session.as_ref().unwrap(), now()));
     }
+    #[test]
+    fn socket_relays_text_and_binary_frames_to_the_page() {
+        assert_eq!(
+            message_fields(&Message::Text(r#"["pokeStart",{}]"#.into())),
+            Some(json!({"data":"[\"pokeStart\",{}]"}))
+        );
+        let chunk = vec![0u8, 0xff, b'[', b']'];
+        assert_eq!(
+            message_fields(&Message::Binary(chunk.into())),
+            Some(json!({"binary":"AP9bXQ=="}))
+        );
+        assert_eq!(message_fields(&Message::Ping(vec![1].into())), None);
+    }
     #[tokio::test]
     async fn socket_retry_refreshes_native_jwt_after_cached_start_without_retargeting() {
         let mut host = cached_host();
@@ -2426,7 +2450,7 @@ mod tests {
             .replace('+', "%2B")
             .replace('/', "%2F")
             .replace('=', "%3D");
-        let request = json!({"op":"ws.open","rid":1,"gen":host.gen,"cid":1,"url":"wss://zero.example/sync/v51/connect","protocol":encoded});
+        let request = json!({"op":"ws.open","rid":1,"gen":host.gen,"cid":1,"url":"wss://zero.example/sync/v53/connect","protocol":encoded});
         host.responses.push_back((0, "".into(), false));
         assert_eq!(host.socket_open(&request).await, Err("network"));
         assert!(host.jwt.is_empty());

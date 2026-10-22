@@ -23,6 +23,12 @@ network failures permit this fallback; invalid credentials, trust failures,
 expired evidence, and failed revocation storage stay unavailable. Offline task
 editing and account/server transitions still require broader device qualification.
 
+The Android and desktop hosts open only the sync path the bundled Zero client
+requests (`/sync/v53/connect` for Zero 1.11.1) on the configured Zero origin, and
+relay Zero's binary poke chunks to the page as ArrayBuffers. The page cannot send
+binary frames. `zero-protocol-pin.test.ts` fails when a Zero upgrade changes that
+path or its chunk size; update both native pins in the same change.
+
 When device storage fails, sign-out and account/server changes wait for the
 actual pending sync queue to be acknowledged by the server. A localized warning
 gives the unsynced count; keep the app open, reconnect, and retry after it drains.
