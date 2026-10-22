@@ -2030,7 +2030,7 @@
 	"attachment_key_pending": "Waiting for access to this workspace's files.",
 	"attachment_key_pending_who": "{names} can grant access when they open Ditero and unlock encryption.",
 	"attachment_key_pending_self": "Set up encryption to open this file.",
-	"attachment_key_wait_expired": "Access still has not arrived, so waiting stopped. Pick the file again to keep waiting.",
+	"attachment_key_wait_expired": "Access still has not arrived, so waiting stopped. Try again to keep waiting.",
 	"attachment_key_wait_moved": "You opened something else, so waiting for file access stopped and nothing was attached. Pick the file again where you want it.",
 	"attachment_key_wait_busy": "Access arrived while another comment was sending. Your files are still here; press send again.",
 	"attachment_unreadable": "This file cannot be opened again.",

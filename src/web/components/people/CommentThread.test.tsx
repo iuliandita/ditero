@@ -1,4 +1,9 @@
-import { isValidElement, type ReactNode } from "react";
+import {
+	type ComponentProps,
+	isValidElement,
+	type ReactElement,
+	type ReactNode,
+} from "react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { Task } from "../../../zero/schema.gen.ts";
 import { CommentThread } from "./CommentThread.tsx";
@@ -80,12 +85,18 @@ vi.mock("../attachments/AttachmentTile.tsx", () => ({
 vi.mock("@/components/ui/button", () => ({ Button: "button" }));
 vi.mock("@/components/ui/input", () => ({ Input: "input" }));
 
+// CommentThread is a keyed wrapper; the tests drive the composer it renders.
+function wrapper(taskId = "task-1") {
+	return CommentThread({
+		task: { id: taskId } as Task,
+		workspaceId: "workspace-1",
+	}) as ReactElement<ComponentProps<typeof CommentThread>>;
+}
+
 function render() {
 	fixture.cursor = 0;
-	return CommentThread({
-		task: { id: "task-1" } as Task,
-		workspaceId: "workspace-1",
-	});
+	const element = wrapper();
+	return (element.type as typeof CommentThread)(element.props);
 }
 
 function find(
@@ -223,7 +234,9 @@ function alertText(): unknown {
 
 // The key arrives later: runWithFiles reports a wait and keeps the action.
 function deferKey() {
-	const waiting: Array<(key: typeof fixture.key) => unknown> = [];
+	const waiting: Array<
+		(key: typeof fixture.key, files: File[], automatic: boolean) => unknown
+	> = [];
 	fixture.runWithFiles.mockImplementation(async (_files, action) => {
 		waiting.push(action);
 		return false;
@@ -231,25 +244,34 @@ function deferKey() {
 	return waiting;
 }
 
-test("a resumed comment posts the submitted text and keeps a newer draft", async () => {
+// The wait's own retry (automatic) posts what Send captured and keeps a newer
+// draft; a resume the user triggers, such as the rotation dialog, posts the draft.
+test.each([
+	{ automatic: true, posted: "submitted text", left: "a newer draft" },
+	{ automatic: false, posted: "a newer draft", left: "" },
+])("a resume with automatic=$automatic posts $posted", async ({
+	automatic,
+	posted,
+	left,
+}) => {
 	const waiting = deferKey();
 	selectFile();
 	type("submitted text");
 	await send();
 	expect(fixture.mutate).not.toHaveBeenCalled();
 	type("a newer draft");
-	await waiting[0]?.(fixture.key);
+	await waiting[0]?.(fixture.key, [], automatic);
 	expect(fixture.mutate).toHaveBeenCalledOnce();
 	expect(fixture.mutate.mock.calls[0]?.[0]).toMatchObject({
 		taskId: "task-1",
-		body: "submitted text",
+		body: posted,
 	});
 	expect(fixture.upload).toHaveBeenCalledOnce();
 	const input = find(
 		render(),
 		(props) => props["data-testid"] === "comment-input",
 	);
-	expect(input.value).toBe("a newer draft");
+	expect(input.value).toBe(left);
 });
 
 test("a key that arrives while another file comment is sending says so", async () => {
@@ -267,7 +289,7 @@ test("a key that arrives while another file comment is sending says so", async (
 		action(fixture.key),
 	);
 	const sending = send();
-	await waiting[0]?.(fixture.key);
+	await waiting[0]?.(fixture.key, [], true);
 	expect(fixture.mutate).toHaveBeenCalledOnce();
 	expect(alertText()).toBe("attachment_key_wait_busy");
 	acknowledge({ type: "success" });
@@ -284,4 +306,9 @@ test("a key for another workspace never encrypts the comment's files", async () 
 	expect(fixture.mutate).not.toHaveBeenCalled();
 	expect(fixture.upload).not.toHaveBeenCalled();
 	expect(alertText()).toBe("attachment_error_upload_failed");
+});
+
+test("the composer is keyed by task so picked files never follow a task change", () => {
+	expect(wrapper("task-1").key).toBe("task-1");
+	expect(wrapper("task-2").key).toBe("task-2");
 });

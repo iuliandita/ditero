@@ -454,3 +454,26 @@ it("pauses while the page is hidden and checks at once on return", async () => {
 	await settle(POLL_MS);
 	expect(pendingPaths()).toHaveLength(2);
 });
+
+it("keeps a failure backoff across a hidden and visible cycle", async () => {
+	const error = vi.spyOn(console, "error").mockImplementation(() => {});
+	let failing = true;
+	pendingResponse = async () =>
+		failing
+			? new Response("down", { status: 500 })
+			: Response.json({ requests: [] });
+	await settle(POLL_MS);
+	await until(() => error.mock.calls.length > 0);
+	expect(pendingPaths()).toHaveLength(1);
+	// The failed pass doubled the delay to 30 s.
+	setHidden(true);
+	await settle(POLL_MS * 4);
+	setHidden(false);
+	await settle(0);
+	expect(pendingPaths()).toHaveLength(1);
+	await settle(POLL_MS);
+	expect(pendingPaths()).toHaveLength(1);
+	failing = false;
+	await settle(POLL_MS);
+	expect(pendingPaths()).toHaveLength(2);
+});

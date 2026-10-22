@@ -1,6 +1,13 @@
 import { useQuery, useZero } from "@rocicorp/zero/react";
 import { Copy, Paperclip, Pencil, Send, Trash2 } from "lucide-react";
-import { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+	type ComponentProps,
+	useId,
+	useLayoutEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { runMutation } from "@/lib/run-mutation";
@@ -73,7 +80,13 @@ function activeMention(
 	return { start: at, query };
 }
 
-export function CommentThread({
+// Keyed by task: the draft, picked files and any wait for file access belong to
+// one task and must not follow the dialog to the next.
+export function CommentThread(props: ComponentProps<typeof CommentComposer>) {
+	return <CommentComposer key={props.task.id} {...props} />;
+}
+
+function CommentComposer({
 	task,
 	workspaceId,
 	restricted = false,
@@ -478,14 +491,20 @@ export function CommentThread({
 				let callbackStarted = false;
 				await gate.runWithFiles(
 					snapshot.map((file) => file.file),
-					(key) => {
+					(key, _files, automatic) => {
 						if (callbackStarted) return;
 						callbackStarted = true;
 						const selected = snapshot.filter(
 							(file) => !file.selectionController.signal.aborted,
 						);
 						if (selected.length === 0) return;
-						return submitWithFiles(text, selected, key);
+						// The wait's own retry posts what was sent; a resume the user triggers
+						// (rotation dialog) posts the draft as it stands.
+						return submitWithFiles(
+							automatic ? text : bodyRef.current.trim(),
+							selected,
+							key,
+						);
 					},
 				);
 				restoreFocus = !callbackStarted && !gate.hasPendingAction();

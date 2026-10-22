@@ -182,7 +182,7 @@ it("keeps a selection waiting for its grant and completes it when the key arrive
 	fixture.key = { workspaceId: "ws_1", keyVersion: 1 };
 	await settle(WAIT_MS);
 	expect(action).toHaveBeenCalledTimes(1);
-	expect(action).toHaveBeenCalledWith(fixture.key, [file]);
+	expect(action).toHaveBeenCalledWith(fixture.key, [file], true);
 	expect(gate.error).toBeNull();
 	expect(gate.hasPendingAction()).toBe(false);
 
@@ -298,4 +298,11 @@ it("checks its own request cheaply before a full retry", async () => {
 	await settle(WAIT_MS);
 	expect(fixture.workspaceKey).toHaveBeenCalledTimes(before + 1);
 	expect(action).toHaveBeenCalledOnce();
+});
+
+it("tells the action whether the retry was automatic or the user's resume", async () => {
+	const action = await select();
+	fixture.key = { workspaceId: "ws_1", keyVersion: 1 };
+	await gate.resume();
+	expect(action).toHaveBeenCalledExactlyOnceWith(fixture.key, [file], false);
 });

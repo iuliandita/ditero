@@ -333,8 +333,10 @@ export function KeyringProvider({
 			for (const id of fresh) reloaded.add(id);
 			await hydrateWorkspaceKeys(publicKey);
 		};
-		// A hidden tab does not poll; returning to it checks at once.
+		// A hidden tab does not poll. Returning checks at once, unless failures
+		// had backed the poll off: it then resumes at that delay.
 		let poll: ReturnType<typeof startKeyPoll> | null = null;
+		let resumeDelayMs = 0;
 		const start = (initialDelayMs?: number) => {
 			poll = startKeyPoll({
 				intervalMs: STATE_POLL_MS,
@@ -350,9 +352,13 @@ export function KeyringProvider({
 		const hidden = () => typeof document !== "undefined" && document.hidden;
 		const onVisibility = () => {
 			if (hidden()) {
-				poll?.stop();
-				poll = null;
-			} else if (!poll) start(0);
+				if (poll) {
+					const delay = poll.nextDelayMs();
+					resumeDelayMs = delay > STATE_POLL_MS ? delay : 0;
+					poll.stop();
+					poll = null;
+				}
+			} else if (!poll) start(resumeDelayMs);
 		};
 		if (!hidden()) start();
 		if (typeof document !== "undefined")

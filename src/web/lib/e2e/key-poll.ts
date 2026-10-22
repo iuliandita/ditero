@@ -1,4 +1,8 @@
-export type KeyPoll = { stop: () => void };
+export type KeyPoll = {
+	stop: () => void;
+	/** Delay before the next run, including any backoff. */
+	nextDelayMs: () => number;
+};
 
 export type KeyPollOptions = {
 	intervalMs: number;
@@ -57,6 +61,7 @@ export function startKeyPoll(options: KeyPollOptions): KeyPoll {
 
 	schedule();
 	return {
+		nextDelayMs: () => delay,
 		stop() {
 			stopped = true;
 			if (timer !== undefined) clearTimeout(timer);

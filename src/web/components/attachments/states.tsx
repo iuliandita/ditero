@@ -38,9 +38,12 @@ import { formatBytes, formatList } from "../../lib/intl-format.ts";
 import { EnrollmentWizard } from "../e2e/EnrollmentWizard.tsx";
 import { UnlockDialog } from "../e2e/UnlockDialog.tsx";
 
+// `automatic` is true when the key-wait retry runs the action without the user
+// acting; an explicit resume (rotation dialog) or the first attempt is false.
 type ReadyAction = (
 	key: WorkspaceKeyMaterial,
 	files: File[],
+	automatic: boolean,
 ) => void | Promise<void>;
 type PendingAction = {
 	files: File[];
@@ -205,7 +208,7 @@ export function useAttachmentGate(
 			pending.current = null;
 			setKeyWait(0);
 			if (waiting) setError(null);
-			await current.action(key, current.files);
+			await current.action(key, current.files, waiting);
 			return true;
 		},
 		[abandon, keyring],
