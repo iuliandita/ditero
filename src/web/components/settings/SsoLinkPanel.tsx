@@ -12,7 +12,7 @@ const RETURN_PATH = "/settings/security";
 // a Ditero account through a matching email, only through this signed-in action.
 export function SsoLinkPanel() {
 	const [providers, setProviders] = useState<PublicSsoProvider[]>([]);
-	const [linked, setLinked] = useState<Set<string> | null>(null);
+	const [linked, setLinked] = useState<Map<string, string> | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
 
@@ -22,7 +22,9 @@ export function SsoLinkPanel() {
 			setError(authErrorMessage(result.error, m.security_sso_error_load));
 			return;
 		}
-		setLinked(new Set(result.data.map((account) => account.providerId)));
+		setLinked(
+			new Map(result.data.map((account) => [account.providerId, account.id])),
+		);
 	}, []);
 
 	useEffect(() => {
@@ -67,9 +69,9 @@ export function SsoLinkPanel() {
 		setBusy(true);
 		setError(null);
 		try {
-			const result = await authClient.unlinkAccount({
-				providerId: provider.id,
-			});
+			const accountId = linked?.get(provider.id);
+			if (!accountId) return;
+			const result = await authClient.unlinkAccount({ accountId });
 			if (result.error) {
 				setError(authErrorMessage(result.error, m.security_sso_error_unlink));
 				return;

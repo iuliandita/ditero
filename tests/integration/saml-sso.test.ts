@@ -1,6 +1,6 @@
 import { count, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 import {
 	afterAll,
 	afterEach,
@@ -33,13 +33,14 @@ const db = drizzle(admin, { schema: tables });
 const ORIGIN = "http://localhost:3000";
 const GRANT = `${"A".repeat(42)}A`;
 
-type Booted = Awaited<ReturnType<typeof boot>>;
+type AuthModule = typeof import("../../src/auth/auth.ts");
+type Booted = AuthModule & { pool: Pool; origin: string };
 const open: Booted[] = [];
 
 async function boot(
 	mode: "open" | "bootstrap" | "closed",
 	env: Record<string, string | undefined> = {},
-) {
+): Promise<Booted> {
 	vi.resetModules();
 	for (const key of Object.keys(process.env))
 		if (key.startsWith("DITERO_SAML_")) delete process.env[key];
@@ -638,7 +639,7 @@ describe("explicit linking", () => {
 		);
 		return signIn.headers
 			.getSetCookie()
-			.map((cookie) => cookie.split(";", 1)[0])
+			.map((cookie: string) => cookie.split(";", 1)[0])
 			.join("; ");
 	}
 
@@ -823,7 +824,10 @@ describe("runtime database role", () => {
 			`grant select,insert,update,delete on all tables in schema public to ${role}`,
 		);
 		const app = await boot("open");
-		app.pool.on("connect", (client) => void client.query(`set role ${role}`));
+		app.pool.on(
+			"connect",
+			(client: PoolClient) => void client.query(`set role ${role}`),
+		);
 		const response = await signedIn(app, await beginFlow(app));
 		expect(hasSession(response)).toBe(true);
 		const [user] = await db.select().from(tables.user);

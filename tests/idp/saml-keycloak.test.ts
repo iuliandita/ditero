@@ -283,8 +283,24 @@ async function browse(
 				action: decode(attributes(form).action ?? ""),
 			};
 		}
-		const form = /<form\b[^>]*id="kc-form-login"[^>]*>/i.exec(html)?.[0];
-		if (!form) throw new Error(`unexpected Keycloak page at ${url}`);
+		const forms = [...html.matchAll(/<form\b[^>]*>[\s\S]*?<\/form>/gi)].map(
+			(match) => match[0],
+		);
+		const form = forms
+			.find((candidate) => /name="password"/i.test(candidate))
+			?.match(/<form\b[^>]*>/i)?.[0];
+		if (!form) {
+			const title = /<title[^>]*>([^<]*)</i.exec(html)?.[1]?.trim();
+			throw new Error(
+				`unexpected Keycloak page at ${url}: status ${response.status}, title ${title}, ${html.length} bytes, forms ${forms.length}, text ${html
+					.replace(
+						/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<[^>]+>/gi,
+						" ",
+					)
+					.replace(/\s+/g, " ")
+					.slice(0, 300)}`,
+			);
+		}
 		url = new URL(decode(attributes(form).action), url).href;
 		init = {
 			method: "POST",
