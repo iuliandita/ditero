@@ -2,7 +2,7 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "054fe2c80bd8bff518f721c7ed47a7e1df29d40b86971c472b89724f8020d09a",
+			"sourceDigest": "4fc393c030dc05874faec58bb7e643bf75403c8ed35c028e025cb7edecdb75f7",
 			"docs": [
 				"docs/runbooks/database-roles.md",
 				"docs/runbooks/sign-in-providers.md"
