@@ -101,10 +101,8 @@ test("desktop: a local storage failure is shown and offline edits are refused", 
 // stop its socket before the accepted queue has a durable server copy.
 async function attemptRetirement(page: Page) {
 	return page.evaluate(async () => {
-		const path = "/src/web/lib/zero-lifecycle.ts";
-		const lifecycle = (await import(
-			path
-		)) as typeof import("../../src/web/lib/zero-lifecycle.ts");
+		const lifecycle = window.__diteroZeroLifecycle;
+		if (!lifecycle) throw new Error("E2E retirement hook is unavailable");
 		try {
 			await lifecycle.retireZeroClients();
 			return { retired: true, message: "" };
