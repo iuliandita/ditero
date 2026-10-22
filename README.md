@@ -23,10 +23,11 @@ are included, with no subscriptions or paid feature unlocks.
 
 [Website](https://ditero.app/) | [Quick start](#run-it-docker-compose) | [Features](#available-on-develop) | [Documentation](#documentation) | [Roadmap](docs/ROADMAP.md) | [Changelog](CHANGELOG.md) | [Brand assets](assets/brand/README.md)
 
-> **Beta preparation.** `0.1.0-beta.1` is the first beta being prepared, a `0.x`
-> prerelease with breaking changes possible before `v1.0.0`. It is not stable.
-> Until beta publication completes, the latest published prerelease remains
-> [`v0.0.1-alpha.12`](https://github.com/iuliandita/ditero/releases/tag/v0.0.1-alpha.12).
+> **Beta.** `0.1.0-beta.2` is being prepared; it is a `0.x` prerelease with
+> breaking changes possible before `v1.0.0`. It is not stable. Until its
+> publication completes, the latest published prerelease remains
+> [`v0.1.0-beta.1`](https://github.com/iuliandita/ditero/releases/tag/v0.1.0-beta.1),
+> whose Android and desktop apps cannot sync; use the web app or wait for beta 2.
 > The [changelog](CHANGELOG.md) describes the candidate and earlier releases.
 > The native desktop archive-import entry remains unavailable pending transfer
 > and recovery qualification. Native device/platform qualification, general deep

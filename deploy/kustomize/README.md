@@ -65,12 +65,12 @@ resources:
 namespace: household
 namePrefix: home-
 images:
-- name: ghcr.io/iuliandita/ditero:0.1.0-beta.1
+- name: ghcr.io/iuliandita/ditero:0.1.0-beta.2
   newName: docker.io/iuliandita/ditero
-  newTag: 0.1.0-beta.1
-- name: ghcr.io/iuliandita/ditero:0.1.0-beta.1-zero
+  newTag: 0.1.0-beta.2
+- name: ghcr.io/iuliandita/ditero:0.1.0-beta.2-zero
   newName: docker.io/iuliandita/ditero
-  newTag: 0.1.0-beta.1-zero
+  newTag: 0.1.0-beta.2-zero
 configMapGenerator:
 - name: ditero-app-config
   behavior: merge

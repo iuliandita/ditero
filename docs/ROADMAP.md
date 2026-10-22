@@ -41,13 +41,12 @@ are published, with full runtime qualification still pending. See the
 [Android](../apps/android/README.md) and [desktop](../apps/desktop/README.md)
 qualification notes. Native delivery remains open in issue #346.
 
-Development happens on `develop`. The first beta, `0.1.0-beta.1`, is being prepared;
-it remains a `0.x` prerelease with breaking changes possible, not a stable release.
+Development happens on `develop`. The second beta, `0.1.0-beta.2`, is being prepared;
+betas remain `0.x` prereleases with breaking changes possible, not stable releases.
 The first published release was `0.0.1-alpha.1`; the latest published prerelease is
-[`0.0.1-alpha.12`](https://github.com/iuliandita/ditero/releases/tag/v0.0.1-alpha.12).
-Alpha 12 clarifies the paired app-data and encrypted attachment downloads,
-keeps prepared exports available after a canceled or failed save, and waits for
-language-save confirmation before reloading.
+[`0.1.0-beta.1`](https://github.com/iuliandita/ditero/releases/tag/v0.1.0-beta.1).
+Beta 2 restores Android and desktop sync, which beta 1 broke by keeping the old
+sync address after the sync engine upgrade.
 The native desktop archive-import entry
 remains unavailable pending transfer and recovery qualification. Broader native
 device qualification remains open.
