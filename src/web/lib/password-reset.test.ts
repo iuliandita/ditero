@@ -1,4 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
+import { getLocale, overwriteGetLocale } from "../../paraglide/runtime.js";
 import {
 	newPasswordProblem,
 	readResetLink,
@@ -123,4 +124,28 @@ describe("submitPasswordReset", () => {
 			),
 		).toEqual({ kind: "error", message: "That password is too short." });
 	});
+});
+
+test.each([
+	"request",
+	"submit",
+])("localizes a code-less HTTP 429 on reset %s", async (action) => {
+	const originalGetLocale = getLocale;
+	overwriteGetLocale(() => "de");
+	try {
+		const request = reply(429, {
+			message: "Too many requests. Please try again later.",
+		});
+		const result =
+			action === "request"
+				? await requestPasswordReset("ada@example.test", request)
+				: await submitPasswordReset("token", "new-password-456", request);
+		expect(result).toEqual({
+			kind: "error",
+			message:
+				"Zu viele Versuche zum Zurücksetzen. Warte ein paar Minuten und versuch es erneut.",
+		});
+	} finally {
+		overwriteGetLocale(originalGetLocale);
+	}
 });

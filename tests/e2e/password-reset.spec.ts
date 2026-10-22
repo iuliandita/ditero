@@ -131,6 +131,9 @@ test("the mailed link sets a new password, reports what it removed and returns t
 	await page.getByTestId("reset-submit").click();
 	await expect(page.getByTestId("reset-done")).toBeVisible();
 	await expect(page.getByTestId("reset-removed")).toHaveText("Access tokens");
+	await expect(page.getByTestId("reset-done")).toContainText(
+		"Existing two-factor authentication settings stay unchanged.",
+	);
 
 	await page.getByTestId("reset-sign-in").click();
 	await expect(page.getByTestId("signin")).toBeVisible();

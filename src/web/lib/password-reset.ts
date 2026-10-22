@@ -66,6 +66,8 @@ export async function requestPasswordReset(
 		{ email, redirectTo: RESET_PAGE_PATH },
 	);
 	if (response.ok) return { kind: "sent" };
+	if (response.status === 429)
+		return { kind: "error", message: m.reset_rate_limited() };
 	if (body.code === "MAIL_NOT_CONFIGURED")
 		return { kind: "error", message: m.auth_mail_not_configured() };
 	return {
@@ -116,6 +118,8 @@ export async function submitPasswordReset(
 			),
 		};
 	}
+	if (response.status === 429)
+		return { kind: "error", message: m.reset_rate_limited() };
 	if (body.code === "INVALID_TOKEN") return { kind: "invalid" };
 	return {
 		kind: "error",

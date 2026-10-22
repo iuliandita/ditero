@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isoDateTimeSchema } from "./iso-datetime.ts";
 import { PublicApiError } from "./public-api.ts";
 
 export const API_COMMENT_RESPONSE_BYTES = 262144;
@@ -16,7 +17,7 @@ export const apiCommentIdSchema = text
 			) && !value.split("/").some((part) => part === "." || part === ".."),
 	);
 const state = z.string().regex(/^[a-f0-9]{64}$/);
-const instant = z.string().datetime({ offset: true });
+const instant = isoDateTimeSchema({ offset: true });
 const scope = { workspaceId: apiCommentIdSchema, listId: apiCommentIdSchema };
 export const apiCommentCreateSchema = z
 	.object({ ...scope, expectedTaskState: state, body: text.max(10000) })

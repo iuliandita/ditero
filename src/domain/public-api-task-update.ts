@@ -1,7 +1,8 @@
 import { z } from "zod";
+import { isoDateTimeSchema } from "./iso-datetime.ts";
 import { PUBLIC_API_ID, PublicApiError } from "./public-api.ts";
 
-const instant = z.iso.datetime({ offset: true });
+const instant = isoDateTimeSchema({ offset: true });
 export const apiTaskSnapshotSchema = z
 	.object({
 		version: z.literal(1),

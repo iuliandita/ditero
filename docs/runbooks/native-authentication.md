@@ -53,7 +53,11 @@ while a browser session is already signed in. The reset creates
 no session and the pending grant is not carried through it: start sign-in from
 the app again afterwards. A completed reset ends every browser and native session
 of the account and revokes its access tokens, calendar feed links, passkeys,
-linked provider sign-ins and other reset links in the same transaction; see
+linked provider sign-ins, other reset links and pending account-bound sign-in proofs
+(including two-factor challenges and trusted-device grants) in the same transaction.
+It also marks the email verified because the mailed token proves mailbox access.
+Existing two-factor enrollment and backup codes stay unchanged. Provider relinking
+still requires the server's linking policy to permit it; see
 [security](../security.md).
 Approval derives the user and approving session from the browser, not from
 request fields. A native session cannot approve another grant. There is no

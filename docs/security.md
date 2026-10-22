@@ -80,7 +80,11 @@ transaction with the token use and the password change, it:
 - revokes every personal access token and calendar feed link;
 - deletes every passkey;
 - unlinks every Google or other provider sign-in, keeping only the password;
-- invalidates every other outstanding reset link of the account.
+- invalidates every other outstanding reset link and pending sign-in proof of the
+  account, including two-factor challenges, trusted-device grants, email OTPs and
+  magic links, and account-bound passkey and provider-link challenges;
+- marks the account email verified, since redeeming the emailed token proves
+  control of that mailbox, in the same transaction.
 
 If any step fails, none of them happen and the link stays usable. A reset also
 succeeds when there are no other credentials or sessions to revoke. A request
@@ -90,8 +94,10 @@ actively in use by someone else. The reset page
 lists the kinds of credentials that were removed. Sync access ends within the
 revocation bound described below: new Zero tokens and requests are refused
 immediately and open subscriptions close at the next revalidation. A session
-started with the new password is unaffected. A provider sign-in whose verified
-email matches the account links again on its next use.
+started with the new password is unaffected. A provider sign-in can link again
+only when the server permits implicit account linking and the provider supplies
+a matching verified email for the verified local account. A server that disables implicit linking requires an explicit link from a
+new authenticated session; password reset does not override that policy.
 
 A reset does not touch inbound webhooks or notification channel credentials,
 which belong to lists and workspaces rather than to signing in, or workspace
@@ -99,7 +105,10 @@ membership and encryption keys. It also keeps two-factor authentication (TOTP an
 backup codes). Removing it would let anyone who controls the mailbox defeat a
 second factor the owner set up. The cost: someone who had the old password could
 also have enrolled their own authenticator, and the owner is then asked for a
-code they don't have. Neither side can sign in. An operator recovers the account
+code they don't have. Once the reset commits, a saved sign-in challenge or trusted
+device cannot bypass a fresh password and second-factor check. An attacker who
+knows only the old password cannot finish that pending sign-in. Password sign-in
+still needs the enrolled factor or operator recovery. An operator recovers the account
 after verifying the owner out of band, by deleting the account's `two_factor` row
 and setting `two_factor_enabled` to false for the user. After a reset, review
 inbound webhooks and channel settings for anything you did not create.

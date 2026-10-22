@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { panelsSchema } from "./dashboard.ts";
+import { isoDateTimeSchema } from "./iso-datetime.ts";
 import { PUBLIC_API_ID } from "./public-api.ts";
 import { filterGroupSchema, viewDisplaySchema } from "./view-filter.ts";
 
@@ -15,7 +16,7 @@ export const PUBLIC_API_RESOURCES = [
 ] as const;
 export type PublicApiResource = (typeof PUBLIC_API_RESOURCES)[number];
 const nullableText = z.string().nullable();
-const nullableInstant = z.iso.datetime().nullable();
+const nullableInstant = isoDateTimeSchema().nullable();
 const scope = z.enum(["personal", "workspace"]);
 const savedSurface = {
 	id: PUBLIC_API_ID,
@@ -33,7 +34,7 @@ export const publicApiProfileSchema = z
 		timezone: z.string(),
 		timezoneChosen: z.boolean(),
 		locale: z.string(),
-		serverTime: z.iso.datetime(),
+		serverTime: isoDateTimeSchema(),
 		tokenAccess: z.enum(["read", "write"]),
 	})
 	.strict();

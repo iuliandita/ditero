@@ -134,7 +134,8 @@ describe("withPasswordResetTransaction", () => {
 		expect(statements).toEqual([
 			"select set_config('ditero.user_id', ?, true)",
 			'select id from "user" where id = ? for update',
-			"delete from verification where identifier like 'reset-password:%' and value = ?",
+			expect.stringContaining("with owned as materialized"),
+			'update "user" set email_verified = true, updated_at = statement_timestamp() where id = ?',
 			"update personal_access_token set revoked_at = statement_timestamp() where user_id = ? and revoked_at is null",
 			"update calendar_feed set revoked_at = statement_timestamp() where user_id = ? and revoked_at is null",
 			"delete from passkey where user_id = ?",

@@ -42,9 +42,31 @@ export async function revokeResetCredentials(
 	// either locks the user row too, so one that commits first is revoked here.
 	await tx.execute(sql`select set_config('ditero.user_id', ${userId}, true)`);
 	await tx.execute(sql`select id from "user" where id = ${userId} for update`);
-	// Any other outstanding reset link could reset the password again.
+	// Verification values mix plain user IDs, OTP counters and JSON payloads.
+	// Remove challenge dependents before their parent IDs disappear.
+	await tx.execute(sql`
+		with owned as materialized (
+			select v.identifier from verification v cross join "user" u
+			where u.id = ${userId} and (
+				v.value = u.id
+				or v.identifier in (
+					'2fa-otp-' || u.id,
+					'sign-in-otp-' || u.email,
+					'email-verification-otp-' || u.email,
+					'forget-password-otp-' || u.email
+				)
+				or lower((case when pg_input_is_valid(v.value, 'jsonb') then v.value::jsonb end) ->> 'email') = lower(u.email)
+				or (case when pg_input_is_valid(v.value, 'jsonb') then v.value::jsonb end) #>> '{userData,id}' = u.id
+				or (case when pg_input_is_valid(v.value, 'jsonb') then v.value::jsonb end) #>> '{link,userId}' = u.id
+			)
+		)
+		delete from verification where identifier in (select identifier from owned)
+			or identifier in (select '2fa-attempts-' || identifier from owned)
+			or identifier in (select '2fa-otp-' || identifier from owned)
+	`);
+	// Redeeming the emailed reset link proves control of the account's mailbox.
 	await tx.execute(
-		sql`delete from verification where identifier like 'reset-password:%' and value = ${userId}`,
+		sql`update "user" set email_verified = true, updated_at = statement_timestamp() where id = ${userId}`,
 	);
 	const accessTokens = await tx.execute(
 		sql`update personal_access_token set revoked_at = statement_timestamp() where user_id = ${userId} and revoked_at is null`,

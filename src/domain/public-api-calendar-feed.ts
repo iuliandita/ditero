@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isoDateTimeSchema } from "./iso-datetime.ts";
 import { PUBLIC_API_ID, PublicApiError } from "./public-api.ts";
 
 export const CALENDAR_FEED_PREFIX = "ditero_feed_";
@@ -48,9 +49,9 @@ export const calendarFeedMetadataSchema = z
 		hint: z.string().length(4),
 		listId: PUBLIC_API_ID,
 		workspaceId: PUBLIC_API_ID,
-		createdAt: z.iso.datetime(),
-		expiresAt: z.iso.datetime(),
-		revokedAt: z.iso.datetime().nullable(),
+		createdAt: isoDateTimeSchema(),
+		expiresAt: isoDateTimeSchema(),
+		revokedAt: isoDateTimeSchema().nullable(),
 	})
 	.strict();
 export const calendarFeedCreatedSchema = calendarFeedMetadataSchema

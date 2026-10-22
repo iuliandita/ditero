@@ -3,6 +3,7 @@
 // The auth handler runs as a restricted runtime role, so the row-level
 // security on tokens and feeds is really in force.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { symmetricDecrypt } from "better-auth/crypto";
 import { Pool } from "pg";
 import {
 	afterAll,
@@ -371,4 +372,230 @@ test("concurrent uses of one reset link have exactly one winner", async () => {
 		resetTokens: 0,
 		accessTokens: 0,
 	});
+});
+
+function postAuth(path: string, body: unknown, cookie = "") {
+	return auth.handleAuthRequest(
+		new Request(`${origin}/api/auth${path}`, {
+			method: "POST",
+			headers: { "content-type": "application/json", origin, cookie },
+			body: JSON.stringify(body),
+		}),
+	);
+}
+
+const cookies = (response: Response) =>
+	response.headers
+		.getSetCookie()
+		.map((value) => value.split(";")[0])
+		.join("; ");
+
+test("a pending password sign-in cannot finish TOTP after a reset", async () => {
+	const victim = await seedAccount();
+	await admin.query("delete from two_factor where user_id=$1", [victim.userId]);
+	const signIn = () =>
+		postAuth("/sign-in/email", {
+			email: `${victim.userId}@reset.test`,
+			password: "old-password-123",
+		});
+	const session = await signIn();
+	expect(session.status).toBe(200);
+	const enabled = await postAuth(
+		"/two-factor/enable",
+		{
+			password: "old-password-123",
+			method: "totp",
+		},
+		cookies(session),
+	);
+	expect(enabled.status).toBe(200);
+	const context = await auth.auth.$context;
+	const enrolled = await context.adapter.findOne<{
+		secret: string;
+		backupCodes: string;
+	}>({
+		model: "twoFactor",
+		where: [{ field: "userId", value: victim.userId }],
+	});
+	if (!enrolled) throw new Error("missing enrollment");
+	const secret = await symmetricDecrypt({
+		key: context.secretConfig,
+		data: enrolled.secret,
+	});
+	const code = () => auth.auth.api.generateTOTP({ body: { secret } });
+	const verified = await postAuth(
+		"/two-factor/verify-totp",
+		await code(),
+		cookies(session),
+	);
+	expect(verified.status).toBe(200);
+	// Establish a real trusted device, then a separate pending challenge.
+	const trustedChallenge = await signIn();
+	expect(await trustedChallenge.json()).toMatchObject({
+		twoFactorRedirect: true,
+	});
+	const trusted = await postAuth(
+		"/two-factor/verify-totp",
+		{ ...(await code()), trustDevice: true },
+		cookies(trustedChallenge),
+	);
+	expect(trusted.status).toBe(200);
+	const pending = await signIn();
+	expect(await pending.json()).toMatchObject({ twoFactorRedirect: true });
+	const proofCount = async () =>
+		(
+			await admin.query(
+				"select count(*)::int n from verification where value=$1 and (identifier like '2fa-%' or identifier like 'trust-device-%')",
+				[victim.userId],
+			)
+		).rows[0].n;
+	expect(await proofCount()).toBeGreaterThanOrEqual(2);
+	expect((await reset(victim.resetToken)).status).toBe(200);
+	expect((await counts(victim.userId)).sessions).toBe(0);
+	const refused = await postAuth(
+		"/two-factor/verify-totp",
+		await code(),
+		cookies(pending),
+	);
+	expect(refused.status).toBe(401);
+	expect(await refused.json()).toMatchObject({
+		code: "INVALID_TWO_FACTOR_COOKIE",
+	});
+	expect((await counts(victim.userId)).sessions).toBe(0);
+	expect(
+		await auth.auth.api.getSession({
+			headers: new Headers({ cookie: cookies(refused) }),
+		}),
+	).toBeNull();
+	expect(await proofCount()).toBe(0);
+	const kept = await context.adapter.findOne<{
+		secret: string;
+		backupCodes: string;
+	}>({
+		model: "twoFactor",
+		where: [{ field: "userId", value: victim.userId }],
+	});
+	// Do not include the enrolled secrets in assertion output.
+	expect(
+		kept?.secret === enrolled.secret &&
+			kept?.backupCodes === enrolled.backupCodes,
+	).toBe(true);
+	const next = await postAuth(
+		"/sign-in/email",
+		{
+			email: `${victim.userId}@reset.test`,
+			password: "new-password-456",
+		},
+		cookies(trusted),
+	);
+	expect(await next.json()).toMatchObject({ twoFactorRedirect: true });
+	const recovered = await postAuth(
+		"/two-factor/verify-totp",
+		await code(),
+		cookies(next),
+	);
+	expect(recovered.status).toBe(200);
+	expect((await counts(victim.userId)).sessions).toBe(1);
+	expect(
+		(
+			await auth.auth.api.getSession({
+				headers: new Headers({ cookie: cookies(recovered) }),
+			})
+		)?.user.id,
+	).toBe(victim.userId);
+});
+
+test("a reset removes every account-bound verification format without touching a bystander", async () => {
+	const victim = await seedAccount();
+	const bystander = await seedAccount();
+	const records = (userId: string) => {
+		const challenge = `2fa-${randomUUID()}`;
+		const email = `${userId}@reset.test`;
+		return [
+			[challenge, userId],
+			[`2fa-attempts-${challenge}`, "0"],
+			[`2fa-otp-${challenge}`, "opaque:0"],
+			[`2fa-otp-${userId}`, "opaque:0"],
+			[`trust-device-${randomUUID()}`, userId],
+			[`delete-account-${randomUUID()}`, userId],
+			[`sign-in-otp-${email}`, "opaque:0"],
+			[`email-verification-otp-${email}`, "opaque:0"],
+			[`forget-password-otp-${email}`, "opaque:0"],
+			[
+				`magic-link:${randomUUID()}`,
+				JSON.stringify({ type: "magic-link", email }),
+			],
+			[
+				randomUUID(),
+				JSON.stringify({ type: "registration", userData: { id: userId } }),
+			],
+			[
+				randomUUID(),
+				JSON.stringify({ type: "authentication", userData: { id: userId } }),
+			],
+			[
+				`auth-state:${randomUUID()}`,
+				JSON.stringify({ link: { userId, email } }),
+			],
+		];
+	};
+	const own = records(victim.userId);
+	const other = records(bystander.userId);
+	const unrelated = [
+		[randomUUID(), "not-json"],
+		[
+			randomUUID(),
+			JSON.stringify({ type: "authentication", userData: { id: "" } }),
+		],
+	];
+	const inserted = [...own, ...other, ...unrelated];
+	try {
+		for (const [identifier, value] of inserted)
+			await admin.query(
+				"insert into verification(id,identifier,value,expires_at) values($1,$2,$3,now()+interval '1 hour')",
+				[randomUUID(), identifier, value],
+			);
+		const remaining = async (rows: string[][]) =>
+			(
+				await admin.query(
+					"select count(*)::int n from verification where identifier=any($1::text[])",
+					[rows.map(([identifier]) => identifier)],
+				)
+			).rows[0].n;
+		expect(await remaining(own)).toBe(own.length);
+		expect((await reset(victim.resetToken)).status).toBe(200);
+		expect(await remaining(own)).toBe(0);
+		expect(await remaining(other)).toBe(other.length);
+		expect(await remaining(unrelated)).toBe(unrelated.length);
+	} finally {
+		await admin.query(
+			"delete from verification where identifier=any($1::text[])",
+			[inserted.map(([identifier]) => identifier)],
+		);
+	}
+});
+
+test("mailbox verification commits with the reset and rolls back with a later revocation failure", async () => {
+	const victim = await seedAccount();
+	const bystander = await seedAccount();
+	await admin.query(
+		'update "user" set email_verified=false where id=any($1::text[])',
+		[[victim.userId, bystander.userId]],
+	);
+	const verified = async (userId: string) =>
+		(
+			await admin.query('select email_verified from "user" where id=$1', [
+				userId,
+			])
+		).rows[0].email_verified;
+	vi.spyOn(console, "error").mockImplementation(() => {});
+	await admin.query(`revoke update on calendar_feed from "${role}"`);
+	expect((await reset(victim.resetToken)).ok).toBe(false);
+	expect(await verified(victim.userId)).toBe(false);
+	expect(await passwordMatches(victim.userId, "old-password-123")).toBe(true);
+	await admin.query(`grant update on calendar_feed to "${role}"`);
+	expect((await reset(victim.resetToken)).status).toBe(200);
+	expect(await verified(victim.userId)).toBe(true);
+	expect(await verified(bystander.userId)).toBe(false);
+	expect((await reset(victim.resetToken)).status).toBe(400);
 });

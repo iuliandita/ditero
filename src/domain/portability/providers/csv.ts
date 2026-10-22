@@ -1,5 +1,6 @@
 import { generateNKeysBetween } from "fractional-indexing";
 import { z } from "zod";
+import { isoDateTimeSchema } from "../../iso-datetime.ts";
 import type { PortableExportV1, PortableRows } from "../v1.ts";
 import {
 	CSV_ADAPTER,
@@ -36,7 +37,7 @@ export const CSV_HEADER = [
 ] as const;
 
 export type CsvTextEncoding = "plain" | "apostrophe-v1";
-const dateSchema = z.iso.datetime({ offset: true });
+const dateSchema = isoDateTimeSchema({ offset: true });
 const uuidSchema = z.uuid();
 const encoder = new TextEncoder();
 
