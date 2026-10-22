@@ -8,6 +8,16 @@ using System.Runtime.InteropServices;
 public static class JourneyNotificationMouse {
     [DllImport("user32.dll", SetLastError=true)] public static extern bool SetCursorPos(int x, int y);
     [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
+    private delegate bool EnumProc(IntPtr window, IntPtr parameter);
+    [DllImport("user32.dll")] private static extern bool EnumWindows(EnumProc callback, IntPtr parameter);
+    [DllImport("user32.dll")] private static extern bool EnumChildWindows(IntPtr parent, EnumProc callback, IntPtr parameter);
+    [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr window);
+    public static IntPtr[] VisibleWindows() {
+        var windows = new System.Collections.Generic.HashSet<IntPtr>();
+        EnumProc child = (window, parameter) => { if (IsWindowVisible(window)) windows.Add(window); return true; };
+        EnumWindows((window, parameter) => { if (IsWindowVisible(window)) { windows.Add(window); EnumChildWindows(window, child, IntPtr.Zero); } return true; }, IntPtr.Zero);
+        var result = new IntPtr[windows.Count]; windows.CopyTo(result); return result;
+    }
 }
 '@
 $evidence = Join-Path $env:RUNNER_TEMP 'desktop-journeys/evidence'
@@ -83,11 +93,18 @@ if ($Mode -eq 'prepare') {
     Write-Output 'OS UI confirms Do not disturb is off; app notification permissions are unchanged'
     exit 0
 }
-$deadline = [DateTime]::UtcNow.AddSeconds(45)
+$started = [DateTime]::UtcNow
+$nextCapture = $started.AddSeconds(5)
+$frame = 0
+$deadline = $started.AddSeconds(45)
 while ([DateTime]::UtcNow -lt $deadline) {
     $snapshot = [System.Collections.Generic.List[string]]::new()
     $root = [System.Windows.Automation.AutomationElement]::RootElement
-    $windows = $root.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)
+    $windows = [System.Collections.Generic.List[System.Windows.Automation.AutomationElement]]::new()
+    foreach ($handle in [JourneyNotificationMouse]::VisibleWindows()) {
+        try { $windows.Add([System.Windows.Automation.AutomationElement]::FromHandle($handle)) }
+        catch [System.Windows.Automation.ElementNotAvailableException] { $snapshot.Add('Window closed during inspection') }
+    }
     foreach ($window in $windows) {
         $process = Get-Process -Id $window.Current.ProcessId -ErrorAction SilentlyContinue
         if ($null -eq $process) { continue }
@@ -115,6 +132,18 @@ while ([DateTime]::UtcNow -lt $deadline) {
         }
     }
     Set-Content -Path (Join-Path $evidence 'notification-last-uia.txt') -Value ($snapshot -join "`n")
+    if ([DateTime]::UtcNow -ge $nextCapture -and $frame -lt 6) {
+        $frame++
+        $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+        $bitmap = [System.Drawing.Bitmap]::new($bounds.Width, $bounds.Height)
+        $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+        try {
+            $graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+            $bitmap.Save((Join-Path $evidence "notification-desktop-$frame.png"))
+        } finally { $graphics.Dispose(); $bitmap.Dispose() }
+        Set-Content -Path (Join-Path $evidence "notification-frame-$frame-uia.txt") -Value ($snapshot -join "`n")
+        $nextCapture = [DateTime]::UtcNow.AddSeconds(5)
+    }
     Start-Sleep -Milliseconds 200
 }
 $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
