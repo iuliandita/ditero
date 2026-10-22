@@ -6,15 +6,17 @@ Add-Type @'
 using System;
 using System.Runtime.InteropServices;
 public static class JourneyNotificationMouse {
-    [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+    [DllImport("user32.dll", SetLastError=true)] public static extern bool SetCursorPos(int x, int y);
     [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
 }
 '@
 $evidence = Join-Path $env:RUNNER_TEMP 'desktop-journeys/evidence'
 function Click-Element($element) {
+    $invoke = $null
+    if ($element.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$invoke)) { $invoke.Invoke(); return }
     $rectangle = $element.Current.BoundingRectangle
     if ($element.Current.IsOffscreen -or $rectangle.Width -le 0 -or $rectangle.Height -le 0) { throw 'OS control has no visible bounds' }
-    [void][JourneyNotificationMouse]::SetCursorPos([int]($rectangle.X + $rectangle.Width / 2), [int]($rectangle.Y + $rectangle.Height / 2))
+    if (-not [JourneyNotificationMouse]::SetCursorPos([int]($rectangle.X + $rectangle.Width / 2), [int]($rectangle.Y + $rectangle.Height / 2))) { throw "OS pointer positioning failed: $([Runtime.InteropServices.Marshal]::GetLastWin32Error())" }
     [JourneyNotificationMouse]::mouse_event(0x0002, 0, 0, 0, [UIntPtr]::Zero)
     [JourneyNotificationMouse]::mouse_event(0x0004, 0, 0, 0, [UIntPtr]::Zero)
 }
@@ -35,7 +37,7 @@ if ($Mode -eq 'prepare') {
     $before = $button.Current.Name
     $opened = $false
     if ($before -like '*Do not disturb on*') {
-        Click-Element $button
+        Start-Process 'ms-settings:notifications'
         $opened = $true
         $deadline = [DateTime]::UtcNow.AddSeconds(20)
         $toggled = $false
@@ -45,13 +47,16 @@ if ($Mode -eq 'prepare') {
             $windows = $root.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)
             foreach ($window in $windows) {
                 $process = Get-Process -Id $window.Current.ProcessId -ErrorAction SilentlyContinue
-                if ($null -eq $process -or $process.ProcessName -in @('ditero-desktop', 'msedge', 'chrome', 'pwsh', 'powershell')) { continue }
+                if ($null -eq $process -or $process.ProcessName -notin @('SystemSettings', 'ApplicationFrameHost')) { continue }
                 $elements = $window.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)
                 foreach ($element in $elements) {
                     $name = $element.Current.Name
                     $snapshot.Add("$($process.ProcessName) | $($element.Current.ClassName) | $name")
-                    if ($name -notmatch 'do not disturb' -or $name -like 'Notifications *' -or $element.Current.IsOffscreen -or $element.Current.ControlType -ne [System.Windows.Automation.ControlType]::Button) { continue }
-                    Click-Element $element
+                    if ($name -notmatch '^Do not disturb(,? (On|Off))?$' -or $element.Current.IsOffscreen) { continue }
+                    $toggle = $null
+                    if (-not $element.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern, [ref]$toggle)) { continue }
+                    if ($toggle.Current.ToggleState -eq [System.Windows.Automation.ToggleState]::On) { $toggle.Toggle() }
+                    elseif ($toggle.Current.ToggleState -ne [System.Windows.Automation.ToggleState]::Off) { throw 'Do not disturb toggle has indeterminate state' }
                     $toggled = $true
                     break
                 }
@@ -63,7 +68,14 @@ if ($Mode -eq 'prepare') {
         if (-not $toggled) { throw 'Do not disturb is on but its OS control was not found' }
         $settle = [DateTime]::UtcNow.AddSeconds(10)
         while ((Notification-Button).Current.Name -like '*Do not disturb on*' -and [DateTime]::UtcNow -lt $settle) { Start-Sleep -Milliseconds 200 }
-        Click-Element (Notification-Button)
+        $root = [System.Windows.Automation.AutomationElement]::RootElement
+        foreach ($window in $root.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)) {
+            $process = Get-Process -Id $window.Current.ProcessId -ErrorAction SilentlyContinue
+            if ($null -ne $process -and $process.ProcessName -in @('SystemSettings', 'ApplicationFrameHost')) {
+                $pattern = $null
+                if ($window.TryGetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern, [ref]$pattern)) { $pattern.Close() }
+            }
+        }
     }
     $after = (Notification-Button).Current.Name
     @{before=$before; after=$after; changed=$opened; method='normal-os-ui'} | ConvertTo-Json | Set-Content (Join-Path $evidence 'notification-dnd.json')
@@ -97,10 +109,8 @@ while ([DateTime]::UtcNow -lt $deadline) {
             if ($Mode -eq 'show') { Write-Output 'Observed actual Ditero toast'; exit 0 }
             $rectangle = $element.Current.BoundingRectangle
             if ($rectangle.Width -le 0 -or $rectangle.Height -le 0) { continue }
-            [void][JourneyNotificationMouse]::SetCursorPos([int]($rectangle.X + $rectangle.Width / 2), [int]($rectangle.Y + $rectangle.Height / 2))
-            [JourneyNotificationMouse]::mouse_event(0x0002, 0, 0, 0, [UIntPtr]::Zero)
-            [JourneyNotificationMouse]::mouse_event(0x0004, 0, 0, 0, [UIntPtr]::Zero)
-            Write-Output 'Clicked measured Ditero toast bounds'
+            Click-Element $element
+            Write-Output 'Activated actual Ditero toast through OS UI'
             exit 0
         }
     }
