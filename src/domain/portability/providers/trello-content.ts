@@ -8,6 +8,7 @@ import {
 	nonempty,
 	record,
 	string,
+	truncateProviderText,
 } from "./content-common.ts";
 
 function trelloId(value: unknown): string {
@@ -24,10 +25,10 @@ function attachmentLine(value: unknown) {
 	const row = record(value);
 	const name =
 		typeof row.name === "string"
-			? row.name
-					.replace(/[\p{Cc}\p{Cf}\s]+/gu, " ")
-					.trim()
-					.slice(0, 200)
+			? truncateProviderText(
+					row.name.replace(/[\p{Cc}\p{Cf}\s]+/gu, " ").trim(),
+					200,
+				)
 			: "";
 	let link: string | null = null;
 	if (typeof row.url === "string" && row.url.length <= ATTACHMENT_URL_LIMIT)

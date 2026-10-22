@@ -390,6 +390,24 @@ describe("provider content adapters", () => {
 		expect(fetchSpy).not.toHaveBeenCalled();
 		fetchSpy.mockRestore();
 	});
+	test.each([
+		["surrogate pair", `${"a".repeat(199)}😀`, "a".repeat(199)],
+		["split combining grapheme", `${"a".repeat(199)}e\u0301`, "a".repeat(199)],
+	])("bounds Trello attachment names at whole graphemes: %s", async (_kind, name, expected) => {
+		const board = JSON.parse(fixture("trello-content.json").toString());
+		board.cards[0].attachments = [{ name, url: "https://example.test/file" }];
+		const result = await parseContentProvider(
+			"trello",
+			bytes(JSON.stringify(board)),
+			options,
+		);
+		expect(result.document.data.tasks).toHaveLength(4);
+		const notes = result.document.data.tasks.find(
+			(row) => row.title === "Prepare picnic",
+		)?.notes;
+		expect(notes).toContain(`- ${expected}: https://example.test/file`);
+		expect(notes?.isWellFormed()).toBe(true);
+	});
 	test("bounds Trello attachment text and never fails the board because of it", async () => {
 		const board = JSON.parse(fixture("trello-content.json").toString());
 		board.cards[0].attachments = Array.from({ length: 40 }, (_, i) => ({
