@@ -24,10 +24,5 @@ replacements:
       name: ditero-app
     fieldPaths:
     - spec.template.spec.containers.[name=app].env.[name=DITERO_REPLICA_ID].value
-  - select:
-      kind: Deployment
-      name: ditero-zero
-    fieldPaths:
-    - spec.template.spec.initContainers.[name=wait-for-app].env.[name=APP_REPLICA_ID].value
 configurations:
 - name-reference.yaml

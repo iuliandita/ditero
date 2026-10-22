@@ -356,20 +356,6 @@ function assertMigrationGate(items: Manifest[], appService: string) {
 	assert.deepEqual(gate.securityContext.capabilities.drop, ["ALL"]);
 	assert.ok(gate.resources.requests.cpu && gate.resources.limits.memory);
 }
-// Fallback for images built without DITERO_GIT_SHA: both ids are copied from
-// the app image by the base replacements, so an overlay must repeat them.
-function assertFallbackIds(items: Manifest[]) {
-	const image = pod(items, "app").container.image;
-	const ids = [
-		pod(items, "app").container.env.find((e) => e.name === "DITERO_REPLICA_ID"),
-		gateOf(items).env.find((e) => e.name === "APP_REPLICA_ID"),
-	];
-	assert.deepEqual(
-		ids.map((id) => id?.value),
-		[image, image],
-	);
-}
-
 // The gate script is the production artifact: run it against a stub /health.
 // A gate that holds keeps polling and a gate that opens exits, so counting
 // requests avoids wall-clock timing under load.
@@ -419,60 +405,59 @@ async function runGate(
 	} finally {
 		stopped = true;
 		child.kill();
+		await child.exited;
 		server.stop(true);
 	}
 }
 async function assertGateBehavior(items: Manifest[]) {
 	const script = gateOf(items).args?.[0];
 	assert.ok(script);
-	const labeled = { DITERO_GIT_SHA: "new1234", APP_REPLICA_ID: "image-ref" };
-	const unlabeled = { APP_REPLICA_ID: "image-ref" };
-	const health = (replica: string | null, revision: string | null) => ({
+	const labeled = { DITERO_GIT_SHA: "new1234" };
+	const health = (revision: string | null) => ({
 		ok: true,
-		replica,
+		replica: "image-ref",
 		revision,
 	});
-	const [stale, nullRevision, staleReplicaMatch, rollout, fallback] =
-		await Promise.all([
-			runGate(script, labeled, health("pod", "old5678")),
-			runGate(script, labeled, health("pod", null)),
-			// An overlay that forgot replacements leaves the ids equal for any revision.
-			runGate(script, labeled, health("image-ref", "old5678")),
-			runGate(
-				script,
-				labeled,
-				health("pod", "old5678"),
-				health("pod", "new1234"),
-			),
-			runGate(
-				script,
-				unlabeled,
-				health("other", "new1234"),
-				health("image-ref", null),
-			),
-		]);
+	const [
+		stale,
+		nullRevision,
+		emptyRevision,
+		missingRevision,
+		missingCommit,
+		emptyCommit,
+		rollout,
+	] = await Promise.all([
+		runGate(script, labeled, health("old5678")),
+		runGate(script, labeled, health(null)),
+		runGate(script, labeled, health("")),
+		runGate(script, labeled, { ok: true, replica: "image-ref" }),
+		runGate(script, { APP_REPLICA_ID: "image-ref" }, health("old5678")),
+		runGate(
+			script,
+			{ DITERO_GIT_SHA: "", APP_REPLICA_ID: "image-ref" },
+			health("old5678"),
+		),
+		runGate(script, labeled, health("old5678"), health("new1234")),
+	]);
 	assert.equal(stale.releasedEarly, false);
 	assert.equal(nullRevision.releasedEarly, false);
-	assert.equal(staleReplicaMatch.releasedEarly, false);
+	assert.equal(emptyRevision.releasedEarly, false);
+	assert.equal(missingRevision.releasedEarly, false);
+	assert.equal(
+		missingCommit.releasedEarly,
+		false,
+		"missing commit opened gate",
+	);
+	assert.equal(emptyCommit.releasedEarly, false, "empty commit opened gate");
 	assert.deepEqual(rollout, { releasedEarly: false, released: true });
-	assert.deepEqual(fallback, { releasedEarly: false, released: true });
-	const [revisionIgnored, replicaIgnored] = await Promise.all([
-		runGate(
-			script.replace("health.revision === own", "true"),
-			labeled,
-			health("pod", "old5678"),
-		),
-		runGate(
-			script.replace("health.replica === process.env.APP_REPLICA_ID", "true"),
-			unlabeled,
-			health("other", null),
-		),
-	]);
+	const revisionIgnored = await runGate(
+		script.replace("health.revision === own", "true"),
+		labeled,
+		health("old5678"),
+	);
 	assert.equal(revisionIgnored.releasedEarly, true, "mutation not detected");
-	assert.equal(replicaIgnored.releasedEarly, true, "mutation not detected");
 }
 assertMigrationGate(defaults, "ditero-app");
-assertFallbackIds(defaults);
 await assertGateBehavior(defaults);
 
 const defaultTag = defaultImage.slice(defaultImage.indexOf(":") + 1);
@@ -522,49 +507,6 @@ configMapGenerator:
 		"docker.io/iuliandita/ditero:0.0.2-alpha.1-zero",
 	);
 	assertMigrationGate(configured, "home-ditero-app");
-	// No replacements here: the labeled-image gate must not depend on them.
-	assert.notEqual(
-		gateOf(configured).env.find((e) => e.name === "APP_REPLICA_ID")?.value,
-		pod(configured, "app").container.image,
-	);
-	const fallback = join(temporary, "fallback");
-	await mkdir(fallback);
-	await writeFile(
-		join(fallback, "kustomization.yaml"),
-		`apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-- ../base
-images:
-- name: ghcr.io/iuliandita/ditero:${defaultTag}
-  newTag: local-build
-- name: ghcr.io/iuliandita/ditero:${defaultTag}-zero
-  newTag: local-build-zero
-replacements:
-- source:
-    kind: Deployment
-    name: ditero-app
-    fieldPath: spec.template.spec.containers.[name=app].image
-  targets:
-  - select:
-      kind: Deployment
-      name: ditero-app
-    fieldPaths:
-    - spec.template.spec.containers.[name=app].env.[name=DITERO_REPLICA_ID].value
-  - select:
-      kind: Deployment
-      name: ditero-zero
-    fieldPaths:
-    - spec.template.spec.initContainers.[name=wait-for-app].env.[name=APP_REPLICA_ID].value
-`,
-	);
-	const local = render(fallback);
-	assertMigrationGate(local, "ditero-app");
-	assertFallbackIds(local);
-	assert.equal(
-		pod(local, "app").container.image,
-		`ghcr.io/iuliandita/ditero:local-build`,
-	);
 	assert.deepEqual(config.data, {
 		BETTER_AUTH_URL: "https://tasks.example.com",
 		PUBLIC_ZERO_URL: "https://sync.example.com",

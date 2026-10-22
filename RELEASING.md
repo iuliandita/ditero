@@ -106,7 +106,8 @@ Missing history, a changed epoch tag or unavailable tooling blocks publication.
 1. Update `release.json` with the version and a strictly increasing Android version
    code. Align Helm chart metadata, Helm/Kustomize app/Zero image tags, and current
    version/image examples in both packaged deployment guides with that version
-   before tagging. Release packaging checks reject mismatched guide examples.
+   before tagging. Release packaging checks reject mismatched guide examples,
+   including both tag-matched Kustomize image names and replacement tags.
    Native packaging applies the release version to Tauri and Android without
    rewriting generated files; Cargo's package version remains the base version.
 2. Merge the release PR into `develop` for prereleases or `main` for stable releases.

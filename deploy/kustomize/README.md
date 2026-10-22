@@ -148,13 +148,15 @@ override keeps the gate correct without extra overlay fields. A pair built from
 different commits never opens the gate. Apply the base or overlay once; no staged
 replicas are needed.
 
-Images built without a commit (a local `docker build` that passed no
-`DITERO_GIT_SHA`) fall back to comparing `/health` `replica` with `APP_REPLICA_ID`.
-The base copies the app image reference into the app's `DITERO_REPLICA_ID` and the
-init container's `APP_REPLICA_ID` with a `replacements` block, which runs before
-overlay overrides. For such builds, repeat that block in the overlay, naming its
-own resources after any `namePrefix`; otherwise the identifier stays at the base
-image and the fallback opens early. Labeled images ignore this field.
+The gate fails closed when the Zero image's `DITERO_GIT_SHA` is empty or missing,
+or when the app reports a missing, empty or different revision. It never falls
+back to image tags or replica identifiers, which can stay unchanged across an
+upgrade. Build local app and Zero images from the same commit with
+`--build-arg DITERO_GIT_SHA=<full-commit-sha>`; unlabeled images remain waiting.
+Do not override `DITERO_GIT_SHA` in deployment configuration. If the gate stays
+blocked, verify both images' baked commit and the app's migration/startup logs,
+then deploy the matching image pair. The app starts independently of Zero, so a
+matching healthy app releases the gate without a circular startup dependency.
 
 Operators upgrading from `0.0.1-alpha.12` or earlier, or from a render without the
 init container, should remove any manual zero-replica hold patch; applying it
