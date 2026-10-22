@@ -25,7 +25,9 @@ export function resolveRegistrationMode(
 // can name the reason in the user's language instead of a flat failure string.
 export type RegistrationDeniedCode =
 	| "REGISTRATION_DISABLED"
-	| "REGISTRATION_INVITE_REQUIRED";
+	| "REGISTRATION_INVITE_REQUIRED"
+	| "REGISTRATION_RELAY_EMAIL"
+	| "PROVIDER_SIGN_IN_REFUSED";
 
 export class RegistrationDeniedError extends Error {
 	readonly code: RegistrationDeniedCode;

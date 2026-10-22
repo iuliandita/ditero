@@ -15,6 +15,7 @@ import {
 	ZeroRetirementError,
 } from "../../lib/zero-lifecycle.ts";
 import { Input } from "../ui/input.tsx";
+import { LinkedProvidersPanel } from "./LinkedProvidersPanel.tsx";
 
 export function AccountPanel() {
 	const native = useNativeAccount();
@@ -31,6 +32,7 @@ function BrowserAccountPanel() {
 		<>
 			<AccountContent profile={session?.user} />
 			<DisplayNameForm name={session?.user.name ?? ""} />
+			<LinkedProvidersPanel />
 		</>
 	);
 }

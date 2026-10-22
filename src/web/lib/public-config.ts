@@ -16,5 +16,13 @@ export async function fetchPublicConfig(): Promise<PublicConfig> {
 		socialProviders: Array.isArray(body.socialProviders)
 			? body.socialProviders.filter((provider) => typeof provider === "string")
 			: [],
+		oidcProviders: Array.isArray(body.oidcProviders)
+			? body.oidcProviders.filter(
+					(provider) =>
+						typeof provider?.id === "string" &&
+						typeof provider.name === "string" &&
+						typeof provider.icon === "string",
+				)
+			: [],
 	};
 }
