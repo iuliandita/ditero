@@ -18,7 +18,8 @@ export const workspaceNameSchema = z
 	.string()
 	.refine(validText)
 	.transform((value) => value.trim())
-	.pipe(z.string().min(1).max(WORKSPACE_NAME_MAX_LENGTH));
+	.pipe(z.string().min(1))
+	.refine((value) => value.length <= WORKSPACE_NAME_MAX_LENGTH);
 
 export const workspaceCreateSchema = z
 	.object({

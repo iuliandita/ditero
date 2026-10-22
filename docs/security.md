@@ -82,7 +82,8 @@ transaction with the token use and the password change, it:
 - unlinks every Google or other provider sign-in, keeping only the password;
 - invalidates every other outstanding reset link of the account.
 
-If any step fails, none of them happen and the link stays usable. A request
+If any step fails, none of them happen and the link stays usable. A reset also
+succeeds when there are no other credentials or sessions to revoke. A request
 that was already authenticated before the reset committed can still finish
 creating a credential, so review the lists after a reset if the account was
 actively in use by someone else. The reset page

@@ -99,7 +99,11 @@ function observePasswordWrite<T extends object>(
 			return async (input: AdapterCall) => {
 				const result = await Reflect.apply(value, target, [input]);
 				const userId = credentialOwner(property, input);
-				if (typeof userId === "string") onWrite(userId);
+				if (typeof userId === "string") {
+					if (property === "updateMany" ? result !== 1 : !result)
+						throw resetUnavailable();
+					onWrite(userId);
+				}
 				return result;
 			};
 		},

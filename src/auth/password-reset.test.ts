@@ -196,3 +196,30 @@ describe("runPasswordReset", () => {
 		});
 	});
 });
+
+test("a credential update that affects no row cannot complete the reset", async () => {
+	const { database, statements } = fakeDatabase();
+	const { factory, adapter } = fakeFactory();
+	adapter.updateMany.mockResolvedValue(0);
+	const wrapped = withPasswordResetTransaction(
+		() => factory as never,
+		database as never,
+	)({} as never) as unknown as {
+		transaction: (
+			callback: (a: typeof adapter) => Promise<unknown>,
+		) => Promise<unknown>;
+	};
+	await runPasswordReset(async () => {
+		await expect(
+			wrapped.transaction((tx) =>
+				tx.updateMany({
+					model: "account",
+					where: [{ field: "userId", value: "user-1" }],
+					update: { password: "hash" },
+				}),
+			),
+		).rejects.toThrow("Password reset is unavailable");
+		return new Response(null, { status: 500 });
+	});
+	expect(statements).toEqual([]);
+});

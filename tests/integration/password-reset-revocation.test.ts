@@ -328,3 +328,47 @@ test("a reset of a provider-only account creates its password and unlinks the pr
 	});
 	expect(await passwordMatches(victim.userId, "new-password-456")).toBe(true);
 });
+
+test("a reset succeeds even when there are no planted credentials or sessions", async () => {
+	const victim = await seedAccount();
+	for (const table of [
+		"session",
+		"personal_access_token",
+		"calendar_feed",
+		"passkey",
+	])
+		await admin.query(`delete from ${table} where user_id=$1`, [victim.userId]);
+	await admin.query(
+		"delete from account where user_id=$1 and provider_id<>'credential'",
+		[victim.userId],
+	);
+	const response = await reset(victim.resetToken);
+	expect(response.status, await response.clone().text()).toBe(200);
+	expect(await response.json()).toEqual({
+		status: true,
+		revoked: {
+			accessTokens: 0,
+			calendarFeeds: 0,
+			passkeys: 0,
+			linkedAccounts: 0,
+		},
+	});
+	expect(await passwordMatches(victim.userId, "new-password-456")).toBe(true);
+});
+
+test("concurrent uses of one reset link have exactly one winner", async () => {
+	const victim = await seedAccount();
+	const responses = await Promise.all([
+		reset(victim.resetToken, "first-password-123"),
+		reset(victim.resetToken, "second-password-456"),
+	]);
+	expect(responses.map((response) => response.status).sort()).toEqual([
+		200, 400,
+	]);
+	const winner = responses[0].ok ? "first-password-123" : "second-password-456";
+	expect(await passwordMatches(victim.userId, winner)).toBe(true);
+	expect(await counts(victim.userId)).toMatchObject({
+		resetTokens: 0,
+		accessTokens: 0,
+	});
+});

@@ -26,7 +26,13 @@ export function App() {
 	return (
 		<ConfirmProvider>
 			<SnackbarProvider>
-				<Routes />
+				{window.location.pathname.replace(/\/+$/, "") === "/reset-password" ? (
+					<DisplayPreferencesProvider userId={null}>
+						<ResetPassword />
+					</DisplayPreferencesProvider>
+				) : (
+					<Routes />
+				)}
 			</SnackbarProvider>
 		</ConfirmProvider>
 	);
@@ -72,9 +78,6 @@ function SessionRoutes({
 		return standalone(
 			<NativeAuthorize session={session} isPending={isPending} />,
 		);
-	// The emailed reset link opens here in whatever browser reads the mail.
-	if (window.location.pathname.replace(/\/+$/, "") === "/reset-password")
-		return standalone(<ResetPassword />);
 	if (isPending) return standalone(<BootSkeleton />);
 	if (!session)
 		return standalone(
