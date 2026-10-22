@@ -1,12 +1,14 @@
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import { sep } from "node:path";
 import { expect, test } from "vitest";
 
 // Both native bridges allow exactly one Zero sync path and bound inbound binary frames.
 // A Zero upgrade that changes either must update the native pins in the same change, or
 // native sync never connects while web keeps working.
 const zeroEntry = createRequire(import.meta.url).resolve("@rocicorp/zero");
-const zeroRoot = zeroEntry.slice(0, zeroEntry.lastIndexOf("/out/"));
+// Native separators: Windows desktop CI resolves backslash paths.
+const zeroRoot = zeroEntry.slice(0, zeroEntry.lastIndexOf(`${sep}out${sep}`));
 const read = (path: string | URL) => readFileSync(path, "utf8");
 const repo = (path: string) =>
 	read(new URL(`../../../${path}`, import.meta.url));

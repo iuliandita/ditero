@@ -1920,14 +1920,18 @@ final class NativeZeroTransport {
         @Override
         public void onMessage(@NonNull WebSocket webSocket, @NonNull ByteString bytes) {
             String encoded = binaryFrame(bytes);
-            if (encoded == null) {
-                webSocket.close(1009, "too large");
-                return;
-            }
             synchronized (this) {
                 if (terminal) return;
-                queue(put(event("message"), "binary", encoded), false);
+                if (encoded != null) {
+                    queue(put(event("message"), "binary", encoded), false);
+                    return;
+                }
+                // End the page's socket now: frames still in flight after this one would
+                // otherwise reach Zero with a poke chunk missing.
+                terminal = true;
+                queue(put(put(put(event("close"), "code", 1006), "reason", ""), "clean", false), true);
             }
+            webSocket.close(1009, "too large");
         }
 
         @Override
