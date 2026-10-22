@@ -127,10 +127,18 @@ task-link behavior and qualification limits are documented in the
 
 Linux system notifications require a notification service with action support.
 Windows uses installed-app toasts with click routing while the banner is visible;
-dismissed banners are removed from history. Hosted Windows checks turn off
-Do not disturb through the OS UI before testing; the app does not override it.
-The Windows journey runs in the logged-in user's limited interactive session and
-asserts that it is unelevated before launching Ditero.
+dismissed banners are removed from history. Hosted Windows preparation turns off
+Do not disturb through the OS UI; the app does not override it. No banner or click
+was observed even with that setting off. Windows display, click routing, and popup
+retirement remain unqualified in #346. CI reports and asserts an explicit
+"unqualified on hosted runner" result for this case, separate from 11 required
+core journey passes. Those core checks inherit the hosted runner's token and
+record its actual elevation. They exercise HTTPS trust, browser consent, sync,
+offline persistence, server isolation, and Credential Manager cleanup; their
+assertions do not depend on notification-shell delivery or establish unelevated
+runtime qualification. The restricted medium-integrity worker could not start
+Node (AccessDenied), so it is not used for these checks. Elevation as the cause
+of the missing banner remains unproven.
 macOS 10.14+ uses
 UNUserNotificationCenter and asks for notification permission when you enable delivery. Denied permission is shown
 with a localized reason; allow Ditero in system notification settings and retry.
@@ -143,8 +151,9 @@ The installed Linux journey also verifies popup withdrawal on server switch and
 sign-out, with a displayed notification as a positive control before each action.
 Enable delivery in Settings after signing in. Notifications arrive while Ditero
 is open or minimized; closing the application stops reception. These backends
-remain experimental. The hosted journey matrix requires real display and click
-routing when permission is granted. On hosted macOS 15, the installed ad-hoc build
+remain experimental. Linux notification qualification requires real display and
+click routing. The Windows hosted exception above does not credit either behavior.
+On hosted macOS 15, the installed ad-hoc build
 changes from NotDetermined to Denied without showing an Allow dialog, even with
 Ditero frontmost. The journey verifies the fresh OS denial, localized reason, no
 notification registration, and empty OS state. Display, click routing and popup

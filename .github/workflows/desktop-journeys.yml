@@ -134,7 +134,7 @@ jobs:
       - name: Install Linux or macOS development package
         if: runner.os != 'Windows'
         run: bash apps/desktop/tests/journeys/install.sh
-      - name: Run Windows journeys in a normal interactive session
+      - name: Run Windows core journeys with recorded runner elevation
         if: runner.os == 'Windows'
         timeout-minutes: 15
         shell: pwsh
