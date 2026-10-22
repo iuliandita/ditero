@@ -73,7 +73,7 @@ function requireVerifiedIdToken(provider: SocialProvider): SocialProvider {
 	const getUserInfo = provider.getUserInfo as (token: {
 		idToken?: string;
 		expectedIdTokenNonce?: string;
-	}) => Promise<unknown>;
+	}) => Promise<{ user: Record<string, unknown> } | null>;
 	return {
 		...provider,
 		requiresIdTokenNonce: true,
@@ -95,7 +95,11 @@ function requireVerifiedIdToken(provider: SocialProvider): SocialProvider {
 				))
 			)
 				return null;
-			return getUserInfo(token);
+			const result = await getUserInfo(token);
+			// Microsoft email claims are not mailbox proof, including optional claims.
+			return result && provider.id === "microsoft"
+				? { ...result, user: { ...result.user, emailVerified: false } }
+				: result;
 		},
 	};
 }
@@ -136,6 +140,34 @@ export function signInProviderPlugin(options: {
 							code: "ID_TOKEN_NOT_SUPPORTED",
 							message: "Use the provider authorization code flow",
 						});
+					}),
+				},
+			],
+			after: [
+				{
+					matcher: (context) =>
+						context.path?.startsWith("/callback/") === true ||
+						context.path?.startsWith("/oauth2/callback/") === true,
+					handler: createAuthMiddleware(async (context) => {
+						const location = context.context.responseHeaders?.get("location");
+						if (!location) return;
+						const target = new URL(location, context.context.baseURL);
+						const code = target.searchParams.get("error");
+						// These are sign-in refusals, never explicit owner-link failures.
+						if (
+							!code ||
+							![
+								"account_not_linked",
+								"REGISTRATION_DISABLED",
+								"REGISTRATION_INVITE_REQUIRED",
+								"REGISTRATION_RELAY_EMAIL",
+								"PROVIDER_SIGN_IN_REFUSED",
+							].includes(code)
+						)
+							return;
+						target.searchParams.set("error", "PROVIDER_SIGN_IN_REFUSED");
+						target.searchParams.delete("error_description");
+						context.setHeader("location", target.href);
 					}),
 				},
 			],

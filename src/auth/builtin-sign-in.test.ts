@@ -45,9 +45,12 @@ async function setup(
 async function signIn(
 	h: Harness,
 	provider: string,
-	options: { form?: boolean } = {},
+	options: { form?: boolean; session?: Map<string, string> } = {},
 ) {
-	const started = await startOAuth(h.auth, provider);
+	const started = await startOAuth(h.auth, provider, {
+		session: options.session,
+		link: options.session !== undefined,
+	});
 	h.onAuthorization?.(started.authorization);
 	return {
 		started,
@@ -123,18 +126,20 @@ describe("GitHub", () => {
 		).toBeTruthy();
 	});
 
-	test("does not trust an email GitHub reports as unverified", async () => {
-		const h = await setup(
-			env,
-			github([{ email: "ada@example.test", primary: true, verified: false }]),
-			{
-				mode: "closed",
-				invites: ["ada@example.test"],
-			},
-		);
-		const { outcome } = await signIn(h, "github");
-		expect(outcome.error).toBe("REGISTRATION_DISABLED");
-		expectNoAccount(h);
+	test("refuses unverified GitHub registration in every mode", async () => {
+		for (const mode of ["open", "bootstrap", "closed"] as const) {
+			const h = await setup(
+				env,
+				github([{ email: "ada@example.test", primary: true, verified: false }]),
+				{
+					mode,
+					invites: ["ada@example.test"],
+				},
+			);
+			const { outcome } = await signIn(h, "github");
+			expect(outcome.error).toBe("PROVIDER_SIGN_IN_REFUSED");
+			expectNoAccount(h);
+		}
 	});
 
 	test("a verified email satisfies an invitation in a closed instance", async () => {
@@ -163,7 +168,7 @@ describe("GitHub", () => {
 		);
 		await verifiedUser(h, "ada@example.test");
 		const { outcome } = await signIn(h, "github");
-		expect(outcome.error).toBe("account_not_linked");
+		expect(outcome.error).toBe("PROVIDER_SIGN_IN_REFUSED");
 		expect(
 			h.store.account.filter((a) => a.providerId === "github"),
 		).toHaveLength(0);
@@ -236,7 +241,7 @@ describe("Discord", () => {
 			},
 		);
 		expect((await signIn(h, "discord")).outcome.error).toBe(
-			"REGISTRATION_DISABLED",
+			"PROVIDER_SIGN_IN_REFUSED",
 		);
 		expectNoAccount(h);
 	});
@@ -254,7 +259,7 @@ describe("Discord", () => {
 		);
 		await verifiedUser(h, "ada@example.test");
 		expect((await signIn(h, "discord")).outcome.error).toBe(
-			"account_not_linked",
+			"PROVIDER_SIGN_IN_REFUSED",
 		);
 	});
 });
@@ -304,18 +309,21 @@ describe("Facebook", () => {
 		];
 	}
 
-	test("signs in but never treats the email as verified", async () => {
+	test("links explicitly but never treats the email as verified", async () => {
 		const h = await setup(env, facebook());
-		const { started, outcome } = await signIn(h, "facebook");
+		const session = await signedInUser(h.auth, "owner@example.test");
+		const { started, outcome } = await signIn(h, "facebook", { session });
 		expect(started.authorization.searchParams.get("scope")).toBe(
 			"email public_profile",
 		);
 		expect(outcome.error).toBeNull();
 		expect(h.store.user[0]).toMatchObject({
-			email: "ada@example.test",
+			email: "owner@example.test",
 			emailVerified: false,
 		});
-		expect(h.store.account[0]).toMatchObject({
+		expect(
+			h.store.account.find((a) => a.providerId === "facebook"),
+		).toMatchObject({
 			providerId: "facebook",
 			accountId: "fb-user-1",
 		});
@@ -327,16 +335,16 @@ describe("Facebook", () => {
 			invites: ["ada@example.test"],
 		});
 		expect((await signIn(h, "facebook")).outcome.error).toBe(
-			"REGISTRATION_DISABLED",
+			"PROVIDER_SIGN_IN_REFUSED",
 		);
 		expectNoAccount(h);
 	});
 
-	test("its email cannot link to an existing account", async () => {
+	test("its email never links implicitly to an existing account", async () => {
 		const h = await setup(env, facebook());
 		await verifiedUser(h, "ada@example.test");
 		expect((await signIn(h, "facebook")).outcome.error).toBe(
-			"account_not_linked",
+			"PROVIDER_SIGN_IN_REFUSED",
 		);
 	});
 
@@ -363,7 +371,10 @@ describe("Microsoft", () => {
 		MICROSOFT_CLIENT_SECRET: "ms-secret",
 	};
 
-	async function microsoft(tenantSetting: string) {
+	async function microsoft(
+		tenantSetting: string,
+		options: Parameters<typeof setup>[2] = {},
+	) {
 		const key = await signingKey("ms-key");
 		const state = { claims: {} as Record<string, unknown>, key, nonce: "" };
 		const tenantPath = tenantSetting.toLowerCase();
@@ -386,7 +397,11 @@ describe("Microsoft", () => {
 					? json(key.jwks)
 					: undefined,
 		];
-		const h = await setup({ ...base, MICROSOFT_TENANT: tenantSetting }, routes);
+		const h = await setup(
+			{ ...base, MICROSOFT_TENANT: tenantSetting },
+			routes,
+			options,
+		);
 		const claims = (tid: string, extra: Record<string, unknown> = {}) => {
 			state.claims = {
 				iss: `https://login.microsoftonline.com/${tid}/v2.0`,
@@ -416,7 +431,8 @@ describe("Microsoft", () => {
 	test("single tenant: keys the account on tenant and object ID, with openid scopes only", async () => {
 		const { h, claims } = await microsoft(TENANT);
 		claims(TENANT);
-		const { started, outcome } = await signIn(h, "microsoft");
+		const session = await signedInUser(h.auth, "owner@example.test");
+		const { started, outcome } = await signIn(h, "microsoft", { session });
 		expect(started.authorization.pathname).toBe(
 			`/${TENANT}/oauth2/v2.0/authorize`,
 		);
@@ -428,11 +444,13 @@ describe("Microsoft", () => {
 		).toBe("S256");
 		expect(started.authorization.searchParams.get("nonce")).toBeTruthy();
 		expect(outcome.error).toBeNull();
-		expect(h.store.account[0]).toMatchObject({
+		expect(
+			h.store.account.find((a) => a.providerId === "microsoft"),
+		).toMatchObject({
 			providerId: "microsoft",
 			accountId: `${TENANT}:oid-0001`,
 		});
-		// The mutable email is not trusted: work-account emails are not verified claims.
+		// Microsoft email claims never count as mailbox proof.
 		expect(h.store.user[0]).toMatchObject({ emailVerified: false });
 		expect(
 			h.mocks.calls.some((c) => c.url.hostname === "graph.microsoft.com"),
@@ -442,10 +460,15 @@ describe("Microsoft", () => {
 	test("the same object ID in another tenant is a different account", async () => {
 		const { h, claims } = await microsoft("organizations");
 		claims("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", { email: "a@example.test" });
-		await signIn(h, "microsoft");
+		const session = await signedInUser(h.auth, "owner@example.test");
+		await signIn(h, "microsoft", { session });
 		claims("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", { email: "b@example.test" });
-		await signIn(h, "microsoft");
-		expect(h.store.account.map((a) => a.accountId)).toEqual([
+		await signIn(h, "microsoft", { session });
+		expect(
+			h.store.account
+				.filter((a) => a.providerId === "microsoft")
+				.map((a) => a.accountId),
+		).toEqual([
 			"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:oid-0001",
 			"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb:oid-0001",
 		]);
@@ -454,12 +477,15 @@ describe("Microsoft", () => {
 	test("a changed email keeps the same account", async () => {
 		const { h, claims } = await microsoft(TENANT);
 		claims(TENANT);
-		await signIn(h, "microsoft");
+		const session = await signedInUser(h.auth, "owner@example.test");
+		await signIn(h, "microsoft", { session });
 		claims(TENANT, { email: "renamed@example.test" });
 		const second = await signIn(h, "microsoft");
 		expect(second.outcome.error).toBeNull();
 		expect(h.store.user).toHaveLength(1);
-		expect(h.store.account).toHaveLength(1);
+		expect(
+			h.store.account.filter((a) => a.providerId === "microsoft"),
+		).toHaveLength(1);
 	});
 
 	test("single tenant refuses a token from another tenant", async () => {
@@ -481,7 +507,10 @@ describe("Microsoft", () => {
 	] as const)("%s mode with tenant %s", async (mode, tid, allowed) => {
 		const { h, claims } = await microsoft(mode);
 		claims(tid);
-		const { outcome } = await signIn(h, "microsoft");
+		const session = allowed
+			? await signedInUser(h.auth, "owner@example.test")
+			: undefined;
+		const { outcome } = await signIn(h, "microsoft", { session });
 		if (allowed) expect(outcome.error).toBeNull();
 		else expect(outcome.error).toBe("unable_to_get_user_info");
 	});
@@ -511,8 +540,10 @@ describe("Microsoft", () => {
 	test("refuses a replayed callback and a token bound to an earlier request", async () => {
 		const { h, claims, state } = await microsoft(TENANT);
 		claims(TENANT);
-		const first = await signIn(h, "microsoft");
+		const session = await signedInUser(h.auth, "owner@example.test");
+		const first = await signIn(h, "microsoft", { session });
 		expect(first.outcome.error).toBeNull();
+		const sessionCount = h.store.session.length;
 		const earlier = state.nonce;
 		expect(
 			(await finishOAuth(h.auth, "microsoft", first.started)).error,
@@ -523,7 +554,7 @@ describe("Microsoft", () => {
 		expect((await finishOAuth(h.auth, "microsoft", next)).error).toBe(
 			"unable_to_get_user_info",
 		);
-		expect(h.store.session).toHaveLength(1);
+		expect(h.store.session).toHaveLength(sessionCount);
 	});
 
 	test("refuses a token signed by another key", async () => {
@@ -542,6 +573,24 @@ describe("Microsoft", () => {
 			"email_not_found",
 		);
 		expectNoAccount(h);
+	});
+
+	test.each([
+		{ email_verified: true },
+		{ verified_primary_email: ["ada@example.test"] },
+		{ verified_secondary_email: ["ada@example.test"] },
+	])("Microsoft verification claims never authorize registration or invitations: %j", async (extra) => {
+		for (const mode of ["open", "bootstrap", "closed"] as const) {
+			const { h, claims } = await microsoft(TENANT, {
+				mode,
+				invites: ["ada@example.test"],
+			});
+			claims(TENANT, extra);
+			expect((await signIn(h, "microsoft")).outcome.error).toBe(
+				"PROVIDER_SIGN_IN_REFUSED",
+			);
+			expectNoAccount(h);
+		}
 	});
 });
 
@@ -636,6 +685,37 @@ describe("Apple", () => {
 		);
 	});
 
+	test.each([
+		"callbackURL",
+		"errorCallbackURL",
+		"newUserCallbackURL",
+	])("Apple does not trust a GitHub %s on Apple's host", async (field) => {
+		const h = memoryAuth({
+			env: {
+				...env,
+				GITHUB_CLIENT_ID: "gh-id",
+				GITHUB_CLIENT_SECRET: "gh-secret",
+			},
+			io,
+		});
+		const request = (target: string) =>
+			h.auth.handler(
+				new Request(`${BASE}/api/auth/sign-in/social`, {
+					method: "POST",
+					headers: { origin: BASE, "content-type": "application/json" },
+					body: JSON.stringify({
+						provider: "github",
+						callbackURL: "/done",
+						[field]: target,
+					}),
+				}),
+			);
+		expect((await request("/done")).status).toBe(200);
+		expect((await request("https://appleid.apple.com/return")).status).toBe(
+			403,
+		);
+	});
+
 	test("Apple's origin is accepted for the callback POST and nothing else", () => {
 		const origins = ["http://localhost:3000"];
 		const request = (method: string, path: string) =>
@@ -717,7 +797,7 @@ describe("Apple", () => {
 		expect((await finishOAuth(h.auth, "apple", started)).error).toBeNull();
 	});
 
-	test("a relay address cannot match an invitation and says so", async () => {
+	test("a relay address without a matching invitation gets the neutral refusal", async () => {
 		const { h, issued } = await apple(
 			{ email: "x1y2z3@privaterelay.appleid.com" },
 			{ mode: "bootstrap", invites: ["ada@example.test"] },
@@ -725,7 +805,7 @@ describe("Apple", () => {
 		await signedInUser(h.auth, "owner@example.test");
 		const { started } = await appleSignIn(h, issued);
 		const done = await finishOAuth(h.auth, "apple", started);
-		expect(done.error).toBe("REGISTRATION_RELAY_EMAIL");
+		expect(done.error).toBe("PROVIDER_SIGN_IN_REFUSED");
 		expect(h.store.user).toHaveLength(1);
 	});
 
@@ -749,7 +829,7 @@ describe("Apple", () => {
 		await verifiedUser(h, "ada@example.test");
 		const { started } = await appleSignIn(h, issued);
 		const done = await finishOAuth(h.auth, "apple", started);
-		expect(done.error).toBe("account_not_linked");
+		expect(done.error).toBe("PROVIDER_SIGN_IN_REFUSED");
 	});
 });
 

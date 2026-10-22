@@ -178,7 +178,7 @@ describe("generic OpenID Connect sign-in", () => {
 		const h = await setup();
 		await verifiedUser(h, "ada@example.test");
 		const { outcome } = await signInAs(h);
-		expect(outcome.error).toBe("account_not_linked");
+		expect(outcome.error).toBe("PROVIDER_SIGN_IN_REFUSED");
 		expect(outcome.jar.has("better-auth.session_token")).toBe(false);
 		expect(
 			h.store.account.filter((a) => a.providerId === "family"),
@@ -186,9 +186,10 @@ describe("generic OpenID Connect sign-in", () => {
 		expect(h.store.user).toHaveLength(1);
 	});
 
-	test("links explicitly for a signed-in user, even with a different email", async () => {
+	test("links explicitly for a signed-in user, even with a different unverified email", async () => {
 		const h = await setup();
 		const session = await signedInUser(h.auth, "owner@example.test");
+		h.fixture.issue({ email_verified: false });
 		const { outcome } = await signInAs(h, session);
 		expect(outcome.error).toBeNull();
 		expect(h.store.user).toHaveLength(1);
@@ -293,11 +294,16 @@ describe("generic OpenID Connect sign-in", () => {
 		expect(h.store.user).toHaveLength(0);
 	});
 
-	test("records an unverified email as unverified", async () => {
-		const h = await setup();
-		h.fixture.issue({ email_verified: false });
-		await signInAs(h);
-		expect(h.store.user[0]).toMatchObject({ emailVerified: false });
+	test("refuses unverified OIDC registration in every mode", async () => {
+		for (const mode of ["open", "bootstrap", "closed"] as const) {
+			const h = await setup({ env, mode, invites: ["ada@example.test"] });
+			h.fixture.issue({ email_verified: false });
+			const { outcome } = await signInAs(h);
+			expect(outcome.error).toBe("PROVIDER_SIGN_IN_REFUSED");
+			expect(h.store.user).toHaveLength(0);
+			expect(h.store.account).toHaveLength(0);
+			expect(h.store.session).toHaveLength(0);
+		}
 	});
 
 	test("a client-submitted ID token is not a way to sign in", async () => {
@@ -396,7 +402,7 @@ describe("registration gate for OpenID Connect sign-ups", () => {
 	test.each([
 		["open", [], true, true],
 		["bootstrap", [], true, true],
-		["closed", [], false, "REGISTRATION_DISABLED"],
+		["closed", [], false, "PROVIDER_SIGN_IN_REFUSED"],
 	] as const)("%s mode, first account", async (mode, invites, allowed, code) => {
 		const h = await setup({ env, mode, invites: [...invites] });
 		const { outcome } = await signInAs(h);
@@ -413,7 +419,7 @@ describe("registration gate for OpenID Connect sign-ups", () => {
 		await signedInUser(h.auth, "owner@example.test");
 		h.fixture.issue({ email: "stranger@example.test" });
 		const stranger = await signInAs(h);
-		expect(stranger.outcome.error).toBe("REGISTRATION_INVITE_REQUIRED");
+		expect(stranger.outcome.error).toBe("PROVIDER_SIGN_IN_REFUSED");
 
 		h.fixture.issue({ email: "ada@example.test", email_verified: true });
 		const invited = await signInAs(h);
@@ -428,7 +434,7 @@ describe("registration gate for OpenID Connect sign-ups", () => {
 		});
 		h.fixture.issue({ email_verified: false });
 		const { outcome } = await signInAs(h);
-		expect(outcome.error).toBe("REGISTRATION_DISABLED");
+		expect(outcome.error).toBe("PROVIDER_SIGN_IN_REFUSED");
 		expect(h.store.user).toHaveLength(0);
 	});
 });

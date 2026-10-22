@@ -32,12 +32,20 @@ can register without an invitation. `closed` disables uninvited registration,
 including the first account; eligible invitations can still admit accounts.
 Optional provider sign-in (Google, generic OpenID Connect, Microsoft, GitHub,
 Discord, Apple, Facebook) creates accounts through the same registration check, so
-a first provider sign-in needs the same admission as an email signup. Only a
-provider-verified email can satisfy an invitation, and a provider account is never
-linked to an existing account by email: the signed-in owner links it explicitly.
+a first provider sign-in needs the same admission as an email signup. Every
+new Ditero account created through a provider also requires a provider-verified
+email, in every mode.
+Microsoft and Facebook emails are always treated as unverified, so account holders
+must link those providers explicitly. Only a provider-verified email can satisfy an
+invitation, and a provider account is never linked to an existing account by email: the signed-in owner links it explicitly.
 Provider accounts are keyed on the provider's immutable ID (issuer plus subject for
 OpenID Connect). See
 [Sign-in providers](runbooks/sign-in-providers.md).
+
+Provider callback account-existence and registration-policy refusals share a neutral
+code and omit the underlying description. Timing can still differ; allowed
+verified-email registration can reveal admission through success versus refusal.
+This does not claim to prevent every provider registration side channel.
 
 Email sign-up returns HTTP 200 with `{"token":null,"user":null}` for both a
 new account and an existing email when admission is allowed. Neither response

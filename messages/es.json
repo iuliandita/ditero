@@ -1531,6 +1531,7 @@
 	"auth_error_session_required": "Inicia sesión antes de añadir una passkey.",
 	"auth_error_registration_invite_required": "Esta instancia solo acepta cuentas nuevas por invitación. Pide a un administrador que te invite.",
 	"auth_error_registration_disabled": "Las cuentas nuevas están desactivadas en esta instancia.",
+	"auth_error_provider_sign_in_refused": "No se pudo completar el inicio de sesión con el proveedor. Usa otro método y luego vincula este proveedor en Ajustes. Las cuentas nuevas pueden requerir una invitación y un correo verificado por el proveedor.",
 	"auth_error_registration_relay_email": "Apple ocultó tu dirección de correo, así que no se puede asociar una invitación. Regístrate con la dirección invitada y luego vincula Apple en Ajustes.",
 	"auth_error_email_not_found": "El proveedor no compartió una dirección de correo. Permite que la comparta e inténtalo de nuevo, o usa otra forma de iniciar sesión.",
 	"auth_error_account_not_linked": "Ya existe una cuenta con este correo. Inicia sesión en ella primero y luego vincula este proveedor en Ajustes.",

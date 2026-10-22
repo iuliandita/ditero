@@ -120,6 +120,7 @@ export function memoryAuth(options: {
 		secret: "provider-journey-test-secret-32-bytes!",
 		database: memoryAdapter(store),
 		logger: { disabled: true },
+		advanced: { disableOriginCheck: false },
 		trustedOrigins: providers.trustedOrigins,
 		account: providers.account,
 		socialProviders: providers.socialProviders,

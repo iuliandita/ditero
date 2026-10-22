@@ -109,7 +109,10 @@ export function publicProvidersFromEnv(
 // way. Shared by the server and its provider tests so both run the same wiring.
 export function providerAuthOptions(signIn: SignInProviders) {
 	return {
-		trustedOrigins: signIn.settings.apple ? [APPLE_ORIGIN] : [],
+		trustedOrigins: (request?: Request) =>
+			request
+				? acceptedAuthOrigins(request, [], Boolean(signIn.settings.apple))
+				: [],
 		account: {
 			accountLinking: {
 				enabled: true,

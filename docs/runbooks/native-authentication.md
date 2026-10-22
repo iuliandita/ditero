@@ -42,8 +42,9 @@ Each social or OpenID Connect provider appears only when the operator has
 configured it; the page reads the same server-driven list as the web sign-in. A
 provider sign-in is the system browser's ordinary sign-in, so the approval step and
 the grant ID are unchanged. A registration-policy refusal returns to this page with
-the localized registration message and retains the grant ID. A provider email is
-never linked to an existing account automatically; link providers from browser
+the neutral localized `PROVIDER_SIGN_IN_REFUSED` message and retains the grant ID.
+New provider accounts require a provider-verified email in every registration mode.
+A provider email is never linked to an existing account automatically; link providers from browser
 settings. See [sign-in providers](sign-in-providers.md).
 Preview exposes only the device label, expiry, and pending or approved status.
 An approved grant is visible only to its approving account while the original
@@ -53,9 +54,10 @@ request fields. A native session cannot approve another grant. There is no
 caller-supplied callback URL.
 
 Better Auth 1.7 keeps Google's `/api/auth/callback/google` redirect URI and the
-pending native approval URL; the other providers use `/api/auth/callback/<provider>`. Registration refusals carry a stable `error` code
-and a readable `error_description`; clients localize the code. A registration-policy
-check that cannot run (for example during a database outage) returns the same way
+pending native approval URL; the other providers use `/api/auth/callback/<provider>`.
+Account-existence and registration-policy refusals share `PROVIDER_SIGN_IN_REFUSED`
+and omit `error_description`; clients localize the code. Other errors may retain a
+readable description. A registration-policy check that cannot run (for example during a database outage) returns the same way
 with `REGISTRATION_UNAVAILABLE`, so the system browser returns to the sign-in page
 with a localized error. The unapproved native grant still expires normally.
 TOTP enrollment explicitly requests the `totp` method

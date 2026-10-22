@@ -8,7 +8,7 @@ import { fetchPublicConfig } from "../../lib/public-config.ts";
 import { signInProviderOptions } from "../../lib/sign-in-providers.ts";
 import { ProviderMark } from "../auth/ProviderMark.tsx";
 
-type LinkedAccount = { providerId: string; accountId: string };
+type LinkedAccount = { id: string; providerId: string; accountId: string };
 
 // Linking is always an explicit action by the signed-in account holder. The
 // provider's email address is never compared with this account's.
@@ -79,7 +79,9 @@ export function LinkedProvidersPanel() {
 		setBusy(true);
 		setError(null);
 		try {
-			const result = await authClient.unlinkAccount(account);
+			const result = await authClient.unlinkAccount({
+				accountId: account.id,
+			});
 			if (result.error) throw new Error("unlink refused");
 			setConfirming(null);
 			await refresh();

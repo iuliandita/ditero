@@ -54,7 +54,7 @@ describe("native consent return path", () => {
 			"a registration refusal",
 			"ada@example.test",
 			"closed",
-			"REGISTRATION_DISABLED",
+			"PROVIDER_SIGN_IN_REFUSED",
 		],
 		["a missing email", null, "open", "email_not_found"],
 	] as const)("%s keeps the grant on the consent page", async (_label, email, mode, code) => {
@@ -70,4 +70,50 @@ describe("native consent return path", () => {
 		expect(outcome.error).toBe(code);
 		expect(outcome.jar.has("better-auth.session_token")).toBe(false);
 	});
+});
+
+// Compare the entire redirect, including the absence of a revealing description.
+test.each([
+	false,
+	true,
+])("provider refusal is neutral for existing/unknown email, verified=%s", async (verified) => {
+	const outcomes: string[] = [];
+	for (const existing of [false, true]) {
+		mockProviderEndpoints([
+			(r) =>
+				r.url.hostname === "github.com"
+					? json({ access_token: "gh-token", token_type: "bearer" })
+					: undefined,
+			(r) =>
+				r.url.pathname === "/user"
+					? json({ id: 9, login: "ada", email: null })
+					: undefined,
+			(r) =>
+				r.url.pathname === "/user/emails"
+					? json([{ email: "ada@example.test", primary: true, verified }])
+					: undefined,
+		]);
+		const h = memoryAuth({ env, mode: "closed" });
+		if (existing) {
+			h.store.user.push({
+				id: "existing",
+				email: "ada@example.test",
+				name: "Ada",
+				emailVerified: true,
+			});
+		}
+		const started = await startOAuth(h.auth, "github", {
+			callbackURL: consent,
+			errorCallbackURL: consent,
+		});
+		const result = await finishOAuth(h.auth, "github", started);
+		expect(result.error).toBe("PROVIDER_SIGN_IN_REFUSED");
+		expect(result.location?.searchParams.has("error_description")).toBe(false);
+		expect(result.location?.searchParams.get("grantId")).toBe(grantId);
+		expect(h.store.account).toHaveLength(0);
+		expect(h.store.session).toHaveLength(0);
+		if (!result.location) throw new Error("Missing refusal redirect");
+		outcomes.push(result.location.href);
+	}
+	expect(outcomes[0]).toBe(outcomes[1]);
 });

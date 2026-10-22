@@ -77,6 +77,20 @@ describe("authErrorMessage", () => {
 		);
 	});
 
+	test("localizes a neutral provider refusal without revealing account existence", () => {
+		expect(
+			authErrorMessage(
+				{
+					code: "PROVIDER_SIGN_IN_REFUSED",
+					message: "Provider sign-in could not be completed",
+				},
+				fallback,
+			),
+		).toBe(
+			"Provider sign-in could not be completed. Use another sign-in method, then link this provider under Settings. New accounts may require an invitation and a provider-verified email.",
+		);
+	});
+
 	test("localizes the registration outage code", () => {
 		expect(
 			authErrorMessage({ code: "REGISTRATION_UNAVAILABLE" }, fallback),

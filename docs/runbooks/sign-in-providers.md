@@ -32,7 +32,13 @@ credentials and do not replace the guardian's session.
 Clients calling `POST /api/auth/sign-up/email` receive `{"token":null,"user":null}`
 on accepted requests, without cookies. Obtain a session and user details through
 sign-in instead. Registration-policy refusals retain their existing error codes.
-See [Security](../security.md#authentication) for enumeration and timing limits.
+Provider callback refusals for account existence and registration policy use the
+same neutral `PROVIDER_SIGN_IN_REFUSED` code, without a revealing description.
+This does not make provider sign-in constant-time: provider responses and database
+lookups can differ in duration. An allowed verified-email registration still
+succeeds, so open registration and eligible invitations can reveal admission by
+success versus refusal. See [Security](../security.md#authentication) for enumeration
+and timing limits.
 
 ## Why each instance needs its own client
 
@@ -61,30 +67,32 @@ for their own address.
   by email: GitHub numeric ID, Discord ID, Facebook ID, Apple `sub`, Microsoft tenant
   ID plus object ID, and for OpenID Connect the issuer plus `sub`. Changing the email
   at the provider does not create a second account.
-- **First sign-in is a sign-up.** It follows `DITERO_REGISTRATION_MODE`: `open`
+- **First sign-in is a sign-up.** Every provider, including Google and generic
+  OpenID Connect, must report the email as verified before creating an account,
+  in every registration mode. Then `DITERO_REGISTRATION_MODE` applies: `open`
   creates the account, `bootstrap` allows only the first account or an invited email,
-  `closed` allows only invited emails. A refusal returns to the sign-in page with the
-  same localized message as email sign-up.
+  `closed` allows only invited emails. Refusals use a neutral localized message
+  suggesting another sign-in method and explicit linking from Settings.
 - **Invitations need a verified email.** A provider sign-in satisfies an email
   invitation only when the provider reports that email as verified (GitHub's emails
   endpoint, Discord's `verified` flag, OpenID Connect `email_verified`, Google's
-  verified flag). Microsoft work accounts and Facebook never report a verified email,
-  so they cannot redeem an invitation on their own; the invited person signs up with
-  that email address first and links the provider afterwards.
+  verified flag). Ditero always treats Microsoft and Facebook emails as unverified,
+  so those providers cannot create accounts or satisfy invitations. Sign up with
+  email or another eligible method first, then link the provider from Settings.
 - **Policy outages.** If registration cannot be checked, the callback returns with
   `REGISTRATION_UNAVAILABLE` and a localized retry message. Pending native approval
   still expires normally. Concurrent duplicate provider links are refused with
   `ACCOUNT_ALREADY_LINKED`.
 - **No implicit linking.** A provider account is never attached to an existing account
-  because the emails match. If an account with that email already exists, the sign-in
-  is refused with "an account with this email already exists". Sign in to that account
-  and link the provider yourself (next point). This also applies to Google: earlier
-  releases linked a Google sign-in to a password account with the same verified email;
+  because the emails match. If the account is not already linked, sign-in returns
+  the neutral refusal. Sign in with another method and link the provider yourself
+  (next point). This also applies to Google: earlier releases linked a Google sign-in to a password account with the same verified email;
   now you link it once under Settings.
 - **Linking.** While signed in, Settings > Account lists the configured providers with
-  *Link* and *Unlink* buttons. Linking may use a different email (an Apple relay
-  address, a work account). The provider account must not already belong to someone
-  else. You cannot unlink your last way to sign in. Linking happens in the browser;
+  *Link* and *Unlink* buttons. Unlink removes the selected local account row while
+  retaining other sign-in methods. Linking may use a different or unverified email
+  (an Apple relay address, a work account). The provider account must not already
+  belong to someone else. You cannot unlink your last way to sign in. Linking happens in the browser;
   the Android and desktop apps open browser settings for it.
 - **Missing email.** A provider that returns no email address (a private GitHub email
   without the `user:email` scope, a Discord account without an email, a Facebook user
@@ -183,8 +191,8 @@ DITERO_OIDC_FAMILY_NAME="Family login"
 2. Register the redirect URI `<BETTER_AUTH_URL>/api/auth/callback/<ID>` exactly.
 3. Allow the authorization code grant and the `openid`, `email` and `profile` scopes.
 4. Make sure the provider releases `email` and `email_verified` in the ID token or at
-   its userinfo endpoint. Without a verified email the account still signs in, but it
-   cannot redeem an invitation.
+   its userinfo endpoint. Without a verified email a new account is refused;
+   an existing account holder can link it explicitly from Settings.
 5. Require `S256` PKCE if the provider lets you. Ditero always sends it.
 6. Note the exact issuer from the provider's discovery document.
 7. Your server needs outbound HTTPS to the provider's discovery, token, userinfo and
@@ -254,11 +262,12 @@ tenant's issuer, `organizations` rejects the personal-account tenant, `consumers
 accepts only it.
 
 The account is keyed on tenant ID plus object ID, which Microsoft never reuses. The
-email claim can change and is not a verified claim for work accounts, so Ditero treats
-it as unverified: it cannot satisfy an invitation. Invited people sign up with email
-first and then link Microsoft. With `organizations` or `common`, anyone with an
-account from an allowed tenant can sign up when registration is `open`; keep
-`bootstrap` or `closed` to control membership.
+email claim can change, so Ditero always treats it as unverified, including personal
+accounts and tokens with `email_verified`, `verified_primary_email` or
+`verified_secondary_email`. None of these claims authorizes registration or an
+invitation, in any mode. People sign up with email or another eligible method first,
+then explicitly link Microsoft. Tenant restrictions still apply to linking and
+subsequent sign-in.
 
 ### Rotate the client secret
 
@@ -279,9 +288,9 @@ GITHUB_CLIENT_SECRET_FILE=/run/secrets/github_secret
 ```
 
 Ditero requests `read:user` and `user:email`. It uses GitHub's emails endpoint and
-takes the primary address with its `verified` flag; an unverified address signs in but
-cannot redeem an invitation. A user with no email, or one who revoked the email scope,
-sees the missing-email message. The account key is the numeric user ID, so renaming
+takes the primary address with its `verified` flag; an unverified address cannot
+create an account or redeem an invitation, but can be explicitly linked. A user
+with no email, or one who revoked the email scope, sees the missing-email message. The account key is the numeric user ID, so renaming
 the GitHub login changes nothing.
 
 ## Discord
@@ -295,8 +304,8 @@ DISCORD_CLIENT_ID=...
 DISCORD_CLIENT_SECRET_FILE=/run/secrets/discord_secret
 ```
 
-Scopes are `identify` and `email`. Discord's `verified` flag decides whether the
-address counts for invitations. Accounts without an email show the missing-email
+Scopes are `identify` and `email`. Discord's `verified` flag is required for
+registration and invitations. Accounts without an email show the missing-email
 message. The account key is the user's snowflake ID.
 
 ## Apple (advanced)
@@ -342,9 +351,10 @@ re-reading the key file each time, so nothing is renewed by hand. Replacing the 
   origin only for that one route.
 - Apple sends the person's name only on the first authorization.
 - "Hide my email" gives a `privaterelay.appleid.com` address. It cannot match an
-  invitation sent to the person's real address, and Ditero says so instead of showing
-  the generic invitation message. The invited person signs up with the invited
-  address, then links Apple under Settings. A relay address is accepted when linking.
+  invitation sent to the person's real address. The callback uses the same neutral
+  refusal as other registration-policy failures. The invited person signs up with
+  the invited address, then links Apple under Settings. A relay address is accepted
+  when linking.
 - Apple reports the email as verified, so a real address can satisfy an invitation.
 
 ## Facebook
@@ -361,8 +371,9 @@ FACEBOOK_CLIENT_SECRET_FILE=/run/secrets/facebook_secret
 
 Redirect URI: `<BETTER_AUTH_URL>/api/auth/callback/facebook`. Scopes are
 `public_profile` and `email`. Facebook's email is not a verified claim and users can
-decline sharing it, so Ditero never uses it for invitations or linking, and a user
-without an email sees the missing-email message. Ditero also checks, through Facebook's
+decline sharing it, so Ditero never uses it for registration or invitations. An
+existing account holder can explicitly link Facebook from Settings; a user without
+an email sees the missing-email message. Ditero also checks, through Facebook's
 token inspection endpoint, that the access token was issued to your app.
 
 Instagram consumer sign-in is not possible: Meta retired it in December 2024.
@@ -373,10 +384,8 @@ The sign-in page shows these after a failed attempt.
 
 | Message | Cause |
 | --- | --- |
-| Only by invitation / new accounts are off | The registration mode refused the first sign-in; see above. |
-| An account with this email already exists | Link the provider from Settings while signed in. |
+| Provider sign-in could not be completed | Use another sign-in method, then link the provider from Settings. New accounts require a provider-verified email and admission under the registration mode. |
 | The provider did not share an email | Enable the email scope or release the email claim; see the provider section. |
-| Apple hid your email address | Sign up with the invited address, then link Apple. |
 | That provider account is already linked to a different account | Unlink it from the other account first. |
 | Sign-in failed (generic) | Check the server log: usually a wrong secret, issuer or redirect URI, or an expired Microsoft or Apple secret. |
 

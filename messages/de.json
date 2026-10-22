@@ -1502,6 +1502,7 @@
 	"auth_error_session_required": "Melde dich an, bevor du einen Passkey hinzufügst.",
 	"auth_error_registration_invite_required": "Diese Instanz nimmt neue Konten nur per Einladung an. Bitte einen Admin, dich einzuladen.",
 	"auth_error_registration_disabled": "Neue Konten sind auf dieser Instanz deaktiviert.",
+	"auth_error_provider_sign_in_refused": "Die Anmeldung über den Anbieter konnte nicht abgeschlossen werden. Melde dich anders an und verknüpfe den Anbieter dann unter Einstellungen. Neue Konten benötigen möglicherweise eine Einladung und eine vom Anbieter bestätigte E-Mail-Adresse.",
 	"auth_error_registration_relay_email": "Apple hat deine E-Mail-Adresse verborgen, deshalb lässt sich eine Einladung nicht zuordnen. Registriere dich mit der eingeladenen E-Mail-Adresse und verknüpfe Apple dann unter Einstellungen.",
 	"auth_error_email_not_found": "Der Anbieter hat keine E-Mail-Adresse weitergegeben. Erlaube die Weitergabe deiner E-Mail-Adresse und versuche es erneut oder melde dich anders an.",
 	"auth_error_account_not_linked": "Mit dieser E-Mail-Adresse gibt es bereits ein Konto. Melde dich zuerst dort an und verknüpfe diesen Anbieter dann unter Einstellungen.",

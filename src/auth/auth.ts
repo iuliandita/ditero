@@ -119,9 +119,9 @@ export const auth = betterAuth({
 	database: authDatabase,
 	secret: process.env.BETTER_AUTH_SECRET,
 	baseURL: process.env.BETTER_AUTH_URL,
-	trustedOrigins: [
+	trustedOrigins: (request) => [
 		...trustedAuthOrigins(process.env),
-		...providerOptions.trustedOrigins,
+		...providerOptions.trustedOrigins(request),
 	],
 	account: providerOptions.account,
 	emailAndPassword: {

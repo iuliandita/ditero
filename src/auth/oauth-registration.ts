@@ -12,7 +12,7 @@ export function isAppleRelayEmail(email: string): boolean {
 
 // Anything other than an email sign-up (or an internal call with no path) is a
 // provider callback, where the address is only as good as the provider's own
-// verified claim. An unverified address must not satisfy an email invitation.
+// verified claim. An unverified address must never create a provider account.
 export function oauthRegistrationScope(
 	path: string | undefined,
 	emailVerified: boolean,
@@ -52,6 +52,11 @@ export async function assertRegistration(input: {
 	hasInvite: (email: string) => Promise<boolean>;
 }): Promise<void> {
 	const scope = oauthRegistrationScope(input.path, input.emailVerified);
+	if (scope.oauth && !input.emailVerified)
+		throw new RegistrationDeniedError(
+			"PROVIDER_SIGN_IN_REFUSED",
+			"Provider sign-in could not be completed",
+		);
 	try {
 		const invited =
 			input.bypass ||

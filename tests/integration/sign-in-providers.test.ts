@@ -120,12 +120,21 @@ describe("provider sign-in against the real registration gate", () => {
 		expect(workspaces.value).toBe(1);
 	});
 
+	test("bootstrap refuses an unverified first provider account through the real user hook", async () => {
+		emails = [{ email: "ada@test.invalid", primary: true, verified: false }];
+		const outcome = await githubSignIn();
+		expect(outcome.error).toBe("PROVIDER_SIGN_IN_REFUSED");
+		expect(await db.select().from(tables.user)).toEqual([]);
+		expect(await db.select().from(tables.account)).toEqual([]);
+		expect(await db.select().from(tables.session)).toEqual([]);
+	});
+
 	test("bootstrap: a later stranger needs an invitation", async () => {
 		await db
 			.insert(tables.user)
 			.values({ id: "first", name: "First", email: "first@test.invalid" });
 		const outcome = await githubSignIn();
-		expect(outcome.error).toBe("REGISTRATION_INVITE_REQUIRED");
+		expect(outcome.error).toBe("PROVIDER_SIGN_IN_REFUSED");
 		expect(await db.select().from(tables.account)).toEqual([]);
 	});
 
@@ -144,7 +153,7 @@ describe("provider sign-in against the real registration gate", () => {
 		await seedInvite("ada@test.invalid");
 		emails = [{ email: "ada@test.invalid", primary: true, verified: false }];
 		const outcome = await githubSignIn();
-		expect(outcome.error).toBe("REGISTRATION_INVITE_REQUIRED");
+		expect(outcome.error).toBe("PROVIDER_SIGN_IN_REFUSED");
 		expect(await db.select().from(tables.account)).toEqual([]);
 		expect(
 			await db
@@ -162,7 +171,7 @@ describe("provider sign-in against the real registration gate", () => {
 			emailVerified: true,
 		});
 		const outcome = await githubSignIn();
-		expect(outcome.error).toBe("account_not_linked");
+		expect(outcome.error).toBe("PROVIDER_SIGN_IN_REFUSED");
 		expect(await db.select().from(tables.account)).toEqual([]);
 		expect(await db.select().from(tables.session)).toEqual([]);
 	});

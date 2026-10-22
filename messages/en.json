@@ -1502,6 +1502,7 @@
 	"auth_error_session_required": "Sign in before adding a passkey.",
 	"auth_error_registration_invite_required": "This instance only accepts new accounts by invitation. Ask an admin to invite you.",
 	"auth_error_registration_disabled": "New accounts are turned off on this instance.",
+	"auth_error_provider_sign_in_refused": "Provider sign-in could not be completed. Use another sign-in method, then link this provider under Settings. New accounts may require an invitation and a provider-verified email.",
 	"auth_error_registration_relay_email": "Apple hid your email address, so an invitation cannot be matched to it. Sign up with the invited email address, then link Apple under Settings.",
 	"auth_error_email_not_found": "The provider did not share an email address. Allow it to share your email and try again, or use another way to sign in.",
 	"auth_error_account_not_linked": "An account with this email already exists. Sign in to it first, then link this provider under Settings.",
