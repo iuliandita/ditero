@@ -268,7 +268,12 @@ localized warning gives the queue count and asks the user to keep the app open,
 let the server acknowledge the edits, then retry. Reconnection alone is not proof
 of acknowledgement. The close barrier also checks failures first discovered
 while persisting, before stopping sync. After the queue drains, retirement can
-close a memory-only client without requiring its unavailable storage. There is
+close a memory-only client without requiring its unavailable storage.
+Initialization and memory fallback retries wait only for a predecessor client
+to close. Closing during a slow initial open still settles. With no accepted
+edits it closes;
+unacknowledged accepted edits retain the same storage-failure refusal. Pending
+queue inspection also settles or rejects if initialization fails. There is
 no discard action. Closing a tab or terminating a process can still lose
 memory-only edits; free storage, let pending edits sync, then restart.
 

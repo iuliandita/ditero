@@ -116,7 +116,7 @@ index e12e006dee67765e5827882ab32f362d52894f18..679ee7568b3e0ad217dfb1a958b811d8
   * It is a `cannot-open` storage failure, or `full` when the browser says so
   * (WebKit's IndexedDB is SQLite underneath and reports `database or disk is
 diff --git a/out/replicache/src/replicache-impl.js b/out/replicache/src/replicache-impl.js
-index 0732d55a5c819e6816c096f0c8484c86423a595b..01847a40cd59c22fc21f3b20222a6030f80e4871 100644
+index 0732d55a5c819e6816c096f0c8484c86423a595b..b042eeec30a9f8fb1ac11978409284de0bedadd0 100644
 --- a/out/replicache/src/replicache-impl.js
 +++ b/out/replicache/src/replicache-impl.js
 @@ -172,6 +172,10 @@
@@ -130,7 +130,31 @@ index 0732d55a5c819e6816c096f0c8484c86423a595b..01847a40cd59c22fc21f3b20222a6030
  	#closeAbortController = new AbortController();
  	/**
  	* Aborted on close, on a storage failure after the open, and by
-@@ -489,24 +493,59 @@
+@@ -378,7 +382,9 @@
+ 		this.#onPersist = initOnPersistChannel(this.name, this.#closeAbortController.signal, (persistInfo) => {
+ 			this.#handlePersist(persistInfo);
+ 		});
+-		const open = () => this.#open(indexes, enableClientGroupForking, enableMutationRecovery, clientMaxAgeMs, profileIDResolver.resolve, clientGroupIDResolver.resolve, readyResolver.resolve, onClientsDeleted);
++		// Initialization retries wait only for the predecessor, never our own close.
++		const previousClose = closingInstances.get(this.name);
++		const open = () => this.#open(previousClose, indexes, enableClientGroupForking, enableMutationRecovery, clientMaxAgeMs, profileIDResolver.resolve, clientGroupIDResolver.resolve, readyResolver.resolve, onClientsDeleted);
+ 		open().catch((e) => {
+ 			if (e instanceof InvalidRefCountError) {
+ 				this.#openFailed.resolve();
+@@ -394,10 +400,10 @@
+ 			this.#lc.error?.("Error during open", e);
+ 		});
+ 	}
+-	async #open(indexes, enableClientGroupForking, enableMutationRecovery, clientMaxAgeMs, profileIDResolver, resolveClientGroupID, resolveReady, onClientsDeleted) {
++	async #open(previousClose, indexes, enableClientGroupForking, enableMutationRecovery, clientMaxAgeMs, profileIDResolver, resolveClientGroupID, resolveReady, onClientsDeleted) {
+ 		const { clientID } = this;
+ 		const openStart = performance.now();
+-		await closingInstances.get(this.name);
++		await previousClose;
+ 		await this.#idbDatabases.getProfileID().then(profileIDResolver);
+ 		await this.#idbDatabases.putDatabase(this.#idbDatabase);
+ 		const [client, headHash, , isNewClientGroup] = await initClientV6(clientID, this.#lc, this.perdag, Object.keys(this.#mutatorRegistry), indexes, 7, enableClientGroupForking);
+@@ -489,24 +495,59 @@
  	*
  	* When closed all subscriptions end and no more read or writes are allowed.
  	*/
@@ -208,7 +232,7 @@ index 0732d55a5c819e6816c096f0c8484c86423a595b..01847a40cd59c22fc21f3b20222a6030
  	}
  	async maybeEndPull(syncHead, requestID) {
  		for (;;) {
-@@ -741,13 +780,17 @@
+@@ -741,13 +782,17 @@
  		};
  	}
  	persist() {
@@ -228,7 +252,7 @@ index 0732d55a5c819e6816c096f0c8484c86423a595b..01847a40cd59c22fc21f3b20222a6030
  				if (e instanceof ClientStateNotFoundError) this.#clientStateNotFoundOnClient(clientID);
  				else if (e instanceof InvalidRefCountError) {
  					await this.#handleInvalidRefCount(e);
-@@ -760,6 +803,7 @@
+@@ -760,6 +805,7 @@
  					return;
  				}
  			}
@@ -236,7 +260,7 @@ index 0732d55a5c819e6816c096f0c8484c86423a595b..01847a40cd59c22fc21f3b20222a6030
  			const clientGroupID = await this.#clientGroupIDPromise;
  			assert(clientGroupID, "Expected clientGroupID to be defined");
  			this.#onPersist({
-@@ -1076,8 +1120,12 @@
+@@ -1076,8 +1122,12 @@
  	#register(name, mutatorImpl) {
  		this.#mutatorRegistry[name] = mutatorImpl;
  		return (args) => {
@@ -249,7 +273,7 @@ index 0732d55a5c819e6816c096f0c8484c86423a595b..01847a40cd59c22fc21f3b20222a6030
  			if (trackingData) return {
  				client: result,
  				server: trackingData.serverPromise
-@@ -1145,7 +1193,9 @@
+@@ -1145,7 +1195,9 @@
  	*
  	* @experimental This method is experimental and may change in the future.
  	*/

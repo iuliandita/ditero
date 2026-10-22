@@ -287,3 +287,111 @@ it.each([
 		await reopened?.close();
 	}
 });
+
+it.each([
+	false,
+	true,
+])("settles close and pending inspection after slow startup falls back to memory (accepted edit: %s)", async (withEdit) => {
+	let enter!: () => void;
+	let release!: () => void;
+	const entered = new Promise<void>((resolve) => {
+		enter = resolve;
+	});
+	const held = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	const failure = new StorageFailureError(
+		"cannot-open",
+		"slow primary open failed",
+	);
+	let first = true;
+	const provider: StoreProvider = {
+		create(name) {
+			const store = new MemStore(name);
+			return {
+				read: () => store.read(),
+				write: async () => {
+					if (first) {
+						first = false;
+						enter();
+						await held;
+						throw failure;
+					}
+					return store.write();
+				},
+				close: () => store.close(),
+				get closed() {
+					return store.closed;
+				},
+			};
+		},
+		drop: dropMemStore,
+	};
+	// @ts-expect-error This isolated fixture schema differs from the app's global DefaultTypes schema.
+	const zero = new Zero<typeof schema>({
+		userID: randomUUID(),
+		cacheURL: null,
+		schema,
+		kvStore: provider,
+		logLevel: "error",
+	});
+	let rep: ReplicacheImpl | undefined;
+	const originalPending = ReplicacheImpl.prototype.experimentalPendingMutations;
+	const pending = vi
+		.spyOn(ReplicacheImpl.prototype, "experimentalPendingMutations")
+		.mockImplementation(function (this: ReplicacheImpl) {
+			rep = this;
+			return originalPending.call(this);
+		});
+	let timeout: ReturnType<typeof setTimeout> | undefined;
+	let settled = false;
+	try {
+		await entered;
+		// Dispatch is accepted before close, but its local commit awaits startup.
+		const accepted = withEdit
+			? zero.mutate.item.upsert({ id: "accepted during open" })
+			: Promise.resolve();
+		const inspection = zero.pendingMutations();
+		const closing = zero.close();
+		const results = Promise.allSettled([closing, inspection, accepted]);
+		release();
+		const [closed, inspected, committed] = await Promise.race([
+			results,
+			new Promise<never>((_, reject) => {
+				timeout = setTimeout(
+					() => reject(new Error("slow-open close or pending inspection hung")),
+					1000,
+				);
+			}),
+		]);
+		settled = true;
+		expect(committed.status).toBe("fulfilled");
+		if (withEdit) {
+			expect(closed).toMatchObject({
+				status: "rejected",
+				reason: { pendingMutations: 1, cause: failure },
+			});
+			expect(zero.closed).toBe(false);
+			expect(await zero.pendingMutations()).toBe(1);
+			if (!rep) throw new Error("missing real Replicache instance");
+			await rep.poke({
+				baseCookie: null,
+				pullResponse: {
+					cookie: "1",
+					lastMutationIDChanges: { [rep.clientID]: 1 },
+					patch: [],
+				},
+			});
+			await zero.close();
+		} else {
+			expect(closed.status).toBe("fulfilled");
+			expect(zero.closed).toBe(true);
+		}
+		expect(inspected).toEqual({ status: "fulfilled", value: withEdit ? 1 : 0 });
+	} finally {
+		release();
+		clearTimeout(timeout);
+		pending.mockRestore();
+		if (settled && !zero.closed) await zero.close();
+	}
+});
