@@ -138,7 +138,7 @@ def expected_assets(version: str) -> set[str]:
         "windows-x64-unsigned.exe", "windows-arm64-unsigned.exe",
         "macos-arm64-adhoc.dmg", "macos-x64-adhoc.dmg",
         "android-independent-universal-signed.apk", "android-independent-universal-signed.aab",
-        "compose.tar.gz", "kustomize.tar.gz", "sbom-alpine.spdx.json", "sbom-debian.spdx.json", "sbom-zero.spdx.json",
+        "compose.tar.gz", "kustomize.tar.gz", "clients.tar.gz", "sbom-alpine.spdx.json", "sbom-debian.spdx.json", "sbom-zero.spdx.json",
         "image-alpine.txt", "image-debian.txt", "image-zero.txt",
     )
     return {f"ditero-{version}-{suffix}" for suffix in suffixes} | {f"ditero-{version}.tgz"}
@@ -237,7 +237,8 @@ def runtime_notice_records(manifest):
     return records
 
 
-def verify_clients_candidate(path: Path, version: str, source_sha: str) -> None:
+def verify_standalone_candidate(path: Path, version: str, source_sha: str) -> None:
+    """Disabled embedded-runtime candidate; never part of a release."""
     prefix = f"ditero-{version}-clients-linux-x64"
     clients = ("ditero", "ditero-mcp", "ditero-tui")
     required = {"BUILDINFO.json", "LICENSE", "REBUILD.md", "notices/Bun-LICENSE.md", "notices/runtime/manifest.json"}
@@ -333,12 +334,124 @@ def verify_clients_candidate(path: Path, version: str, source_sha: str) -> None:
                 raise ValueError("Client binary is not executable Linux x64 ELF")
 
 
+CLIENT_SHEBANG = b"#!/usr/bin/env -S bun --no-env-file --config=/dev/null\n"
+CLIENT_BUNDLES = ("ditero-cli.js", "ditero-mcp.js", "ditero-tui.js")
+CLIENT_FILES = (*CLIENT_BUNDLES, "THIRD_PARTY_NOTICES.txt", "LICENSE", "BUILDINFO.json", "SHA256SUMS")
+
+
+CLIENT_MARKER = re.compile(rb"/\*! ditero-package: (\S+) \*/")
+CLIENT_LEAKS = {
+    "absolute home or build path": re.compile(rb"/(?:home|Users|root)/[A-Za-z0-9._-]+|[A-Za-z]:\\Users\\|/(?:github/workspace|__w|actions-runner|runner/work)/|priv/code"),
+    "private-looking host or address": re.compile(
+        rb"(?<![0-9.])(?:10\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])|192\.168)\.\d{1,3}\.\d{1,3}(?![0-9])"
+        rb"|[\"'`@/][A-Za-z0-9.-]+\.(?:local|lan|internal|home\.arpa|ditas\.cc|rubean\.io|phonepos\.online)[:/\"'`]"),
+    "environment file content": re.compile(rb"(?m)^[A-Z][A-Z0-9_]{3,}=\S|\b(?:DATABASE_URL|BETTER_AUTH_SECRET|DITERO_[A-Z_]*(?:KEY|SECRET|TOKEN|PASSWORD)|[A-Z_]*PASSWORD)=[^\s\"'`$]{4,}"),
+    "secret": re.compile(
+        rb"-----BEGIN [A-Z ]*PRIVATE KEY-----"
+        rb"|\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|glpat-[A-Za-z0-9_-]{20,}|npm_[A-Za-z0-9]{36}"
+        rb"|(?:AKIA|ASIA)[0-9A-Z]{16}|xox[abprs]-[A-Za-z0-9-]{10,}|sk-[A-Za-z0-9_-]{20,})\b"
+        rb"|\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}"),
+}
+
+
+def minimum_bun() -> str:
+    found = re.search(r'MINIMUM_BUN = "(\d+\.\d+\.\d+)"', (ROOT / "src/clients/build-info.ts").read_text())
+    if found is None:
+        raise ValueError("Cannot read the minimum supported Bun version")
+    return found.group(1)
+
+
+def verify_clients(path: Path, version: str, source_sha: str, allow_dirty: bool = False) -> None:
+    prefix = f"ditero-{version}-clients"
+    minimum = minimum_bun()
+    with tarfile.open(path) as archive:
+        members = archive.getmembers()
+        if len(members) > 32 or sum(member.size for member in members) > 32 * 1024 * 1024:
+            raise ValueError("Client archive exceeds its size bound")
+        files = {}
+        for member in members:
+            parts = member.name.rstrip("/").split("/")
+            if parts[0] != prefix or len(parts) > 2 or any(part in (".", "..", "") or part.startswith(".") for part in parts):
+                raise ValueError("Unexpected client archive path")
+            if member.isdir() and len(parts) == 1:
+                continue
+            if not (member.isfile() and len(parts) == 2) or parts[1] in files:
+                raise ValueError("Client archive contains a duplicate, link, special file or nested path")
+            files[parts[1]] = member
+        if set(files) != set(CLIENT_FILES):
+            raise ValueError(f"Client archive file mismatch: missing={sorted(set(CLIENT_FILES) - set(files))}, extra={sorted(set(files) - set(CLIENT_FILES))}")
+        content = {name: archive.extractfile(member).read() for name, member in files.items()}
+    for name, raw in content.items():
+        if not raw:
+            raise ValueError(f"Empty client archive file: {name}")
+    for name in CLIENT_BUNDLES:
+        bundle = content[name]
+        if not files[name].mode & 0o111:
+            raise ValueError(f"Client bundle is not executable: {name}")
+        if not bundle.startswith(CLIENT_SHEBANG) or f"m=[{minimum.replace('.', ',')}]".encode() not in bundle[:1024]:
+            raise ValueError(f"Client bundle lacks the shebang or minimum Bun check: {name}")
+        if b"sourceMappingURL" in bundle:
+            raise ValueError(f"Client bundle links a source map: {name}")
+    for name in (*CLIENT_BUNDLES, "BUILDINFO.json"):
+        for label, pattern in CLIENT_LEAKS.items():
+            if pattern.search(content[name]):
+                raise ValueError(f"Client file contains a {label}: {name}")
+    if len(content["BUILDINFO.json"]) > 65536:
+        raise ValueError("Client build identity exceeds its size bound")
+    info = strict_json(content["BUILDINFO.json"])
+    if not isinstance(info, dict) or type(info.get("sourceDirty")) is not bool or type(info.get("apiVersion")) is not int:
+        raise ValueError("Invalid client build identity")
+    if info["sourceDirty"] and not allow_dirty:
+        raise ValueError("Client bundles were built from modified source")
+    if (info.get("version"), info.get("sourceSha"), info.get("target"), info.get("apiVersion"), info.get("clients"), info.get("minimumBun")) != (version, source_sha, "bun", 1, list(CLIENT_BUNDLES), minimum):
+        raise ValueError("Client archive source identity mismatch")
+    if not isinstance(info.get("buildBun"), str) or not re.fullmatch(r"\d+\.\d+\.\d+", info["buildBun"]):
+        raise ValueError("Client build identity lacks the building Bun version")
+    dependencies = info.get("dependencies")
+    if (not isinstance(dependencies, list) or not dependencies or len(dependencies) > 100 or len(set(dependencies)) != len(dependencies)
+            or any(not isinstance(name, str) or not re.fullmatch(r"(?:@[a-z0-9._~-]+/)?[a-z0-9._~-]+@[0-9][A-Za-z0-9.+-]*", name) for name in dependencies)):
+        raise ValueError("Invalid client dependency inventory")
+    listed = {}
+    for line in content["SHA256SUMS"].decode("utf-8").splitlines():
+        match = re.fullmatch(r"([0-9a-f]{64})  ([A-Za-z0-9_.-]+)", line)
+        if match is None or match.group(2) in listed:
+            raise ValueError("Invalid client checksum list")
+        listed[match.group(2)] = match.group(1)
+    covered = set(CLIENT_FILES) - {"SHA256SUMS"}
+    if set(listed) != covered:
+        raise ValueError("Client checksum list does not cover every bundle and notice file")
+    for name in covered:
+        if hashlib.sha256(content[name]).hexdigest() != listed[name]:
+            raise ValueError(f"Client checksum mismatch: {name}")
+    sections = re.split(r"(?m)^={72}\n(\S+) \(.*\)\n={72}\n", content["THIRD_PARTY_NOTICES.txt"].decode("utf-8"))
+    bodies = dict(zip(sections[1::2], sections[2::2]))
+    if len(bodies) != len(sections[1::2]) or set(bodies) != set(dependencies):
+        raise ValueError("Third-party notices do not match the bundled dependency inventory")
+    for dependency, body in bodies.items():
+        if len(body.strip()) < 100 or not re.search(r"licen[sc]e|permission|copyright", body, re.I):
+            raise ValueError(f"Missing license text for bundled dependency: {dependency}")
+    for name in CLIENT_BUNDLES:
+        bundled = {found.decode() for found in CLIENT_MARKER.findall(content[name])}
+        if not bundled:
+            raise ValueError(f"Client bundle lacks its bundled package markers: {name}")
+        if bundled - set(bodies):
+            raise ValueError(f"Client bundle contains code from a package missing in the notices: {name}: {sorted(bundled - set(bodies))}")
+
+
+def clients_attestation_args(archive: str, repo: str, sha: str) -> list[str]:
+    return ["gh", "attestation", "verify", archive, "--repo", repo,
+            "--signer-workflow", f"{repo}/.github/workflows/release.yml", "--source-digest", sha]
+
+
 def publish(output: Path) -> None:
     version = metadata()["version"]
     names = verify_downloads(output, version)
     tag, repo, sha = (os.environ[name] for name in ("TAG", "REPO", "RELEASE_SHA"))
     if tag != f"v{version}" or command("git", "rev-parse", "HEAD") != sha:
         raise ValueError("Release source identity mismatch")
+    archive = output / f"ditero-{version}-clients.tar.gz"
+    verify_clients(archive, version, sha)
+    subprocess.run(clients_attestation_args(str(archive), repo, sha), cwd=ROOT, check=True)
     remote = command("git", "ls-remote", "origin", f"refs/tags/{tag}^{{}}")
     if remote.split()[0] != sha:
         raise ValueError("Remote annotated tag changed since preparation")
@@ -361,6 +474,8 @@ Deployment: the Helm chart uses external PostgreSQL with logical replication and
 Desktop: Linux x86_64 DEB/RPM/AppImage, unsigned Windows x86_64/ARM64 NSIS installers, and separate ad-hoc signed macOS Apple Silicon/Intel DMGs. Windows and macOS downloads have no trusted publisher signature or notarization. Installer smoke checks cover payloads and bounded startup, not authenticated journeys or upgrades. RPM-distro installation remains unqualified. Native qualification, general deep links and automatic updates remain incomplete.
 
 Android: signed independent APK and AAB, with UnifiedPush and no Google SDK configuration. The AAB is for distribution tooling, not direct installation. Broader device qualification remains open; no store distribution is configured.
+
+Terminal clients: `ditero-{version}-clients.tar.gz` holds the CLI, MCP server and TUI as JavaScript bundles with third-party notices and per-file SHA-256 checksums. They require an installed Bun {minimum_bun()} or newer and are qualified on Linux x64; other platforms remain unqualified. Run `bun --no-env-file --config=/dev/null ditero-cli.js --version` to inspect the JSON build identity. The archive has no separate signature file; its keyless-signed build provenance attestation is stored with GitHub and was checked before this release was published. Verify it with `{" ".join(clients_attestation_args(f"ditero-{version}-clients.tar.gz", repo, sha))}`. See docs/cli.md for installation and platform limits.
 
 Verify downloads with `sha256sum -c SHA256SUMS.txt`. Checksums verify downloaded bytes; they do not replace platform signing or runtime qualification. This prerelease does not move latest or stable image channels.
 """
@@ -398,14 +513,18 @@ Verify downloads with `sha256sum -c SHA256SUMS.txt`. Checksums verify downloaded
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["prepare", "deployment", "publish", "check", "clients"])
+    parser.add_argument("command", choices=["prepare", "deployment", "publish", "check", "clients", "standalone-candidate"])
     parser.add_argument("--output", type=Path, default=Path("release-downloads"))
+    parser.add_argument("--allow-dirty", action="store_true", help="accept client bundles built from modified source (local qualification only)")
     args = parser.parse_args()
     if args.command == "check":
         print(metadata()["version"])
     elif args.command == "clients":
         version = metadata()["version"]
-        verify_clients_candidate(args.output / f"ditero-{version}-clients-linux-x64.tar.gz", version, command("git", "rev-parse", "HEAD"))
+        verify_clients(args.output / f"ditero-{version}-clients.tar.gz", version, command("git", "rev-parse", "HEAD"), args.allow_dirty)
+    elif args.command == "standalone-candidate":
+        version = metadata()["version"]
+        verify_standalone_candidate(args.output / f"ditero-{version}-clients-linux-x64.tar.gz", version, command("git", "rev-parse", "HEAD"))
     elif args.command == "prepare":
         prepare()
     elif args.command == "deployment":

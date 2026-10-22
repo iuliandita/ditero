@@ -10,9 +10,9 @@
 			"note": "Upgrade Better Auth and passkey together to 1.7.12. TOTP enrollment explicitly requests totp and checks the response method before reading setup keys or backup codes. Document the response boundary and unchanged explicit native approval. Session startup, transport retry, locale and theme behavior are preserved. Zero 1.11 cached query results retain the prior unknown-result loading and import-activation policies; initializing remains a pending sync state. Document the client database boundary and durable retirement behavior. Add the SAML sign-in button and the Settings > Security link control, both driven by the server list in /api/config; the sign-in guide documents linking and errors."
 		},
 		"release": {
-			"sourceDigest": "a675a1dc3668f040faf1c5a69a6adb43d3852b9e3a461a9a6b5aebc3fb0eaf76",
+			"sourceDigest": "e39ab8ea979d2a4ed1b134610a8fd5a7c47393732eff31f7f5c35e030033e2e5",
 			"docs": ["RELEASING.md"],
-			"note": "Prepare the first beta, 0.1.0-beta.1 with Android code 13, retain the existing signing certificate and documentation epoch, align release commands, and describe the remaining prerelease and native qualification limits. Generated publication notes now describe a prerelease rather than an alpha."
+			"note": "Releases add ditero-VERSION-clients.tar.gz (CLI, MCP and TUI bundles, third-party notices, per-file checksums, build provenance attestation) and publication rejects an archive missing a bundle, its checksum, the notices or its attestation, verified with a read-only attestations token. The packaging check qualifies the bundles on the current and the minimum Bun. Standalone executables are not published and move to the roadmap. Existing assets, signing and the stable promotion rules are unchanged. The publish gate also rejects a bundle containing code from a package missing in the notices, an absolute home or build path, a private-looking host or address, environment-file content or a common secret shape, and a build identity without the building Bun."
 		},
 		"configuration": {
 			"sourceDigest": "9593ba2bcf82c18897ed1d31b0af52ff9944e657f2a26c14cca75bde4ef6094d",
@@ -50,9 +50,9 @@
 			"clientVersions": "Better Auth sessions and native consent remain compatible; reload TOTP callers as described in the guide. Zero 1.11 clients require a 1.11 server. The 1.9-to-1.11 client upgrade discards its old local database, so every client must sync pending edits before updating. Keep offline clients on the old bundle until drained; never clear their storage or uninstall them."
 		},
 		"clients": {
-			"sourceDigest": "c07b7e0e2396b7810724d8c3f3a6fcda8106a124fc26874383e6c843e1a708ff",
+			"sourceDigest": "9e440d49e6f7aff5f7588c9a2af8fc981c6308406af74aa088714980d766f668",
 			"docs": ["docs/cli.md"],
-			"note": "Document the retained runtime notice manifest, exact source URLs and SHA-256 checksums, extracted-archive integrity qualification, and unchanged incomplete runtime license coverage and binary publication block."
+			"note": "Terminal clients now ship as JavaScript bundles for a user-installed Bun 1.3.14 or newer instead of standalone binaries. Document the release archive, checksum verification, the bundle shebang that passes --no-env-file and --config=/dev/null so a hostile working directory cannot inject a .env or bunfig.toml preload, the minimum Bun check (exit 2), the JSON --version identity, third-party notices, platform scope (any OS with Bun; qualified on Linux x64) and the MCP launch command. Commands, API envelopes, exit codes other than the new unsupported-Bun case, and credentials from the environment are unchanged. Bundles record the building Bun in BUILDINFO.json, mark every package they contain, including packages inlined into a dependency, and ship its license text in the notices; the Bun check tolerates a version suffix; the rebuild instructions name the tagged commit, the building Bun and the GNU tar requirement."
 		}
 	}
 }

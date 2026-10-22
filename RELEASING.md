@@ -12,10 +12,13 @@ use the [latest published downloads](https://github.com/iuliandita/ditero/releas
 
 Every push and PR builds Android development APKs and unsigned or ad-hoc desktop
 installers. These test artifacts expire after seven days. Release packaging checks
-also retain Helm, Kustomize and Compose packages for 30 days. Linux x64 standalone
-CLI, MCP and TUI candidates are built and exercised internally without Bun.
-Their embedded runtime notices remain incomplete in [#575](https://github.com/iuliandita/ditero/issues/575);
-compiled clients are excluded from release assets and public Actions uploads.
+also retain Helm, Kustomize and Compose packages for 30 days. The same checks build
+the terminal client bundles, verify their identity, checksums and third-party
+notices, and run them against a real database on the Bun pinned in
+`release-checks.yml` and on the minimum supported Bun (`MINIMUM_BUN` in
+`src/clients/build-info.ts`). The release gate also rejects a bundle containing code
+from a package missing in the notices, or an absolute home or build path, a
+private-looking host or address, environment-file content or a common secret shape.
 
 Tagged releases include:
 
@@ -28,6 +31,13 @@ Tagged releases include:
   installers; separate ad-hoc signed macOS Apple Silicon and Intel DMGs.
 - A signed independent Android universal APK and AAB. This flavor uses UnifiedPush;
   Google delivery requires separate private configuration and is not packaged here.
+- `ditero-VERSION-clients.tar.gz`: the CLI, stdio MCP server and TUI as JavaScript
+  bundles for a user-installed Bun, with `THIRD_PARTY_NOTICES.txt` and a `SHA256SUMS`
+  file inside. The archive has no separate signature file; its keyless-signed build
+  provenance attestation is stored with GitHub (`gh attestation verify`, with the
+  command in the release notes). Publication rejects an archive missing a bundle, its
+  checksum or the notices, and rejects a missing or mismatched attestation; the
+  publish job holds `attestations: read` for that check. Standalone executables are not published; see the [roadmap](docs/ROADMAP.md).
 - `SHA256SUMS.txt` covering every download.
 
 The development-installer and release workflows use the same five native targets:

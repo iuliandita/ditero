@@ -95,7 +95,8 @@ templates use the name you enter, or the template name when you leave it blank.
   and task, list, folder, comment, relationship, placement and webhook workflows,
   plus an interactive
   [terminal UI](docs/tui.md) for task creation, completion, scalar updates, deletion
-  and reordering, with read-only comments
+  and reordering, with read-only comments; released as JavaScript bundles that run on
+  an installed Bun 1.3.14 or newer ([install](docs/cli.md#release-bundles))
 
 iOS, TickTick and Microsoft To Do import remain pending. Wider attachment migration
 runtime, terminal, native and deployment qualification remain pending. Voice capture is

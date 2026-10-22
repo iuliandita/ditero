@@ -25,6 +25,16 @@ remain incomplete in [#346](https://github.com/iuliandita/ditero/issues/346).
   unavailable, the sync indicator says so. Edits are then kept only once they
   reach the server, and edits made while offline are refused instead of appearing
   saved.
+
+- Releases include `ditero-VERSION-clients.tar.gz`: the CLI, stdio MCP server and
+  terminal UI as JavaScript bundles with third-party notices, checksums and a
+  build provenance attestation. They need a Bun you install (1.3.14 or newer) and
+  stop with exit status 2 and a message on an older Bun. Standalone executables
+  are not published; they remain on the roadmap.
+- Breaking for scripts: `--version` of the CLI, MCP server and terminal UI now
+  prints one JSON line (name, version, commit, dirty flag, target, minimum Bun and
+  running Bun) instead of `ditero 0.x (...)`. Parse the JSON, or read the
+  `version` field.
 - Task rows use icons for personal and shared workspaces while keeping workspace
   names, translated tooltips and screen-reader descriptions.
 - Google sign-in setup is documented for self-hosters. Compose now passes the
