@@ -18,9 +18,7 @@
 		},
 		"release": {
 			"sourceDigest": "f49c78761db0cb3a936708efeea0345024b662a508c3f5aed64a1a4393acd9c4",
-			"docs": [
-				"RELEASING.md"
-			],
+			"docs": ["RELEASING.md"],
 			"note": "Retain first-beta 0.1.0-beta.1/Android code 13 preparation, signing certificate, documentation epoch, remaining prerelease/native limits and prerelease publication wording. Add ditero-VERSION-clients.tar.gz with CLI/MCP/TUI JavaScript bundles, notices, per-file checksums, BUILDINFO and provenance attestation verified with a read-only attestations token. Packaging qualifies current and minimum Bun. Reject missing bundles/checksums/notices/attestation, bundled packages absent from notices, home/build paths, private-looking hosts/addresses, environment content, common secret shapes and build identity without building Bun. Standalone executables remain deferred; existing assets/signing/stable promotion rules remain. Packaging validates the Kustomize example as exactly two tag-matched image overrides."
 		},
 		"configuration": {
@@ -55,9 +53,7 @@
 		},
 		"authentication": {
 			"sourceDigest": "50db2b78d93a53b6b06f672fd17ef6190a50599a52b7fbdeff9cb1c3c9cf3d80",
-			"docs": [
-				"docs/runbooks/native-authentication.md"
-			],
+			"docs": ["docs/runbooks/native-authentication.md"],
 			"note": "Upgrade Better Auth/passkey to 1.7.12 with additive JWT-key and unique provider-account migrations. Preserve Google callback, PKCE, native grant parameters and explicit approval; retain stable policy refusals and generic REGISTRATION_UNAVAILABLE outages. Configured social/OIDC registration requires verified email; Microsoft/Facebook require explicit owner linking, implicit same-email linking stays disabled, Microsoft/Apple use single-use nonces, non-Google client tokens stay refused and Apple origin trust is callback-POST-only. Account-existence/policy callbacks share a neutral code; concurrent links are refused, including raw link-social 409 JSON. Optional SAML requires operator configuration and signed assertions, defaults IdP-initiated off, keys identity by IdP entity ID plus NameID, retains admission policy and explicit linking, and uses native adapter transactions. Email reset always targets the web reset page and creates no session. One transaction consumes the token, writes the password, verifies mailbox control and revokes sessions/native Zero access, access tokens, calendar links, passkeys, provider links and pending account-bound 2FA/trusted-device/OTP/magic-link/passkey/OAuth/SAML pending-link proofs. Enrolled TOTP/backup codes, webhooks and channel credentials remain. Zero credentials is valid; no updated password row rolls back. Preserve live-session stream revalidation, HTTPS fragment invitations, validated identity updates, retained JWKS/secret checks and stopped-replica secret rotation. Registration discards nonidentity/password fields, keeps neutral timing on persistence failure and logs failures; IP ceilings precede bounded email buckets. Provider rollback may disable new providers without deleting rows; native credentials and approval remain unchanged."
 		},
 		"compatibility": {
@@ -75,16 +71,12 @@
 		},
 		"clients": {
 			"sourceDigest": "9e440d49e6f7aff5f7588c9a2af8fc981c6308406af74aa088714980d766f668",
-			"docs": [
-				"docs/cli.md"
-			],
+			"docs": ["docs/cli.md"],
 			"note": "Ship CLI/MCP/TUI JavaScript bundles for user-installed Bun 1.3.14+; document archive/checksum verification, MCP launch, JSON --version, BUILDINFO building-Bun identity, source URLs and notices/license texts covering every bundled or dependency-inlined package. The shebang uses --no-env-file and --config=/dev/null to prevent working-directory environment/preload injection. Minimum-version failure exits 2 and suffixes are tolerated. Scope is any Bun OS, qualified on Linux x64; rebuilds name tagged commit, building Bun and GNU tar. Commands, API envelopes, other exit codes and environment credentials remain unchanged. Standalone binary publication remains blocked/deferred."
 		},
 		"public-api": {
 			"sourceDigest": "da9126c5d9759f4a0d737870c3ff6f791c3cd5cd13f16b645c4366aecc0f7eca",
-			"docs": [
-				"docs/runbooks/public-api.md"
-			],
+			"docs": ["docs/runbooks/public-api.md"],
 			"note": "Preserve minute, second and fractional-second ISO timestamp acceptance for task create/update/completion, observations and metadata. Offset-capable inputs retain explicit offsets or Z; UTC-only responses remain UTC-only. CSV retains acceptance and normalization. No API version or persisted format changes."
 		}
 	}
