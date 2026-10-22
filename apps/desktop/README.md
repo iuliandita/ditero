@@ -127,7 +127,9 @@ task-link behavior and qualification limits are documented in the
 
 Linux system notifications require a notification service with action support.
 Windows uses installed-app toasts with click routing while the banner is visible;
-dismissed banners are removed from history. macOS 10.14+ uses
+dismissed banners are removed from history. Hosted Windows checks turn off
+Do not disturb through the OS UI before testing; the app does not override it.
+macOS 10.14+ uses
 UNUserNotificationCenter and asks for notification permission when you enable delivery. Denied permission is shown
 with a localized reason; allow Ditero in system notification settings and retry.
 Permission-check failures remain unavailable; they never imply permission granted.

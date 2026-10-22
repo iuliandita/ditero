@@ -19,3 +19,5 @@ $packages = if (Test-Path $systemApps) { @(Get-ChildItem $systemApps -Directory 
 $settingsPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings'
 $settings = if (Test-Path $settingsPath) { Get-ItemProperty $settingsPath | Select-Object NOC_GLOBAL_SETTING_TOASTS_ENABLED, NOC_GLOBAL_SETTING_ALLOW_TOASTS_ABOVE_LOCK } else { $null }
 @{os=$os; hosts=$hosts; packages=$packages; settings=$settings} | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $out 'evidence/notification-platform.json')
+& pwsh -NoProfile -File apps/desktop/tests/journeys/windows-notifications.ps1 -Mode prepare
+if ($LASTEXITCODE -ne 0) { throw 'Windows notification UI preparation failed' }

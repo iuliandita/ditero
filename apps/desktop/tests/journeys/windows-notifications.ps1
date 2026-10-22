@@ -1,4 +1,4 @@
-param([ValidateSet('show', 'click')][string]$Mode = 'click')
+param([ValidateSet('show', 'click', 'prepare')][string]$Mode = 'click')
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, System.Windows.Forms, System.Drawing
@@ -11,6 +11,66 @@ public static class JourneyNotificationMouse {
 }
 '@
 $evidence = Join-Path $env:RUNNER_TEMP 'desktop-journeys/evidence'
+function Click-Element($element) {
+    $rectangle = $element.Current.BoundingRectangle
+    if ($element.Current.IsOffscreen -or $rectangle.Width -le 0 -or $rectangle.Height -le 0) { throw 'OS control has no visible bounds' }
+    [void][JourneyNotificationMouse]::SetCursorPos([int]($rectangle.X + $rectangle.Width / 2), [int]($rectangle.Y + $rectangle.Height / 2))
+    [JourneyNotificationMouse]::mouse_event(0x0002, 0, 0, 0, [UIntPtr]::Zero)
+    [JourneyNotificationMouse]::mouse_event(0x0004, 0, 0, 0, [UIntPtr]::Zero)
+}
+function Notification-Button {
+    $root = [System.Windows.Automation.AutomationElement]::RootElement
+    $windows = $root.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)
+    foreach ($window in $windows) {
+        if ($window.Current.ClassName -ne 'Shell_TrayWnd') { continue }
+        $elements = $window.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)
+        foreach ($element in $elements) {
+            if ($element.Current.Name -like 'Notifications *') { return $element }
+        }
+    }
+    throw 'Notification center taskbar control unavailable'
+}
+if ($Mode -eq 'prepare') {
+    $button = Notification-Button
+    $before = $button.Current.Name
+    $opened = $false
+    if ($before -like '*Do not disturb on*') {
+        Click-Element $button
+        $opened = $true
+        $deadline = [DateTime]::UtcNow.AddSeconds(20)
+        $toggled = $false
+        while ([DateTime]::UtcNow -lt $deadline -and -not $toggled) {
+            $snapshot = [System.Collections.Generic.List[string]]::new()
+            $root = [System.Windows.Automation.AutomationElement]::RootElement
+            $windows = $root.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)
+            foreach ($window in $windows) {
+                $process = Get-Process -Id $window.Current.ProcessId -ErrorAction SilentlyContinue
+                if ($null -eq $process -or $process.ProcessName -in @('ditero-desktop', 'msedge', 'chrome', 'pwsh', 'powershell')) { continue }
+                $elements = $window.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)
+                foreach ($element in $elements) {
+                    $name = $element.Current.Name
+                    $snapshot.Add("$($process.ProcessName) | $($element.Current.ClassName) | $name")
+                    if ($name -notmatch 'do not disturb' -or $name -like 'Notifications *' -or $element.Current.IsOffscreen -or $element.Current.ControlType -ne [System.Windows.Automation.ControlType]::Button) { continue }
+                    Click-Element $element
+                    $toggled = $true
+                    break
+                }
+                if ($toggled) { break }
+            }
+            Set-Content -Path (Join-Path $evidence 'notification-dnd-uia.txt') -Value ($snapshot -join "`n")
+            Start-Sleep -Milliseconds 300
+        }
+        if (-not $toggled) { throw 'Do not disturb is on but its OS control was not found' }
+        $settle = [DateTime]::UtcNow.AddSeconds(10)
+        while ((Notification-Button).Current.Name -like '*Do not disturb on*' -and [DateTime]::UtcNow -lt $settle) { Start-Sleep -Milliseconds 200 }
+        Click-Element (Notification-Button)
+    }
+    $after = (Notification-Button).Current.Name
+    @{before=$before; after=$after; changed=$opened; method='normal-os-ui'} | ConvertTo-Json | Set-Content (Join-Path $evidence 'notification-dnd.json')
+    if ($after -like '*Do not disturb on*') { throw 'Do not disturb remained on after OS UI action' }
+    Write-Output 'OS UI confirms Do not disturb is off; app notification permissions are unchanged'
+    exit 0
+}
 $deadline = [DateTime]::UtcNow.AddSeconds(45)
 while ([DateTime]::UtcNow -lt $deadline) {
     $snapshot = [System.Collections.Generic.List[string]]::new()
