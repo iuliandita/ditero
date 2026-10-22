@@ -19,5 +19,16 @@ $packages = if (Test-Path $systemApps) { @(Get-ChildItem $systemApps -Directory 
 $settingsPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings'
 $settings = if (Test-Path $settingsPath) { Get-ItemProperty $settingsPath | Select-Object NOC_GLOBAL_SETTING_TOASTS_ENABLED, NOC_GLOBAL_SETTING_ALLOW_TOASTS_ABOVE_LOCK } else { $null }
 @{os=$os; hosts=$hosts; packages=$packages; settings=$settings} | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $out 'evidence/notification-platform.json')
+$registered = & powershell -NoProfile -Command '$ErrorActionPreference="Stop"; @{packages=@(Get-AppxPackage -Name "*ShellExperienceHost*" | Select-Object Name,Status,InstallLocation)} | ConvertTo-Json -Depth 4'
+if ($LASTEXITCODE -ne 0) { throw 'Per-user notification shell query failed' }
+$registered | Set-Content (Join-Path $out 'evidence/notification-shell-registration.json')
+$shell = New-Object -ComObject Shell.Application
+$programs = [Environment]::GetFolderPath('Programs')
+$shortcuts = @(Get-ChildItem $programs -Recurse -File -Filter 'Ditero.lnk' | ForEach-Object {
+    $item = $shell.Namespace($_.DirectoryName).ParseName($_.Name)
+    @{name=$_.Name; appId=$item.ExtendedProperty('System.AppUserModel.ID')}
+})
+@{shortcuts=$shortcuts} | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $out 'evidence/notification-shortcuts.json')
+if (@($shortcuts | Where-Object {$_.appId -eq 'io.ditero.desktop'}).Count -ne 1) { throw 'Installed notification shortcut identity missing or duplicated' }
 & pwsh -NoProfile -File apps/desktop/tests/journeys/windows-notifications.ps1 -Mode prepare
 if ($LASTEXITCODE -ne 0) { throw 'Windows notification UI preparation failed' }

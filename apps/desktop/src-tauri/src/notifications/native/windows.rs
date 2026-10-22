@@ -5,7 +5,8 @@ use ::windows::{
     Foundation::{DateTime, IReference, PropertyValue, TypedEventHandler},
     Win32::System::WinRT::{RoInitialize, RoUninitialize, RO_INIT_MULTITHREADED},
     UI::Notifications::{
-        NotificationSetting, ToastNotification, ToastNotificationManager, ToastNotifier,
+        NotificationSetting, ToastDismissedEventArgs, ToastFailedEventArgs, ToastNotification,
+        ToastNotificationManager, ToastNotifier,
     },
 };
 
@@ -189,12 +190,21 @@ impl Backend {
         let captured = self.owner.clone();
         let send = self.send.clone();
         let key = id.to_owned();
-        let failed = match toast.Failed(&TypedEventHandler::new(move |_, _| {
-            if captured.current() {
-                let _ = send.try_send(Response::Failed(key.clone()));
-            }
-            Ok(())
-        })) {
+        let failed = match toast.Failed(
+            &TypedEventHandler::<ToastNotification, ToastFailedEventArgs>::new(move |_, _args| {
+                #[cfg(debug_assertions)]
+                if let Some(args) = _args.as_ref() {
+                    eprintln!(
+                        "Windows notification failed: {:?}",
+                        args.ErrorCode().map_err(|e| e.code())
+                    );
+                }
+                if captured.current() {
+                    let _ = send.try_send(Response::Failed(key.clone()));
+                }
+                Ok(())
+            }),
+        ) {
             Ok(token) => token,
             Err(_) => {
                 let _ = toast.RemoveActivated(action);
@@ -202,7 +212,17 @@ impl Backend {
             }
         };
         let key = id.to_owned();
-        let dismissed = match toast.Dismissed(&TypedEventHandler::new(move |_, _| {
+        let dismissed = match toast.Dismissed(&TypedEventHandler::<
+            ToastNotification,
+            ToastDismissedEventArgs,
+        >::new(move |_, _args| {
+            #[cfg(debug_assertions)]
+            if let Some(args) = _args.as_ref() {
+                eprintln!(
+                    "Windows notification dismissed: {:?}",
+                    args.Reason().map(|reason| reason.0).map_err(|e| e.code())
+                );
+            }
             // Classic desktop activation is reliable while the banner is on screen.
             // Do not leave a history entry whose click could launch a second process.
             if apartment().is_err()
@@ -237,6 +257,15 @@ impl Backend {
             self.close(id, display);
             return Err("temporary-unavailable");
         }
+        #[cfg(debug_assertions)]
+        eprintln!(
+            "Windows notification submitted: suppressed={:?}, history={:?}",
+            display.toast.SuppressPopup().map_err(|e| e.code()),
+            ToastNotificationManager::History()
+                .and_then(|h| h.GetHistoryWithId(&HSTRING::from(APP_ID)))
+                .and_then(|v| v.Size())
+                .map_err(|e| e.code())
+        );
         Ok(display)
     }
     pub fn close(&self, id: &str, display: Display) {
