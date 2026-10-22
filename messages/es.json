@@ -2858,5 +2858,14 @@
 	"import_content_label_collision": "Estas etiquetas importadas ya existen en el espacio de trabajo de destino y se reutilizan con su color actual: {names}",
 	"import_content_secure": "El cálculo del hash requiere HTTPS o localhost. Abre una conexión segura antes de importar.",
 	"import_content_binding_conflict": "Esta fuente está vinculada a otros bytes, nombres o zona horaria. Elige Nueva fuente para crear una copia separada.",
-	"import_content_invalid": "No es un archivo UTF-8 compatible, sus referencias son incoherentes o contiene elementos especiales no admitidos. Convierte los archivos PST, ZIP y otras codificaciones según la guía."
+	"import_content_invalid": "No es un archivo UTF-8 compatible, sus referencias son incoherentes o contiene elementos especiales no admitidos. Convierte los archivos PST, ZIP y otras codificaciones según la guía.",
+	"security_sso_heading": "Inicio de sesión único",
+	"security_sso_description": "Vincula el proveedor de identidad de tu organización con esta cuenta. Iniciar sesión con SSO nunca concede por sí solo acceso a un espacio.",
+	"security_sso_linked": "vinculado",
+	"security_sso_not_linked": "sin vincular",
+	"security_sso_link": "Vincular",
+	"security_sso_unlink": "Desvincular",
+	"security_sso_error_load": "No se pudieron cargar tus inicios de sesión vinculados.",
+	"security_sso_error_link": "No se pudo iniciar la vinculación del inicio de sesión único.",
+	"security_sso_error_unlink": "No se pudo desvincular el inicio de sesión único."
 }

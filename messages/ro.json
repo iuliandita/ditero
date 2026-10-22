@@ -2858,5 +2858,14 @@
 	"import_content_label_collision": "Aceste etichete importate există deja în spațiul de lucru țintă și sunt refolosite cu culoarea lor actuală: {names}",
 	"import_content_secure": "Calcularea hashului necesită HTTPS sau localhost. Deschide o conexiune sigură înainte de import.",
 	"import_content_binding_conflict": "Această sursă este legată de alți octeți, alte nume sau alt fus orar. Alege Sursă nouă pentru o copie separată.",
-	"import_content_invalid": "Fișierul nu este un export UTF-8 acceptat, referințele sale sunt inconsistente sau conține elemente speciale neacceptate. Convertește fișierele PST, ZIP și alte codificări conform ghidului."
+	"import_content_invalid": "Fișierul nu este un export UTF-8 acceptat, referințele sale sunt inconsistente sau conține elemente speciale neacceptate. Convertește fișierele PST, ZIP și alte codificări conform ghidului.",
+	"security_sso_heading": "Autentificare unică (SSO)",
+	"security_sso_description": "Asociază furnizorul de identitate al organizației tale cu acest cont. Conectarea prin SSO nu dă, singură, acces la un spațiu.",
+	"security_sso_linked": "asociat",
+	"security_sso_not_linked": "neasociat",
+	"security_sso_link": "Asociază",
+	"security_sso_unlink": "Dezasociază",
+	"security_sso_error_load": "Conectările tale asociate nu au putut fi încărcate.",
+	"security_sso_error_link": "Asocierea autentificării unice nu a putut fi pornită.",
+	"security_sso_error_unlink": "Autentificarea unică nu a putut fi dezasociată."
 }

@@ -13,6 +13,23 @@ The first beta is a `0.x` prerelease, not a stable release. Native device/platfo
 qualification, trusted Windows/macOS signing, deep links and automatic updates
 remain incomplete in [#346](https://github.com/iuliandita/ditero/issues/346).
 
+- Authentication updates to Better Auth 1.7.12. Password reset opens the browser
+  reset form and atomically revokes sessions, personal access tokens, calendar
+  feeds, passkeys and linked sign-in accounts. Two-factor enrollment remains.
+- Compatibility: operators must resolve duplicate provider account records before
+  applying the new unique index; see the database upgrade guide.
+- Optional sign-in adds generic OpenID Connect, Microsoft, GitHub, Discord, Apple
+  and Facebook, plus operator-configured SAML single sign-on. Provider accounts
+  must be explicitly linked to existing accounts from Settings.
+- File import adds content-aware Todoist, TickTick, Microsoft To Do, Trello and
+  generic CSV previews, with explicit loss notices. Trello attachment links stay
+  as text; attachment files are not migrated. Voice capture previews tasks before
+  adding them and uses the browser's supported speech service.
+- Android task links retain the correct task through startup and avoid duplicate
+  notification navigation.
+- Desktop CI exercises runtime journeys; platform qualification remains incomplete.
+- Kustomize deployments gate app startup on successful schema migrations and retain
+  the deployment qualification checks.
 - **Sync every device before upgrading from an alpha.** Sync moves to Zero 1.11.1,
   which starts a new local database on every browser, Android and desktop client.
   Edits made offline with an alpha that have not reached the server stay in the

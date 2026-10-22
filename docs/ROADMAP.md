@@ -178,6 +178,9 @@ discussion.
 
 ## Future
 
+- Opt-in offline saved copy for browser restore, with explicit freshness and account
+  ownership checks.
+
 Good ideas with no timeline yet.
 
 - **Broader operator-blind encryption.** The v1 envelope-key foundation and encrypted
@@ -187,7 +190,7 @@ Good ideas with no timeline yet.
   strong per-tenant isolation (shared-DB row-tenancy first, dedicated DB per tenant for
   customers paying for isolation) and the zero-knowledge story above as a genuine guarantee
   for hosted, sensitive data.
-- **Standalone terminal binaries.** Single-file CLI, MCP and TUI executables that embed
+- **Standalone terminal client binaries.** Single-file CLI, MCP and TUI executables that embed
   the Bun runtime, so no Bun install is needed. They wait on complete embedded-runtime
   license and source notices; until then the clients ship as JavaScript bundles for an
   installed Bun.

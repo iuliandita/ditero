@@ -2809,5 +2809,14 @@
 	"import_content_label_collision": "Diese importierten Labels gibt es im Zielarbeitsbereich bereits; sie werden mit ihrer aktuellen Farbe wiederverwendet: {names}",
 	"import_content_secure": "Das Berechnen des Datei-Hashwerts erfordert HTTPS oder localhost. Öffne vor dem Import eine sichere Verbindung.",
 	"import_content_binding_conflict": "Diese Quelle ist an andere Dateibytes, Namen oder eine andere Zeitzone gebunden. Wähle ausdrücklich Neue Quelle für eine separate Kopie.",
-	"import_content_invalid": "Dies ist kein unterstützter UTF-8-Export, seine Verweise sind inkonsistent oder er enthält nicht unterstützte Sonderinhalte. PST-, ZIP- und andere Kodierungen müssen gemäß Importanleitung konvertiert werden."
+	"import_content_invalid": "Dies ist kein unterstützter UTF-8-Export, seine Verweise sind inkonsistent oder er enthält nicht unterstützte Sonderinhalte. PST-, ZIP- und andere Kodierungen müssen gemäß Importanleitung konvertiert werden.",
+	"security_sso_heading": "Einmalanmeldung (SSO)",
+	"security_sso_description": "Verknüpfe den Identitätsanbieter deiner Organisation mit diesem Konto. Die Anmeldung per SSO gibt für sich allein keinen Zugriff auf einen Arbeitsbereich.",
+	"security_sso_linked": "verknüpft",
+	"security_sso_not_linked": "nicht verknüpft",
+	"security_sso_link": "Verknüpfen",
+	"security_sso_unlink": "Verknüpfung aufheben",
+	"security_sso_error_load": "Deine verknüpften Anmeldungen konnten nicht geladen werden.",
+	"security_sso_error_link": "Die SSO-Verknüpfung konnte nicht gestartet werden.",
+	"security_sso_error_unlink": "Die SSO-Verknüpfung konnte nicht aufgehoben werden."
 }

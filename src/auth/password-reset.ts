@@ -58,6 +58,8 @@ export async function revokeResetCredentials(
 				or lower((case when pg_input_is_valid(v.value, 'jsonb') then v.value::jsonb end) ->> 'email') = lower(u.email)
 				or (case when pg_input_is_valid(v.value, 'jsonb') then v.value::jsonb end) #>> '{userData,id}' = u.id
 				or (case when pg_input_is_valid(v.value, 'jsonb') then v.value::jsonb end) #>> '{link,userId}' = u.id
+				or (v.identifier like 'ditero-saml-link:%' and
+					(case when pg_input_is_valid(v.value, 'jsonb') then v.value::jsonb end) ->> 'userId' = u.id)
 			)
 		)
 		delete from verification where identifier in (select identifier from owned)

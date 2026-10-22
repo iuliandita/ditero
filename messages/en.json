@@ -2809,5 +2809,14 @@
 	"import_content_label_collision": "These imported labels already exist in the target workspace and are reused with their current color: {names}",
 	"import_content_secure": "File hashing requires HTTPS or localhost. Open a secure connection before importing.",
 	"import_content_binding_conflict": "This source is bound to different file bytes, names or time zone. Choose New source explicitly for a separate copy.",
-	"import_content_invalid": "This is not a supported UTF-8 provider export, its references are inconsistent, or it contains unsupported special content. PST, ZIP and non-UTF-8 files must be converted using the import guide."
+	"import_content_invalid": "This is not a supported UTF-8 provider export, its references are inconsistent, or it contains unsupported special content. PST, ZIP and non-UTF-8 files must be converted using the import guide.",
+	"security_sso_heading": "Single sign-on",
+	"security_sso_description": "Link your organization's identity provider to this account. Signing in with single sign-on never grants access to a workspace by itself.",
+	"security_sso_linked": "linked",
+	"security_sso_not_linked": "not linked",
+	"security_sso_link": "Link",
+	"security_sso_unlink": "Unlink",
+	"security_sso_error_load": "Could not load your linked sign-ins.",
+	"security_sso_error_link": "Could not start linking single sign-on.",
+	"security_sso_error_unlink": "Could not unlink single sign-on."
 }

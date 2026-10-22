@@ -533,6 +533,7 @@ test("a reset removes every account-bound verification format without touching a
 				randomUUID(),
 				JSON.stringify({ type: "authentication", userData: { id: userId } }),
 			],
+			[`ditero-saml-link:${randomUUID()}`, JSON.stringify({ userId })],
 			[
 				`auth-state:${randomUUID()}`,
 				JSON.stringify({ link: { userId, email } }),
