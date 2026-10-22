@@ -1,4 +1,3 @@
-import { Zero } from "@rocicorp/zero";
 import { ZeroProvider } from "@rocicorp/zero/react";
 import type { ReactNode } from "react";
 import {
@@ -10,20 +9,21 @@ import {
 	useState,
 } from "react";
 import { m } from "../../paraglide/messages.js";
-import { mutators } from "../../zero/mutators.ts";
-import { schema } from "../../zero/schema.gen.ts";
 import { ConnectionRequired } from "../components/ConnectionRequired.tsx";
 import { ShellSkeleton } from "../components/shell/AppSkeleton.tsx";
+import { EarlierEditsNotice } from "../components/shell/EarlierEditsNotice.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { ConnectionRequiredError } from "./connection-required.ts";
+import { findEarlierUnsyncedEdits } from "./earlier-edits.ts";
 import { createExportBoundary } from "./export-boundary.ts";
 import {
 	createSyncTracker,
-	OFFLINE_EDIT_WINDOW_MS,
+	refuseUnsavedOfflineEdits,
 	type SyncTracker,
 	trackMutations,
 } from "./sync-status.ts";
 import { watchZeroAuth } from "./zero-auth.ts";
+import { createZeroClient, type ZeroClient } from "./zero-client.ts";
 import {
 	createAfterZeroRetirement,
 	registerZeroClient,
@@ -35,29 +35,6 @@ import {
 	type ZeroRuntime,
 	zeroStorageScope,
 } from "./zero-runtime.ts";
-
-// Client-side context ({ id }) is passed for optimistic synced-query evaluation;
-// the server re-derives the authoritative ctx from the JWT. Let TS infer the full
-// Zero generic from the constructor rather than restating it. userID stays the
-// canonical account ID; only a verified native scope may change Zero's storageKey.
-function createZeroClient(
-	userID: string,
-	token: string,
-	cacheURL: string,
-	storageKey?: string,
-) {
-	return new Zero({
-		cacheURL,
-		userID,
-		storageKey,
-		schema,
-		mutators,
-		auth: token,
-		context: { id: userID },
-		disconnectTimeoutMs: OFFLINE_EDIT_WINDOW_MS,
-	});
-}
-type ZeroClient = ReturnType<typeof createZeroClient>;
 
 const SyncEndpointContext = createContext<string | null>(null);
 export function useSyncEndpoint(): string | null {
@@ -96,6 +73,7 @@ export function AppZeroProvider({
 		tracker: SyncTracker;
 		exportBoundary: ReturnType<typeof createExportBoundary>;
 	} | null>(null);
+	const [earlierEdits, setEarlierEdits] = useState<ZeroClient | null>(null);
 	const [startupFailed, setStartupFailed] = useState(false);
 	const [connectionFailed, setConnectionFailed] = useState(false);
 	const initializing = useRef(false);
@@ -140,12 +118,17 @@ export function AppZeroProvider({
 			]);
 			const created = await createAfterZeroRetirement(
 				() => {
-					const instance = createZeroClient(
+					const tracker = createSyncTracker();
+					const instance = createZeroClient({
 						userID,
 						token,
-						config.zeroURL,
-						storageScope,
-					);
+						cacheURL: config.zeroURL,
+						storageKey: storageScope,
+						onStorageFailure: (failure) => {
+							console.error("Zero local storage failed", failure);
+							tracker.setStorageFailed();
+						},
+					});
 					owner = registerZeroClient(
 						userID,
 						instance,
@@ -157,7 +140,6 @@ export function AppZeroProvider({
 						},
 						() => cancelled,
 					);
-					const tracker = createSyncTracker();
 					trackMutations(instance, tracker);
 					const boundary = createExportBoundary({
 						userID,
@@ -177,6 +159,13 @@ export function AppZeroProvider({
 						boundary.wrapMutation(() => mutate(...args));
 					Object.assign(guarded, mutate);
 					Object.defineProperty(instance, "mutate", { value: guarded });
+					refuseUnsavedOfflineEdits(
+						instance,
+						tracker,
+						() =>
+							navigator.onLine &&
+							instance.connection.state.current.name === "connected",
+					);
 					const refreshExport = () => {
 						boundary.refreshJournal();
 						boundary.connectionChanged();
@@ -213,6 +202,14 @@ export function AppZeroProvider({
 				setStartupFailed(false);
 				setConnectionFailed(false);
 				setClient(created);
+				void findEarlierUnsyncedEdits(created.zero.idbName).then(
+					(names) => {
+						if (!cancelled && names.length > 0) setEarlierEdits(created.zero);
+					},
+					(error: unknown) => {
+						console.error("Checking earlier unsynced edits failed", error);
+					},
+				);
 			}
 		})()
 			.catch(async (error: unknown) => {
@@ -263,6 +260,9 @@ export function AppZeroProvider({
 	if (!client) return <ShellSkeleton />;
 	return (
 		<ZeroProvider zero={client.zero}>
+			{earlierEdits === client.zero && (
+				<EarlierEditsNotice onDismiss={() => setEarlierEdits(null)} />
+			)}
 			<SyncTrackerContext.Provider value={client.tracker}>
 				<ExportBoundaryContext.Provider value={client.exportBoundary}>
 					<SyncEndpointContext.Provider value={client.endpoint}>

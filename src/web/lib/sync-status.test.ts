@@ -4,6 +4,7 @@ import {
 	createSyncTracker,
 	deriveSyncPhase,
 	OFFLINE_EDIT_WINDOW_MS,
+	refuseUnsavedOfflineEdits,
 	trackMutations,
 	ZERO_HIDDEN_REASON,
 } from "./sync-status.ts";
@@ -44,6 +45,7 @@ describe("deriveSyncPhase", () => {
 		sessionExpired: false,
 		authRejected: false,
 		offlineSettled: false,
+		storageFailed: false,
 	};
 
 	it("distinguishes server auth rejection while preserving refusal precedence and queued edits", () => {
@@ -128,6 +130,34 @@ describe("deriveSyncPhase", () => {
 		expect(deriveSyncPhase(auth)).toBe("offline");
 		expect(deriveSyncPhase({ ...auth, sessionExpired: true })).toBe("reauth");
 		expect(deriveSyncPhase({ ...base, sessionExpired: true })).toBe("synced");
+	});
+
+	it("never claims on-device saving once storage failed", () => {
+		const failed = { ...base, storageFailed: true };
+		expect(deriveSyncPhase(failed)).toBe("storage-failed");
+		expect(deriveSyncPhase({ ...failed, pending: 2 })).toBe("storage-failed");
+		for (const connection of [
+			"initializing",
+			"connecting",
+			"needs-auth",
+		] as const)
+			expect(
+				deriveSyncPhase({
+					...failed,
+					connection,
+					sessionExpired: true,
+					authRejected: true,
+				}),
+			).toBe("storage-offline");
+		expect(
+			deriveSyncPhase({
+				...failed,
+				connection: "disconnected",
+				tabHidden: true,
+			}),
+		).toBe("storage-offline");
+		expect(deriveSyncPhase({ ...failed, rejected: true })).toBe("rejected");
+		expect(deriveSyncPhase({ ...failed, connection: "error" })).toBe("stopped");
 	});
 
 	it("puts a server rejection ahead of offline and syncing", () => {
@@ -216,6 +246,41 @@ describe("createSyncTracker", () => {
 		m.server(ok);
 		await flush();
 		expect(calls).toBe(1);
+	});
+});
+
+describe("refuseUnsavedOfflineEdits", () => {
+	it("refuses offline edits only after storage failed", async () => {
+		const tracker = createSyncTracker();
+		let connected = false;
+		const handle = mutation().handle;
+		let calls = 0;
+		const zero = {
+			mutate: Object.assign(
+				() => {
+					calls++;
+					return handle;
+				},
+				{ extra: 1 },
+			),
+		};
+		refuseUnsavedOfflineEdits(zero, tracker, () => connected);
+		const mutate = zero.mutate as () => typeof handle;
+		expect(mutate()).toBe(handle);
+		tracker.setStorageFailed();
+		expect(tracker.getSnapshot().storageFailed).toBe(true);
+		const refused = mutate();
+		expect(calls).toBe(1);
+		// A client-side "zero" failure reads as "not saved" in run-mutation.ts.
+		for (const result of [refused.client, refused.server])
+			expect(await result).toMatchObject({
+				type: "error",
+				error: { type: "zero" },
+			});
+		connected = true;
+		expect(mutate()).toBe(handle);
+		expect(calls).toBe(2);
+		expect((zero.mutate as unknown as { extra: number }).extra).toBe(1);
 	});
 });
 

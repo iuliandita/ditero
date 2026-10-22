@@ -90,6 +90,29 @@ forward. Keep offline clients on their existing bundle until they reconnect and
 sync; preserving browser storage alone cannot transfer those queued edits. Do
 not force a reload, clear site data, or uninstall an offline native client.
 
+Native clients carry their bundle: an Android or desktop update installs the new
+client immediately, so sync each device before installing it. The web bundle
+comes from the app image, so browsers change when the server does.
+
+Zero names each local IndexedDB database after the account, storage scope and
+client schema version (`rep:zero-<user>-<key>:7:<schema>`). 1.9 used schema
+`51.<hash>` and 1.11 uses `52.<hash>`; the hash also changes whenever a release
+changes the synced schema, which creates the same boundary. Zero runs without
+mutation recovery, so it never sends edits left in an earlier database, and its
+collector deletes an earlier database about five minutes after each start, and
+every 12 hours after that, once that database has had no client heartbeat for 48
+hours. Pending edits do not prevent this.
+
+On start, the app reads Zero's database registry and any earlier database for
+the same account and scope, without writing or creating databases. If an earlier
+database still holds unacknowledged edits, it shows a persistent warning asking
+the user to close the app, keep its data, and contact the operator. The check
+cannot run in browsers without `indexedDB.databases()` and logs that failure.
+Recovering those edits requires running the previous client against a server it
+can sync with, which means the rollback procedure below on that device's
+deployment. There is no in-place transfer. Without that, the edits are lost once
+the collector runs.
+
 Stop the app and Zero and take coordinated PostgreSQL, attachment and Zero replica
 backups with the original service secrets and encryption keys. Run application
 migrations, start the healthy app, and start the 1.11 Zero server before serving
@@ -224,8 +247,20 @@ still need operator repair; retrying does not grant missing privileges.
 The durable-close patch blocks new writes immediately, waits for accepted local
 commits and forces persistence before closing storage. Failed persistence retains
 handles for explicit retry and blocks account navigation. Zero 1.11's paused
-background persistence does not bypass that final durability check. An initial
-memory-only storage fallback cannot be reported as a durable close.
+background persistence does not bypass that final durability check.
+
+Zero reports local storage failures once per client through `onStorageFailure`:
+`cannot-open` and `full` when the database cannot open, after which the client
+runs in memory for the session, and `io-error` or `full` after opening, after
+which it stops persisting. The sync indicator then shows that changes are not
+saved on this device and are kept only once they reach the server. While the
+client is offline in that state, new edits are refused with the offline message
+rather than accepted into memory. Accepted edits stay in the running client and
+continue to sync; the app does not close or reload it. Free storage, let pending
+edits sync, then restart. Zero's IndexedDB store reports only open failures, so
+a browser quota or transaction error after opening is not detected this way.
+After a memory fallback, explicit sign-out or language changes still close the
+memory client; edits the server has not acknowledged by then are lost.
 
 Follow the upgrade and rollback procedure above when moving from 1.9; that client
 storage boundary applies even though the retry patch itself does not change data

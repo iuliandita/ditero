@@ -36,7 +36,10 @@ export type ConnectionName =
 // synced: nothing waiting. syncing: edits on their way, or (re)connecting
 // briefly. offline: the server is unreachable but edits are still accepted.
 // reauth: the session expired, edits wait for a new sign-in. stopped: Zero
-// refuses new edits. rejected: the server refused a write.
+// refuses new edits. rejected: the server refused a write. storage-failed:
+// this device cannot store edits, so they are kept only once the server has
+// them. storage-offline: the same, while the server is unreachable; new edits
+// are refused (see refuseUnsavedOfflineEdits).
 export type SyncPhase =
 	| "synced"
 	| "syncing"
@@ -44,7 +47,9 @@ export type SyncPhase =
 	| "reauth"
 	| "auth-rejected"
 	| "stopped"
-	| "rejected";
+	| "rejected"
+	| "storage-failed"
+	| "storage-offline";
 
 export function deriveSyncPhase({
 	connection,
@@ -55,6 +60,7 @@ export function deriveSyncPhase({
 	sessionExpired,
 	authRejected,
 	offlineSettled,
+	storageFailed,
 }: {
 	connection: ConnectionName;
 	reason?: string;
@@ -65,6 +71,7 @@ export function deriveSyncPhase({
 	authRejected: boolean;
 	// The browser reports no network, or a reconnect has outlasted the grace.
 	offlineSettled: boolean;
+	storageFailed: boolean;
 }): SyncPhase {
 	const pausedWhileHidden =
 		connection === "disconnected" &&
@@ -75,6 +82,9 @@ export function deriveSyncPhase({
 		connection === "closed"
 	)
 		return "stopped";
+	// Every other phase but a refusal claims edits are kept on this device.
+	if (storageFailed && !rejected)
+		return connection === "connected" ? "storage-failed" : "storage-offline";
 	if (connection === "needs-auth" && sessionExpired) return "reauth";
 	if (rejected) return "rejected";
 	if (connection !== "connected" && authRejected) return "auth-rejected";
@@ -89,6 +99,7 @@ export type SyncSnapshot = {
 	rejected: boolean;
 	sessionExpired: boolean;
 	authRejected: boolean;
+	storageFailed: boolean;
 };
 
 // Counts writes made in this tab that the server has not confirmed. A write
@@ -104,11 +115,13 @@ export function createSyncTracker() {
 	let rejected = false;
 	let sessionExpired = false;
 	let authRejected = false;
+	let storageFailed = false;
 	let snapshot: SyncSnapshot = {
 		pending: 0,
 		rejected: false,
 		sessionExpired: false,
 		authRejected: false,
+		storageFailed: false,
 	};
 	const listeners = new Set<() => void>();
 
@@ -118,12 +131,14 @@ export function createSyncTracker() {
 			rejected,
 			sessionExpired,
 			authRejected,
+			storageFailed,
 		};
 		if (
 			next.pending === snapshot.pending &&
 			next.rejected === snapshot.rejected &&
 			next.sessionExpired === snapshot.sessionExpired &&
-			next.authRejected === snapshot.authRejected
+			next.authRejected === snapshot.authRejected &&
+			next.storageFailed === snapshot.storageFailed
 		)
 			return;
 		snapshot = next;
@@ -165,6 +180,11 @@ export function createSyncTracker() {
 			sessionExpired = expired;
 			publish();
 		},
+		// Zero reports a storage failure once per instance and never clears it.
+		setStorageFailed() {
+			storageFailed = true;
+			publish();
+		},
 		subscribe(listener: () => void) {
 			listeners.add(listener);
 			return () => {
@@ -192,4 +212,27 @@ export function trackMutations<Z extends { mutate: unknown }>(
 	};
 	Object.assign(tracked, mutate);
 	Object.defineProperty(zero, "mutate", { value: tracked });
+}
+
+// Once Zero cannot store edits on this device, an edit made while the server
+// is unreachable lives only in memory and is lost when the app closes. Refuse
+// it the way Zero refuses edits while stopped, so it never appears saved.
+export function refuseUnsavedOfflineEdits<Z extends { mutate: unknown }>(
+	zero: Z,
+	tracker: SyncTracker,
+	isConnected: () => boolean,
+): void {
+	const mutate = zero.mutate as (...args: unknown[]) => TrackedMutation;
+	const guarded = (...args: unknown[]) => {
+		if (tracker.getSnapshot().storageFailed && !isConnected()) {
+			const refusal = Promise.resolve({
+				type: "error",
+				error: { type: "zero", message: "Local storage failed while offline" },
+			});
+			return { client: refusal, server: refusal };
+		}
+		return mutate(...args);
+	};
+	Object.assign(guarded, mutate);
+	Object.defineProperty(zero, "mutate", { value: guarded });
 }
