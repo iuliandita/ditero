@@ -1,50 +1,87 @@
 param([switch]$Worker, [string]$State = (Join-Path $env:RUNNER_TEMP 'desktop-journeys'))
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-$environmentFile = Join-Path $State 'private/session-environment.json'
-$resultFile = Join-Path $State 'private/session-result.json'
 $logFile = Join-Path $State 'evidence/session.log'
 if ($Worker) {
-    $context = Get-Content $environmentFile -Raw | ConvertFrom-Json
-    foreach ($property in $context.environment.PSObject.Properties) { [Environment]::SetEnvironmentVariable($property.Name, [string]$property.Value, 'Process') }
-    Set-Location $context.root
-    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
-    $principal = [Security.Principal.WindowsPrincipal]::new($identity)
-    $elevated = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-    @{elevated=$elevated; method='interactive-limited-task'} | ConvertTo-Json | Set-Content (Join-Path $State 'evidence/session-privileges.json')
     $code = 1
     try {
+        $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+        $principal = [Security.Principal.WindowsPrincipal]::new($identity)
+        $elevated = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+        @{elevated=$elevated; method='restricted-normal-user-token'} | ConvertTo-Json | Set-Content (Join-Path $State 'evidence/session-privileges.json')
         if ($elevated) { throw 'Journey must run as a normal, unelevated desktop application' }
-        & $context.node --experimental-strip-types apps/desktop/tests/journeys/run.ts *> $logFile
+        & node --experimental-strip-types apps/desktop/tests/journeys/run.ts *> $logFile
         $code = $LASTEXITCODE
     } catch { $_ | Out-String | Add-Content $logFile }
-    finally {
-        @{exitCode=$code} | ConvertTo-Json | Set-Content ($resultFile + '.tmp')
-        Move-Item ($resultFile + '.tmp') $resultFile -Force
-    }
     exit $code
 }
-$environment = @{}
-Get-ChildItem Env: | Where-Object {$_.Name -match '^(PATH|HOME|USERPROFILE|LOCALAPPDATA|APPDATA|TEMP|TMP|RUNNER_TEMP|RUNNER_OS|GITHUB_SHA|NODE_EXTRA_CA_CERTS|JOURNEY_.*)$'} | ForEach-Object {$environment[$_.Name]=$_.Value}
-@{environment=$environment; root=(Get-Location).Path; node=(Get-Command node).Source} | ConvertTo-Json -Depth 4 | Set-Content $environmentFile
-$taskName = 'Ditero-Journey-' + [Guid]::NewGuid().ToString('N')
-$script = $PSCommandPath
-$action = New-ScheduledTaskAction -Execute (Get-Command pwsh).Source -Argument "-NoProfile -File `"$script`" -Worker -State `"$State`""
-$principal = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
-$settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 14) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
-try {
-    Register-ScheduledTask -TaskName $taskName -Action $action -Principal $principal -Settings $settings | Out-Null
-    Start-ScheduledTask -TaskName $taskName
-    $deadline = [DateTime]::UtcNow.AddMinutes(14)
-    while (-not (Test-Path $resultFile) -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Seconds 1 }
-    if (Test-Path $logFile) { Get-Content $logFile }
-    if (-not (Test-Path $resultFile)) { throw 'Limited desktop session did not finish within its deadline' }
-    $result = Get-Content $resultFile -Raw | ConvertFrom-Json
-    if ($result.exitCode -ne 0) { throw "Limited desktop journey exit $($result.exitCode)" }
-} finally {
-    $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-    if ($null -ne $task) {
-        if ($task.State -eq 'Running') { Stop-ScheduledTask -TaskName $taskName }
-        Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
+Add-Type @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using System.Security.Principal;
+using System.Text;
+public static class JourneyLimitedSession {
+    [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Unicode)] struct Startup {
+        public int cb; public string reserved, desktop, title;
+        public int x,y,width,height,xChars,yChars,fill,flags;
+        public short show,reservedSize; public IntPtr reservedBytes,input,output,error;
+    }
+    [StructLayout(LayoutKind.Sequential)] struct ProcessInfo { public IntPtr process,thread; public int pid,tid; }
+    [StructLayout(LayoutKind.Sequential)] struct Label { public IntPtr sid; public uint attributes; }
+    [DllImport("advapi32.dll",SetLastError=true)] static extern bool SaferCreateLevel(uint scope,uint level,uint flags,out IntPtr handle,IntPtr reserved);
+    [DllImport("advapi32.dll",SetLastError=true)] static extern bool SaferComputeTokenFromLevel(IntPtr level,IntPtr input,out IntPtr token,uint flags,IntPtr reserved);
+    [DllImport("advapi32.dll")] static extern bool SaferCloseLevel(IntPtr level);
+    [DllImport("advapi32.dll",SetLastError=true)] static extern bool SetTokenInformation(IntPtr token,int kind,IntPtr information,int size);
+    [DllImport("advapi32.dll",SetLastError=true)] static extern bool GetTokenInformation(IntPtr token,int kind,out int information,int size,out int length);
+    [DllImport("advapi32.dll",CharSet=CharSet.Unicode,SetLastError=true)] static extern bool CreateProcessAsUser(IntPtr token,string application,StringBuilder command,IntPtr processSecurity,IntPtr threadSecurity,bool inherit,uint flags,IntPtr environment,string directory,ref Startup startup,out ProcessInfo process);
+    [DllImport("kernel32.dll",SetLastError=true)] static extern IntPtr CreateJobObject(IntPtr security,string name);
+    [DllImport("kernel32.dll",SetLastError=true)] static extern bool AssignProcessToJobObject(IntPtr job,IntPtr process);
+    [DllImport("kernel32.dll",SetLastError=true)] static extern bool TerminateJobObject(IntPtr job,uint code);
+    [DllImport("kernel32.dll",SetLastError=true)] static extern bool TerminateProcess(IntPtr process,uint code);
+    [DllImport("kernel32.dll",SetLastError=true)] static extern uint ResumeThread(IntPtr thread);
+    [DllImport("kernel32.dll",SetLastError=true)] static extern uint WaitForSingleObject(IntPtr handle,uint milliseconds);
+    [DllImport("kernel32.dll",SetLastError=true)] static extern bool GetExitCodeProcess(IntPtr process,out uint code);
+    [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
+    static void Check(bool success) { if (!success) throw new Win32Exception(Marshal.GetLastWin32Error()); }
+    public static int Run(string executable,string arguments,string directory) {
+        IntPtr level=IntPtr.Zero,token=IntPtr.Zero,job=IntPtr.Zero,label=IntPtr.Zero;
+        ProcessInfo child=new ProcessInfo();
+        try {
+            Check(SaferCreateLevel(1,0x20000,1,out level,IntPtr.Zero));
+            Check(SaferComputeTokenFromLevel(level,IntPtr.Zero,out token,0,IntPtr.Zero));
+            var sid=new SecurityIdentifier("S-1-16-8192");
+            var bytes=new byte[sid.BinaryLength]; sid.GetBinaryForm(bytes,0);
+            int header=Marshal.SizeOf<Label>(); label=Marshal.AllocHGlobal(header+bytes.Length);
+            Marshal.Copy(bytes,0,IntPtr.Add(label,header),bytes.Length);
+            Marshal.StructureToPtr(new Label {sid=IntPtr.Add(label,header),attributes=0x20},label,false);
+            Check(SetTokenInformation(token,25,label,header+bytes.Length));
+            int elevated,length; Check(GetTokenInformation(token,20,out elevated,4,out length));
+            using (var identity=new WindowsIdentity(token)) {
+                if (elevated!=0 || new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator)) throw new InvalidOperationException("Restricted token still elevated");
+            }
+            job=CreateJobObject(IntPtr.Zero,null); Check(job!=IntPtr.Zero);
+            var startup=new Startup {cb=Marshal.SizeOf<Startup>(),desktop="winsta0\\default"};
+            var command=new StringBuilder("\""+executable+"\" "+arguments);
+            Check(CreateProcessAsUser(token,executable,command,IntPtr.Zero,IntPtr.Zero,true,0x404,IntPtr.Zero,directory,ref startup,out child));
+            Check(AssignProcessToJobObject(job,child.process));
+            Check(ResumeThread(child.thread)!=uint.MaxValue);
+            uint wait=WaitForSingleObject(child.process,840000);
+            if (wait==258) throw new TimeoutException("Restricted desktop journey exceeded 14 minutes");
+            Check(wait==0);
+            uint code; Check(GetExitCodeProcess(child.process,out code)); return checked((int)code);
+        } finally {
+            if (job!=IntPtr.Zero) { TerminateJobObject(job,1); CloseHandle(job); }
+            if (child.process!=IntPtr.Zero) { TerminateProcess(child.process,1); CloseHandle(child.process); }
+            if (child.thread!=IntPtr.Zero) CloseHandle(child.thread);
+            if (label!=IntPtr.Zero) Marshal.FreeHGlobal(label);
+            if (token!=IntPtr.Zero) CloseHandle(token);
+            if (level!=IntPtr.Zero) SaferCloseLevel(level);
+        }
     }
 }
+'@
+$arguments = "-NoProfile -File `"$PSCommandPath`" -Worker -State `"$State`""
+$code = [JourneyLimitedSession]::Run((Get-Command pwsh).Source, $arguments, (Get-Location).Path)
+if (Test-Path $logFile) { Get-Content $logFile }
+if ($code -ne 0) { throw "Restricted desktop journey exit $code" }
