@@ -46,6 +46,7 @@ import {
 	readProfile,
 	requestGrant,
 	selectServer,
+	subscribeTaskLinkRefusals,
 } from "./bridge.ts";
 import { connectErrorMessage } from "./connect-error.ts";
 import {
@@ -200,6 +201,9 @@ function NativeAppRoutes({
 
 	useEffect(() => {
 		const owner = ++epoch.current;
+		const stopRefusals = subscribeTaskLinkRefusals(() =>
+			show({ message: m.native_link_unavailable() }),
+		);
 		let restoreSocket: (() => void) | undefined;
 		let desktopRestore = false;
 		void (async () => {
@@ -220,6 +224,7 @@ function NativeAppRoutes({
 			});
 		return () => {
 			epoch.current++;
+			stopRefusals();
 			restoreSocket?.();
 		};
 	}, []);

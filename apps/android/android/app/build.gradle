@@ -104,6 +104,22 @@ gradle.taskGraph.whenReady { graph ->
     }
 }
 
+// Debug builds trust user CAs for local HTTPS testing. No release flavor may ship that override, however it is added.
+tasks.register('verifyReleaseManifests') {
+    def variants = ['independentRelease', 'googleRelease']
+    variants.each { dependsOn "process${it.capitalize()}Manifest" }
+    doLast {
+        variants.each { variant ->
+            def merged = layout.buildDirectory.file("intermediates/merged_manifests/${variant}/process${variant.capitalize()}Manifest/AndroidManifest.xml").get().asFile
+            if (!merged.isFile()) throw new GradleException("Merged manifest missing for ${variant}")
+            def application = new XmlSlurper(false, false).parse(merged).application
+            if (!application.@'android:networkSecurityConfig'.text().isEmpty()) throw new GradleException("Release manifest for ${variant} sets networkSecurityConfig")
+            if (application.@'android:debuggable'.text() == 'true') throw new GradleException("Release manifest for ${variant} is debuggable")
+            if (application.@'android:usesCleartextTraffic'.text() != 'false') throw new GradleException("Release manifest for ${variant} must keep usesCleartextTraffic=false")
+        }
+    }
+}
+
 repositories {
     flatDir{
         dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'

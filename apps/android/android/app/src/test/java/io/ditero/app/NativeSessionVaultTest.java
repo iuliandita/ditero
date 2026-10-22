@@ -96,4 +96,23 @@ public class NativeSessionVaultTest {
         Method restore = NativeZeroTransport.class.getDeclaredMethod("restoreSession", ServerContext.class, boolean.class); restore.setAccessible(true);
         assertNull(restore.invoke(transport, context, false)); assertFalse(edited.get());
     }
+
+    @Test public void linkOwnerKeepsIdentityAndATokenDigestNeverTheToken() throws Exception {
+        NativeSessionVault.CapturedOwner owner = NativeSessionVault.capture(context, record(), false);
+        NativeSessionVault.LinkOwner held = owner.linkOwner();
+        assertTrue(held.matches(owner));
+        for (Field field : NativeSessionVault.LinkOwner.class.getDeclaredFields()) {
+            field.setAccessible(true);
+            Object value = field.get(held);
+            assertNotEquals("private-token", value);
+            if (value instanceof byte[]) assertFalse(java.util.Arrays.equals("private-token".getBytes(StandardCharsets.UTF_8), (byte[]) value));
+        }
+        Map<String, Object> rotated = record();
+        rotated.put("token", "rotated-token");
+        assertFalse("another token is another owner", held.matches(NativeSessionVault.capture(context, rotated, false)));
+        Map<String, Object> other = record();
+        other.put("sessionId", "session-2");
+        assertFalse(held.matches(NativeSessionVault.capture(context, other, false)));
+        assertFalse(held.matches(null));
+    }
 }

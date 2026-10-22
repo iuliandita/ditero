@@ -20,6 +20,7 @@ import {
 	revokeSession,
 	selectServer,
 	setNativeSessionRefusalHandler,
+	subscribeTaskLinkRefusals,
 } from "./bridge.ts";
 
 const origin = "https://example.test";
@@ -563,11 +564,77 @@ test("Linux link reads validate task-only identity and exact opaque dismissal", 
 	});
 	reply(command, {});
 	await dismiss;
+	for (const token of ["link", "", "unknown"]) {
+		const repeat = navigation.dismiss(token);
+		const command = sent.at(-1);
+		if (!command) throw Error("missing dismiss command");
+		expect(command).toMatchObject({ op: "link.dismiss", body: { token } });
+		reply(command, {});
+		await repeat;
+	}
 	const before = sent.length;
 	await expect(navigation.dismiss("../file")).rejects.toMatchObject({
 		code: "invalid-message",
 	});
 	expect(sent).toHaveLength(before);
+});
+test("signed-out link refusals notify only the current page without requesting authority", async () => {
+	snapshot.taskLinks = true;
+	await connectBridge();
+	const refused = vi.fn();
+	const unsubscribe = subscribeTaskLinkRefusals(refused);
+	const before = sent.length;
+	for (const gen of [0, 1, 2])
+		native.onmessage?.(
+			new MessageEvent("message", {
+				data: JSON.stringify({ t: "link.refused", gen }),
+			}),
+		);
+	expect(refused).toHaveBeenCalledTimes(1);
+	expect(sent).toHaveLength(before);
+	expect(bridgeState().session).toBeNull();
+	unsubscribe();
+	native.onmessage?.(
+		new MessageEvent("message", {
+			data: JSON.stringify({ t: "link.refused", gen: 1 }),
+		}),
+	);
+	expect(refused).toHaveBeenCalledTimes(1);
+});
+test("link refusals during a same-page handshake remain visible without account authority", async () => {
+	snapshot.taskLinks = true;
+	await connectBridge();
+	const refused = vi.fn();
+	const unsubscribe = subscribeTaskLinkRefusals(refused);
+	const post = native.postMessage;
+	let hello: Record<string, unknown> | undefined;
+	native.postMessage = (message) => {
+		const command = JSON.parse(message) as Record<string, unknown>;
+		if (command.op === "hello") {
+			sent.push(command);
+			hello = command;
+		} else post(message);
+	};
+	const before = sent.length;
+	const connecting = connectBridge();
+	const refuse = (gen: number) =>
+		native.onmessage?.(
+			new MessageEvent("message", {
+				data: JSON.stringify({ t: "link.refused", gen }),
+			}),
+		);
+	refuse(1);
+	expect(refused).toHaveBeenCalledTimes(1);
+	expect(sent.slice(before).map((command) => command.op)).toEqual(["hello"]);
+	if (!hello) throw Error("missing hello");
+	reply(hello, { ...snapshot, gen: 2 });
+	await connecting;
+	refuse(1);
+	expect(refused).toHaveBeenCalledTimes(1);
+	refuse(2);
+	expect(refused).toHaveBeenCalledTimes(2);
+	expect(bridgeState().session).toBeNull();
+	unsubscribe();
 });
 test("Linux link reply cannot grant URL, workspace, or mutation authority", async () => {
 	snapshot.session = session;
