@@ -29,9 +29,9 @@ public static class JourneyLimitedSession {
     }
     [StructLayout(LayoutKind.Sequential)] struct ProcessInfo { public IntPtr process,thread; public int pid,tid; }
     [StructLayout(LayoutKind.Sequential)] struct Label { public IntPtr sid; public uint attributes; }
-    [DllImport("advapi32.dll",SetLastError=true)] static extern bool SaferCreateLevel(uint scope,uint level,uint flags,out IntPtr handle,IntPtr reserved);
-    [DllImport("advapi32.dll",SetLastError=true)] static extern bool SaferComputeTokenFromLevel(IntPtr level,IntPtr input,out IntPtr token,uint flags,IntPtr reserved);
-    [DllImport("advapi32.dll")] static extern bool SaferCloseLevel(IntPtr level);
+    [DllImport("kernel32.dll")] static extern IntPtr GetCurrentProcess();
+    [DllImport("advapi32.dll",SetLastError=true)] static extern bool OpenProcessToken(IntPtr process,uint access,out IntPtr token);
+    [DllImport("advapi32.dll",SetLastError=true)] static extern bool CreateRestrictedToken(IntPtr input,uint flags,uint disabledCount,IntPtr disabled,uint privilegeCount,IntPtr privileges,uint restrictedCount,IntPtr restricted,out IntPtr token);
     [DllImport("advapi32.dll",SetLastError=true)] static extern bool SetTokenInformation(IntPtr token,int kind,IntPtr information,int size);
     [DllImport("advapi32.dll",SetLastError=true)] static extern bool GetTokenInformation(IntPtr token,int kind,out int information,int size,out int length);
     [DllImport("advapi32.dll",CharSet=CharSet.Unicode,SetLastError=true)] static extern bool CreateProcessAsUser(IntPtr token,string application,StringBuilder command,IntPtr processSecurity,IntPtr threadSecurity,bool inherit,uint flags,IntPtr environment,string directory,ref Startup startup,out ProcessInfo process);
@@ -45,11 +45,12 @@ public static class JourneyLimitedSession {
     [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
     static void Check(bool success) { if (!success) throw new Win32Exception(Marshal.GetLastWin32Error()); }
     public static int Run(string executable,string arguments,string directory) {
-        IntPtr level=IntPtr.Zero,token=IntPtr.Zero,job=IntPtr.Zero,label=IntPtr.Zero;
+        IntPtr input=IntPtr.Zero,token=IntPtr.Zero,job=IntPtr.Zero,label=IntPtr.Zero;
         ProcessInfo child=new ProcessInfo();
         try {
-            Check(SaferCreateLevel(1,0x20000,1,out level,IntPtr.Zero));
-            Check(SaferComputeTokenFromLevel(level,IntPtr.Zero,out token,0,IntPtr.Zero));
+            Check(OpenProcessToken(GetCurrentProcess(),0xF01FF,out input));
+            // LUA_TOKEN removes administrator groups; DISABLE_MAX_PRIVILEGE drops privileges.
+            Check(CreateRestrictedToken(input,5,0,IntPtr.Zero,0,IntPtr.Zero,0,IntPtr.Zero,out token));
             var sid=new SecurityIdentifier("S-1-16-8192");
             var bytes=new byte[sid.BinaryLength]; sid.GetBinaryForm(bytes,0);
             int header=Marshal.SizeOf<Label>(); label=Marshal.AllocHGlobal(header+bytes.Length);
@@ -58,7 +59,7 @@ public static class JourneyLimitedSession {
             Check(SetTokenInformation(token,25,label,header+bytes.Length));
             int elevated,length; Check(GetTokenInformation(token,20,out elevated,4,out length));
             using (var identity=new WindowsIdentity(token)) {
-                if (elevated!=0 || new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator)) throw new InvalidOperationException("Restricted token still elevated");
+                if (elevated!=0 || new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator)) throw new InvalidOperationException("Restricted token still elevated: elevation="+elevated+", administrator="+new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator));
             }
             job=CreateJobObject(IntPtr.Zero,null); Check(job!=IntPtr.Zero);
             var startup=new Startup {cb=Marshal.SizeOf<Startup>(),desktop="winsta0\\default"};
@@ -76,7 +77,7 @@ public static class JourneyLimitedSession {
             if (child.thread!=IntPtr.Zero) CloseHandle(child.thread);
             if (label!=IntPtr.Zero) Marshal.FreeHGlobal(label);
             if (token!=IntPtr.Zero) CloseHandle(token);
-            if (level!=IntPtr.Zero) SaferCloseLevel(level);
+            if (input!=IntPtr.Zero) CloseHandle(input);
         }
     }
 }
