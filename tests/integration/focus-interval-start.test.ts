@@ -1,6 +1,7 @@
 // focus.startInterval / focus.logSession on the real server path: the runtime
 // role is NOBYPASSRLS and every mutation runs inside withZeroUserContext, as the
 // mutate route does. Backdating goes through the admin pool.
+import { spawnSync } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
 import { zeroNodePg } from "@rocicorp/zero/server/adapters/pg";
 import { Pool } from "pg";
@@ -17,6 +18,7 @@ import {
 	focusEarlyWaitMs,
 	isFocusDuplicate,
 } from "../../src/domain/focus-interval.ts";
+import { pruneFocusIntervals } from "../../src/server/notifications/scheduler.ts";
 import { mutators } from "../../src/zero/mutators.ts";
 import { queries } from "../../src/zero/queries.ts";
 import { schema } from "../../src/zero/schema.gen.ts";
@@ -67,7 +69,7 @@ const log = (
 	});
 const backdate = (userId: string, intervalId: string, ms: number) =>
 	admin.query(
-		`update focus_interval_start set started_at = now() - make_interval(secs => $3 / 1000.0)
+		`update focus_interval_clock set started_at = now() - make_interval(secs => $3 / 1000.0)
 		 where user_id = $1 and interval_id = $2`,
 		[userId, intervalId, ms],
 	);
@@ -96,6 +98,10 @@ beforeAll(async () => {
 		);
 });
 beforeEach(async () => {
+	await admin.query(
+		"delete from focus_interval_clock where user_id = any($1)",
+		[[A, B]],
+	);
 	await admin.query("delete from focus_session where user_id = any($1)", [
 		[A, B],
 	]);
@@ -143,7 +149,7 @@ describe("focus interval start on the server path", () => {
 			startedAt: 1,
 		} as never);
 		const { rows } = await admin.query(
-			"select extract(epoch from now() - started_at) as age from focus_interval_start where user_id=$1 and interval_id=$2",
+			"select extract(epoch from now() - started_at) as age from focus_interval_clock where user_id=$1 and interval_id=$2",
 			[A, id],
 		);
 		expect(rows).toHaveLength(1);
@@ -151,7 +157,7 @@ describe("focus interval start on the server path", () => {
 		await backdate(A, id, 600_000);
 		await start(A, id);
 		const again = await admin.query(
-			"select extract(epoch from now() - started_at) as age from focus_interval_start where user_id=$1 and interval_id=$2",
+			"select extract(epoch from now() - started_at) as age from focus_interval_clock where user_id=$1 and interval_id=$2",
 			[A, id],
 		);
 		expect(Number(again.rows[0].age)).toBeGreaterThan(500);
@@ -164,8 +170,8 @@ describe("focus interval start on the server path", () => {
 		const failure = await log(A, id, 60).catch((e: unknown) => e);
 		expect(failure).toBeInstanceOf(FocusEarlyError);
 		const wait = focusEarlyWaitMs(failure);
-		expect(wait).toBeGreaterThan(40_000);
-		expect(wait).toBeLessThanOrEqual(50_000);
+		expect(wait).toBeGreaterThan(50_000);
+		expect(wait).toBeLessThanOrEqual(60_000);
 		expect(await sessions(A)).toEqual([]);
 	});
 
@@ -179,14 +185,14 @@ describe("focus interval start on the server path", () => {
 		expect(await sessions(A)).toEqual([{ id: `${A}:${id}` }]);
 	});
 
-	test("network latency within the allowance does not count as early", async () => {
+	test("credit requires the full duration without a per-interval allowance", async () => {
 		const near = randomUUID();
 		await start(A, near);
-		await backdate(A, near, 57_000);
+		await backdate(A, near, 61_000);
 		await log(A, near, 60);
 		const short = randomUUID();
 		await start(A, short);
-		await backdate(A, short, 53_000);
+		await backdate(A, short, 57_000);
 		await expect(log(A, short, 60)).rejects.toBeInstanceOf(FocusEarlyError);
 		expect(await sessions(A)).toEqual([{ id: `${A}:${near}` }]);
 	});
@@ -226,6 +232,8 @@ describe("focus interval start on the server path", () => {
 
 	test("the duplicate-key failure of a lost race is recognized from the real message", async () => {
 		const id = randomUUID();
+		await start(A, id);
+		await backdate(A, id, 61_000);
 		await log(A, id, 60);
 		const row = (
 			await admin.query("select * from focus_session where user_id=$1", [A])
@@ -250,8 +258,17 @@ describe("focus interval start on the server path", () => {
 		expect(isFocusDuplicate(new Error("relation does not exist"))).toBe(false);
 	});
 
-	test("without a recorded start the client-side gate is the only check", async () => {
-		await log(A, randomUUID(), 60);
+	test("missing server evidence cannot use the offline fallback", async () => {
+		await expect(log(A, randomUUID(), 60)).rejects.toThrow("focus-unverified");
+		expect(await sessions(A)).toHaveLength(0);
+		await asServer(A, mutators.focus.logSession, {
+			intervalId: randomUUID(),
+			proof: "monotonic",
+			kind: "work",
+			startedAt: ANCHOR,
+			endedAt: ANCHOR + 60_000,
+			durationSec: 60,
+		});
 		expect(await sessions(A)).toHaveLength(1);
 	});
 
@@ -286,7 +303,7 @@ describe("focus interval start on the server path", () => {
 		expect(
 			(
 				await asB(
-					"update focus_interval_start set started_at = now() where user_id = $1",
+					"update focus_interval_start set interval_id = interval_id where user_id = $1",
 					[B],
 				)
 			).rowCount,
@@ -294,7 +311,7 @@ describe("focus interval start on the server path", () => {
 		expect(
 			(
 				await asB(
-					"update focus_interval_start set started_at = now() where user_id = $1",
+					"update focus_interval_start set interval_id = interval_id where user_id = $1",
 					[A],
 				)
 			).rowCount,
@@ -309,11 +326,35 @@ describe("focus interval start on the server path", () => {
 				[A, randomUUID()],
 			),
 		).rejects.toThrow(/row-level security/);
+		expect(
+			(await asB("select interval_id from focus_interval_clock")).rows,
+		).toEqual([{ interval_id: own }]);
+		expect(
+			(
+				await asB(
+					"update focus_interval_clock set closed_at=now() where user_id=$1",
+					[A],
+				)
+			).rowCount,
+		).toBe(0);
+		await expect(
+			asB(
+				"insert into focus_interval_clock(user_id,interval_id) values ($1,$2)",
+				[A, randomUUID()],
+			),
+		).rejects.toThrow(/row-level security/);
+		expect(
+			(
+				await pool.query(
+					"select rolsuper,rolbypassrls from pg_roles where rolname=current_user",
+				)
+			).rows,
+		).toEqual([{ rolsuper: false, rolbypassrls: false }]);
 		// B reusing A's interval id gets an independent row and clock.
 		await backdate(A, id, 600_000);
 		await start(B, id);
 		const { rows } = await admin.query(
-			"select user_id, extract(epoch from now() - started_at) as age from focus_interval_start where interval_id=$1 order by user_id",
+			"select user_id, extract(epoch from now() - started_at) as age from focus_interval_clock where interval_id=$1 order by user_id",
 			[id],
 		);
 		expect(rows.map((r) => r.user_id)).toEqual([A, B]);
@@ -325,15 +366,97 @@ describe("focus interval start on the server path", () => {
 		expect(await sessions(B)).toEqual([]);
 	});
 
-	test("a start prunes the caller's rows older than 14 days", async () => {
-		const old = randomUUID();
-		await start(A, old);
-		await backdate(A, old, 15 * 86_400_000);
-		await start(A, randomUUID());
-		const { rows } = await admin.query(
-			"select interval_id from focus_interval_start where user_id=$1",
+	test("the scheduler prunes dormant owners in bounded batches", async () => {
+		await admin.query(
+			`insert into focus_interval_clock(user_id,interval_id,started_at)
+			select $1, gen_random_uuid(), now() - interval '15 days' from generate_series(1,502)`,
 			[A],
 		);
-		expect(rows.map((r) => r.interval_id)).not.toContain(old);
+		await admin.query(
+			"insert into focus_interval_start(user_id,interval_id) select user_id,interval_id from focus_interval_clock where user_id=$1",
+			[A],
+		);
+		await start(B, randomUUID());
+		await pruneFocusIntervals(pool);
+		const count = async () =>
+			(
+				await admin.query(
+					"select count(*)::int as n from focus_interval_start where user_id=$1",
+					[A],
+				)
+			).rows[0].n;
+		expect(await count()).toBe(2);
+		await pruneFocusIntervals(pool);
+		expect(await count()).toBe(0);
+		expect(
+			(
+				await admin.query(
+					"select count(*)::int as n from focus_interval_clock where user_id=$1",
+					[A],
+				)
+			).rows[0].n,
+		).toBe(0);
+		expect(
+			(
+				await admin.query(
+					"select count(*)::int as n from focus_interval_start where user_id=$1",
+					[B],
+				)
+			).rows[0].n,
+		).toBe(1);
 	});
+	test("three forward-reload 60-second intervals cannot multiply server time", async () => {
+		const began = Number(
+			(
+				await admin.query(
+					"select extract(epoch from clock_timestamp())::float8 as seconds",
+				)
+			).rows[0].seconds,
+		);
+		const ids = [randomUUID(), randomUUID(), randomUUID()];
+		for (const id of ids) await start(A, id);
+		await new Promise((resolve) => setTimeout(resolve, 60_100));
+		for (const id of ids)
+			await log(A, id, 60).catch((error: unknown) => {
+				expect(String(error)).toMatch(/focus-unverified|focus-early/);
+			});
+		const { rows } = await admin.query(
+			"select coalesce(sum(duration_sec),0)::int as seconds from focus_session where user_id=$1",
+			[A],
+		);
+		expect(rows[0].seconds).toBeLessThanOrEqual(
+			Number(
+				(
+					await admin.query(
+						"select extract(epoch from clock_timestamp())::float8 as seconds",
+					)
+				).rows[0].seconds,
+			) - began,
+		);
+		expect(rows[0].seconds).toBe(60);
+	}, 90_000);
+
+	test("restoring away a previously acknowledged start rejects its pending completion", async () => {
+		const id = randomUUID();
+		await start(A, id);
+		await admin.query("delete from focus_interval_clock where user_id=$1", [A]);
+		await expect(log(A, id, 60)).rejects.toThrow("focus-unverified");
+		expect(await sessions(A)).toHaveLength(0);
+	});
+});
+
+test("the real Zero hydrate and wire serializer emit only acknowledgement ids", async () => {
+	const id = randomUUID();
+	await start(A, id);
+	const { rows } = await admin.query(
+		"select * from focus_interval_start where user_id=$1 and interval_id=$2",
+		[A, id],
+	);
+	expect(rows).toHaveLength(1);
+	const wire = spawnSync(process.execPath, ["tests/support/focus-wire.mjs"], {
+		input: JSON.stringify(rows[0]),
+		encoding: "utf8",
+	});
+	expect(wire.status, wire.stderr).toBe(0);
+	expect(JSON.parse(wire.stdout)).toEqual({ user_id: A, interval_id: id });
 });

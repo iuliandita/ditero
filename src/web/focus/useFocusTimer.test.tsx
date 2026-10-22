@@ -421,12 +421,12 @@ test("expired reload advances across two tabs without crediting unobserved time"
 	await settle();
 	await storageEvent(focusStorageKey("owner"));
 	expect(first.api.session).toMatchObject({
-		cycle: { phase: "break" },
-		running: false,
+		cycle: { phase: "work" },
+		running: true,
 	});
 	expect(second.api.session).toMatchObject({
-		cycle: { phase: "break" },
-		running: false,
+		cycle: { phase: "work" },
+		running: true,
 	});
 	expect((await stored()).pendingCompletions).toEqual([]);
 	expect(fixture.mutate).not.toHaveBeenCalled();
@@ -465,6 +465,7 @@ test.each([
 		startedAt: 10000,
 		endedAt: 12000,
 		durationSec: 2,
+		proof: "monotonic",
 	};
 	expect((await stored()).pendingCompletions).toEqual([completion]);
 	expect((await stored()).session?.cycle.phase).toBe("break");
@@ -656,7 +657,7 @@ test.each([
 	await settle();
 	vi.advanceTimersByTime(Math.max(0, 8000 - correction));
 	await settle();
-	expect(tab.api.session?.cycle.phase).toBe("break");
+	expect(tab.api.session?.cycle.phase).toBe("work");
 	expect(fixture.mutate).not.toHaveBeenCalled();
 	expect((await stored()).pendingCompletions).toEqual([]);
 });
@@ -702,6 +703,11 @@ test("auto-cycle anchors credit to the start of each new live interval", async (
 	expect(
 		new Set(fixture.mutate.mock.calls.map(([args]) => args.intervalId)).size,
 	).toBe(3);
+	expect(fixture.mutate.mock.calls.map(([args]) => args.proof)).toEqual([
+		"monotonic",
+		"monotonic",
+		"monotonic",
+	]);
 });
 
 test("a restored forward-clock interval cannot turn unobserved time into credit by pausing", async () => {
@@ -727,7 +733,7 @@ test("a restored forward-clock interval cannot turn unobserved time into credit 
 	await settle();
 	vi.advanceTimersByTime(3000);
 	await settle();
-	expect(tab.api.session?.cycle.phase).toBe("break");
+	expect(tab.api.session?.cycle.phase).toBe("work");
 	expect(fixture.mutate).not.toHaveBeenCalled();
 });
 
@@ -785,6 +791,7 @@ test("a reload mid-interval still credits an online interval once", async () => 
 	const intervalId = (await stored()).session?.intervalId;
 	vi.advanceTimersByTime(3000);
 	close(tab);
+	await syncStarts([intervalId as string]);
 	tab = open();
 	await settle();
 	vi.advanceTimersByTime(7000);
@@ -803,6 +810,8 @@ test("a forward clock change across reload is left to the server and retried whe
 	let tab = open();
 	tab.api.start();
 	await settle();
+	const intervalId = (await stored()).session?.intervalId as string;
+	await syncStarts([intervalId]);
 	vi.advanceTimersByTime(2000);
 	close(tab);
 	vi.setSystemTime(Date.now() + 60000);
@@ -847,10 +856,10 @@ test("a forward clock change across reload earns nothing when the start was neve
 	vi.setSystemTime(Date.now() + 60000);
 	tab = open();
 	await settle();
-	expect(tab.api.session?.cycle.phase).toBe("break");
+	expect(tab.api.session?.cycle.phase).toBe("work");
 	expect(logs()).toEqual([]);
 	expect((await stored()).pendingCompletions).toEqual([]);
-	expect(tab.api.error).toBe(m.focus_not_counted());
+	expect(tab.api.error).toBeNull();
 });
 
 test("completion reports the paused wall time", async () => {
@@ -958,13 +967,14 @@ test("an expiry right after a load waits for the synced starts before judging th
 	expect(tab.api.error).toBeNull();
 });
 
-test("an uncountable work interval is dropped once with a notice after the lookup grace", async () => {
+test("an unresolved completion survives the lookup grace and accepts a late synced start", async () => {
 	vi.stubGlobal("navigator", {});
 	vi.stubGlobal("__diteroFocusTestSec", 30);
 	fixture.mutate.mockReturnValueOnce({ ...OK, server: new Promise(() => {}) });
 	let tab = open();
 	tab.api.start();
 	await settle();
+	const intervalId = (await stored()).session?.intervalId as string;
 	vi.advanceTimersByTime(3000);
 	close(tab);
 	vi.setSystemTime(Date.now() + 60000);
@@ -975,14 +985,18 @@ test("an uncountable work interval is dropped once with a notice after the looku
 	expect(tab.api.error).toBeNull();
 	vi.advanceTimersByTime(10_500);
 	await settle();
-	expect(tab.api.session?.cycle.phase).toBe("break");
+	expect(tab.api.session?.cycle.phase).toBe("work");
 	expect(logs()).toEqual([]);
 	expect(tab.api.error).toBe(m.focus_not_counted());
 	tab.api.dismissError();
 	await settle();
-	vi.advanceTimersByTime(60_000);
+	vi.advanceTimersByTime(500);
 	await settle();
 	expect(tab.api.error).toBeNull();
+	await syncStarts([intervalId]);
+	expect(logs()).toHaveLength(1);
+	expect(logs()[0]).toMatchObject({ intervalId, proof: "server" });
+	expect(tab.api.session?.cycle.phase).toBe("break");
 });
 
 test("an uncountable break stays silent", async () => {
@@ -1000,7 +1014,7 @@ test("an uncountable break stays silent", async () => {
 	vi.setSystemTime(Date.now() + 60000);
 	const reopened = open();
 	await settle();
-	expect(reopened.api.session?.cycle.phase).toBe("work");
+	expect(reopened.api.session?.cycle.phase).toBe("break");
 	expect(logs()).toEqual([]);
 	expect(reopened.api.error).toBeNull();
 });
@@ -1041,4 +1055,41 @@ test("two tabs racing the same completion show no failure when one loses on the 
 	expect(logs()).toHaveLength(1);
 	expect(tab.api.error).toBeNull();
 	expect((await stored()).pendingCompletions).toEqual([]);
+});
+
+test("review: a later live tab cannot discard another live tab's fully observed interval", async () => {
+	const first = open();
+	first.api.start();
+	await settle();
+	vi.advanceTimersByTime(7000);
+	await settle();
+	const second = open();
+	await settle();
+	// Simulate the later tab getting the completion tick first.
+	tabs.reverse();
+	vi.advanceTimersByTime(3000);
+	await settle();
+	await storageEvent(focusStorageKey("owner"));
+	expect(first.api.session?.cycle.phase).toBe("break");
+	expect(second.api.session?.cycle.phase).toBe("break");
+	expect(logs()).toHaveLength(1);
+});
+
+test("review: restored database missing a formerly acknowledged start must not credit a forward reload", async () => {
+	vi.stubGlobal("navigator", {});
+	let tab = open();
+	tab.api.start();
+	await settle();
+	expect((await stored()).session?.serverStarted).toBe(true);
+	vi.advanceTimersByTime(2000);
+	close(tab);
+	// Database restore removes the recorded start. Synced query confirms absence.
+	fixture.starts = { rows: [], type: "complete" };
+	vi.setSystemTime(Date.now() + 60000);
+	tab = open();
+	await settle();
+	// A persisted acknowledgement cannot substitute for the restored server rows.
+	expect(logs()).toHaveLength(0);
+	expect((await stored()).session?.serverStarted).toBe(false);
+	expect(tab.api.session?.cycle.phase).toBe("work");
 });

@@ -1,18 +1,13 @@
 // The server accepts a finished interval only after it has itself observed the
-// duration less the latency allowance, plus reported pauses, since the start. An early
+// full duration plus reported pauses within its exclusive span. An early
 // arrival is retryable, so the wait rides in the message like a mutator error
 // code: a server rejection reaches the client as a plain string.
 
 export const FOCUS_RETRY_CAP_MS = 24 * 60 * 60 * 1000;
 
-// Network latency can make the server see the start later than the client's
-// countdown began; the allowance stays far below a forward clock jump.
-const SLACK_MAX_MS = 5000;
-
-/** Server-observed time that must pass between start and completion. */
+// Credit never exceeds the server-observed exclusive span.
 export function focusRequiredMs(durationSec: number, pausedMs = 0): number {
-	const duration = durationSec * 1000;
-	return duration - Math.min(SLACK_MAX_MS, duration * 0.2) + pausedMs;
+	return durationSec * 1000 + pausedMs;
 }
 
 export class FocusEarlyError extends Error {

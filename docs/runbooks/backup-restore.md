@@ -94,16 +94,39 @@ changes. Leaving and owner removal both require remaining members to rotate file
 
 ## Focus Interval Start Upgrade
 
-Run the focus-interval migration before deploying the application that records focus
-interval starts. It adds one owner-only table, `focus_interval_start`, that keeps the
-server's own start time for each online interval. Only the ids of an account's own
-rows sync to its clients (read-only, so a reloaded client can see that the server
-recorded the start); the start time is never synced. The table holds no credentials,
-and old rows are pruned after 14 days. Keep the usual coordinated database
-and attachment backup before migrating. Existing focus sessions, attachment ciphertext and
-key envelopes are unchanged, and the table is disposable: restoring a backup without it
-only means intervals started before the restore fall back to the client's monotonic-time
-check, and an interval the client cannot prove either way is reported once as not
-counted. Application rollback can retain this additive migration. Older web and native
-clients keep working: they never send a start, so their intervals are credited as before,
-and updated clients start announcing intervals once the server is upgraded.
+Run both focus-interval migrations before deploying the updated application.
+`focus_interval_start` is an IDs-only acknowledgement table; `focus_interval_clock`
+holds server timestamps separately and has no client schema or named query. Only
+the owner's acknowledgement IDs sync read-only. The second migration invalidates
+older, potentially overlapping starts; it does not rewrite recorded sessions.
+Reload clients after upgrading and start a fresh interval. Keep the usual
+coordinated database and attachment backup before migrating. Attachment ciphertext
+and key envelopes are unchanged.
+
+Each new online start closes that account's preceding timing span. A completion
+needs the full duration plus pauses within its exclusive span, without a latency
+allowance. Evidence expires after 14 days. The scheduler deletes at most 500
+expired clock/acknowledgement pairs per leader tick, including dormant accounts;
+large backlogs drain over multiple ticks, so expiry is not an exact deletion time.
+The fixed-bound expiry function runs with the migration owner's privileges and
+can delete only expired evidence; runtime callers cannot choose owners or cutoffs.
+
+Restore both tables together. A browser's saved `serverStarted` flag does not
+establish that the restored database still has the start. Clients reconcile it
+against synced IDs; the server rejects a pending server-proof completion if its
+clock row is missing, expired, or superseded before enough time elapsed. It never
+converts that completion into an offline fallback. A genuinely offline completion
+records explicit monotonic proof from its observing page. Existing queued
+completions without that marker require server evidence; they may be rejected
+after an upgrade or restore. An unqualified observer leaves the shared interval
+unresolved for a fully observing tab or delayed sync, bounded by the acceptance
+window; a notice appears after ten seconds. Stop can discard that interval.
+
+Rollback to the preceding published release can retain these tables: that release
+ignores them. Rolling back to an intermediate focus implementation that expects
+`started_at` in `focus_interval_start` requires a matching schema rollback from a
+coordinated backup, and loses newer records. Do not restore an older database over
+newer focus sessions merely to roll back the application. Older released clients
+without interval IDs keep their legacy logging behavior; interval-ID clients must
+upgrade to send the explicit proof marker for offline completion. Personal focus
+records from legacy/offline clients are not tamper-proof time tracking.

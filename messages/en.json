@@ -1134,7 +1134,7 @@
 	"focus_cue_work_complete": "Focus complete",
 	"focus_cue_break_over": "Break over",
 	"focus_log_failed": "This interval couldn't be saved. It won't be retried.",
-	"focus_not_counted": "This interval wasn't counted. The full time couldn't be confirmed, for example after a reload while offline.",
+	"focus_not_counted": "This interval is waiting for time confirmation. Keep an observing tab open or wait for sync.",
 	"focus_duration_seconds": [
 		{
 			"declarations": [

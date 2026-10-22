@@ -1220,8 +1220,7 @@ export const focusSession = pgTable("focus_session", {
 		.notNull(),
 });
 
-// Server-observed interval starts for focus.logSession. started_at is always the
-// server's now() and is not synced; the owner's synced query only exposes the ids.
+// IDs-only acknowledgement relation. Server timing lives in a separate table.
 export const focusIntervalStart = pgTable(
 	"focus_interval_start",
 	{
@@ -1229,9 +1228,6 @@ export const focusIntervalStart = pgTable(
 			.notNull()
 			.references(() => user.id, { onDelete: "cascade" }),
 		intervalId: uuid("interval_id").notNull(),
-		startedAt: timestamp("started_at", { withTimezone: true })
-			.defaultNow()
-			.notNull(),
 	},
 	(t) => [
 		primaryKey({ columns: [t.userId, t.intervalId] }),
@@ -1246,6 +1242,45 @@ export const focusIntervalStart = pgTable(
 			withCheck: sql`${t.userId} = current_setting('ditero.user_id', true)`,
 		}),
 		pgPolicy("focus_interval_start_owner_delete", {
+			for: "delete",
+			to: "public",
+			using: sql`${t.userId} = current_setting('ditero.user_id', true)`,
+		}),
+	],
+).enableRLS();
+
+export const focusIntervalClock = pgTable(
+	"focus_interval_clock",
+	{
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		intervalId: uuid("interval_id").notNull(),
+		closedAt: timestamp("closed_at", { withTimezone: true }),
+		startedAt: timestamp("started_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(t) => [
+		primaryKey({ columns: [t.userId, t.intervalId] }),
+		index("focus_interval_clock_expiry").on(t.startedAt),
+		pgPolicy("focus_interval_clock_owner_update", {
+			for: "update",
+			to: "public",
+			using: sql`${t.userId} = current_setting('ditero.user_id', true)`,
+			withCheck: sql`${t.userId} = current_setting('ditero.user_id', true)`,
+		}),
+		pgPolicy("focus_interval_clock_owner_select", {
+			for: "select",
+			to: "public",
+			using: sql`${t.userId} = current_setting('ditero.user_id', true)`,
+		}),
+		pgPolicy("focus_interval_clock_owner_insert", {
+			for: "insert",
+			to: "public",
+			withCheck: sql`${t.userId} = current_setting('ditero.user_id', true)`,
+		}),
+		pgPolicy("focus_interval_clock_owner_delete", {
 			for: "delete",
 			to: "public",
 			using: sql`${t.userId} = current_setting('ditero.user_id', true)`,

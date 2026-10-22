@@ -38,6 +38,7 @@ export type FocusSessionState = z.infer<typeof sessionSchema>;
 const completionSchema = z
 	.object({
 		intervalId: z.uuid(),
+		proof: z.enum(["server", "monotonic"]).optional(),
 		taskId: z.string().max(1024).optional(),
 		kind: z.enum(["work", "break"]),
 		startedAt: instant,

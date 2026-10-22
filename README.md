@@ -104,21 +104,26 @@ in web settings; a new subscription URL is shown only once.
 The [roadmap](docs/ROADMAP.md) distinguishes delivered capabilities from remaining work.
 
 Focus timers are stored locally for each account and shared by its tabs on the same
-browser or native server profile. Returning after an interval expires advances
-according to the auto-cycle setting; paused time is excluded. Stop discards the
+browser or native server profile. Paused time is excluded. Stop discards the
 unfinished interval in every tab. Clearing site data removes local timer state.
 Timers do not follow you to another device.
 
-An interval started while online is also timed by the server: the server records
-when it started and accepts the finished interval once its own clock shows the full
-duration plus any pauses, less a small latency allowance (the smaller of 5 seconds
-and 20% of the duration). Reloading mid-interval keeps the credit, an interval the
-server finds early is retried automatically, and moving the device clock forward
-cannot count unworked time. An interval whose start the server never recorded (an
-offline start, or one a legacy timer began before this
-version) is recorded only if the completing page can establish the full duration
-from monotonic elapsed time and progress saved when paused. If it cannot, the
-interval is not counted and a one-time notice says so.
+Online starts use exclusive server-observed spans per account. Starting another
+interval closes the previous span; credit requires the full duration plus pauses
+within that span, without a per-interval time allowance. A forward clock change
+cannot multiply credit across overlapping intervals. Early completions retry;
+superseded intervals without enough time are rejected.
+
+After reload, a persisted acknowledgement alone is insufficient: the current
+server start must sync before it can establish credit. An observer without proof
+leaves the shared interval unresolved so another observing tab or a delayed sync
+can complete it. After ten seconds a notice explains the missing confirmation;
+the timer can still reconcile during the server's 14-day acceptance window.
+Offline intervals use the completing page's monotonic elapsed time and progress
+saved when paused. Pending completions retain whether they used that proof or a
+server start; a missing server start never silently falls back to offline proof.
+Focus totals are personal records, not tamper-proof time tracking: legacy and
+offline clients supply their own timing evidence.
 
 ## Tech stack
 

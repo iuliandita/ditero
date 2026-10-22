@@ -1155,7 +1155,7 @@
 	"focus_cue_work_complete": "Concentrare încheiată",
 	"focus_cue_break_over": "Pauza s-a terminat",
 	"focus_log_failed": "Intervalul nu a putut fi salvat. Nu se va reîncerca.",
-	"focus_not_counted": "Intervalul nu a fost numărat. Durata completă nu a putut fi confirmată, de exemplu după o reîncărcare fără conexiune.",
+	"focus_not_counted": "Intervalul așteaptă confirmarea duratei. Lasă deschisă o filă care l-a urmărit sau așteaptă sincronizarea.",
 	"focus_duration_seconds": [
 		{
 			"declarations": [

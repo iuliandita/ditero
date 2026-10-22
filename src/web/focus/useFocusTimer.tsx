@@ -62,9 +62,10 @@ export type FocusTimerApi = {
 
 const FocusContext = createContext<FocusTimerApi | null>(null);
 const CUE_MS = 5000;
-// After a load, how long an interval without a known start waits for the
-// server-recorded starts to sync before it is judged on local proof alone.
+// Missing confirmation becomes visible after this delay; it does not discard
+// the unresolved shared interval.
 const START_LOOKUP_GRACE_MS = 10_000;
+const START_ACCEPTANCE_MS = 14 * 86_400_000;
 
 // Production builds omit the short-interval browser-test seam.
 function testOverrideSec(): number | null {
@@ -144,14 +145,27 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 		};
 	}, [storageKey, synchronize]);
 
+	const acknowledgedRef = useRef(new Set<string>());
 	const announceRef = useRef<(state: FocusState) => void>(() => undefined);
 	const updateFocus = useCallback(
 		async (update: (state: FocusState) => FocusState) => {
 			try {
-				const { state, changed } = await accessFocusState(storageKey, update);
+				let announce = false;
+				const { state, changed } = await accessFocusState(
+					storageKey,
+					(current) => {
+						const next = update(current);
+						announce = Boolean(
+							next.session?.running &&
+								(next.session.intervalId !== current.session?.intervalId ||
+									!current.session?.running),
+						);
+						return next;
+					},
+				);
 				applySnapshot(state);
 				if (changed) {
-					announceRef.current(state);
+					if (announce) announceRef.current(state);
 					try {
 						localStorage.setItem(storageKey, String(state.revision));
 					} catch (error) {
@@ -168,13 +182,13 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 	);
 
 	const markServerStarted = useCallback(
-		(intervalId: string) =>
+		(intervalId: string, serverStarted = true) =>
 			updateFocus((current) =>
 				current.session?.intervalId === intervalId &&
-				!current.session.serverStarted
+				current.session.serverStarted !== serverStarted
 					? {
 							...current,
-							session: { ...current.session, serverStarted: true },
+							session: { ...current.session, serverStarted },
 						}
 					: current,
 			),
@@ -191,20 +205,32 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 		() => new Set(startRows.map((row) => row.intervalId)),
 		[startRows],
 	);
-	const startsComplete = startDetails.type === "complete";
+
 	const mountedAtRef = useRef(performance.now());
 	const storedIntervalId =
 		snapshot.key === storageKey ? snapshot.state.session?.intervalId : null;
 	const storedServerStarted =
 		snapshot.key === storageKey ? snapshot.state.session?.serverStarted : true;
 	useEffect(() => {
-		if (
-			storedIntervalId &&
-			!storedServerStarted &&
-			startedIds.has(storedIntervalId)
-		)
+		if (!storedIntervalId) return;
+		const present =
+			startedIds.has(storedIntervalId) ||
+			acknowledgedRef.current.has(storedIntervalId);
+		if (present && !storedServerStarted)
 			void markServerStarted(storedIntervalId);
-	}, [storedIntervalId, storedServerStarted, startedIds, markServerStarted]);
+		else if (
+			startDetails.type === "complete" &&
+			!present &&
+			storedServerStarted
+		)
+			void markServerStarted(storedIntervalId, false);
+	}, [
+		storedIntervalId,
+		storedServerStarted,
+		startedIds,
+		startDetails.type,
+		markServerStarted,
+	]);
 
 	// A fresh interval is announced to the server at once, so its start is
 	// observed with the server's clock. Only a server acknowledgement marks the
@@ -227,6 +253,7 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 						mutationResultFailure(await mutation.client) ??
 						mutationResultFailure(await mutation.server);
 					if (failure) return;
+					acknowledgedRef.current.add(s.intervalId);
 					await markServerStarted(s.intervalId);
 				} catch (error) {
 					console.error("focus.startInterval failed", error);
@@ -273,6 +300,7 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 	const error =
 		failureNotice?.key === storageKey ? failureNotice.message : null;
 	const dismissError = useCallback(() => setFailureNotice(null), []);
+	const unresolvedNoticesRef = useRef(new Set<string>());
 	const attemptedRef = useRef(new Set<string>());
 	const retriesRef = useRef(new Map<string, number>());
 	const retryTimersRef = useRef(new Set<ReturnType<typeof setTimeout>>());
@@ -425,13 +453,14 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 		return () => clearInterval(id);
 	}, [storedSession?.running]);
 
-	// The server's timing check applies once it recorded the start (the flag is
-	// persisted from the ack or from the synced start rows); otherwise only the
-	// page's own monotonic proof of the full duration counts.
+	// A current synced start or this page's live acknowledgement can establish
+	// server evidence. The persisted flag alone cannot survive a database restore.
 	const countable = useCallback(
 		(session: Session) =>
-			session.serverStarted || provenTime(session) >= session.plannedSec * 1000,
-		[provenTime],
+			startedIds.has(session.intervalId) ||
+			acknowledgedRef.current.has(session.intervalId) ||
+			provenTime(session) >= session.plannedSec * 1000,
+		[provenTime, startedIds],
 	);
 	const completingRef = useRef<string | null>(null);
 	useEffect(() => {
@@ -442,14 +471,26 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 			completingRef.current === storedSession.intervalId
 		)
 			return;
-		// Right after a load the recorded starts may not have synced yet.
+		// A timeout is not evidence of absence. Keep the shared interval intact:
+		// another live observer may have proof, or the start may sync later.
 		if (
 			!countable(storedSession) &&
-			!startsComplete &&
-			navigator.onLine !== false &&
-			now - mountedAtRef.current < START_LOOKUP_GRACE_MS
-		)
+			now - mountedAtRef.current < START_ACCEPTANCE_MS
+		) {
+			if (
+				now - mountedAtRef.current >= START_LOOKUP_GRACE_MS &&
+				storedSession.cycle.phase === "work" &&
+				!unresolvedNoticesRef.current.has(
+					`${storageKey}:${storedSession.intervalId}`,
+				)
+			) {
+				unresolvedNoticesRef.current.add(
+					`${storageKey}:${storedSession.intervalId}`,
+				);
+				setFailureNotice({ key: storageKey, message: m.focus_not_counted() });
+			}
 			return;
+		}
 		const intervalId = storedSession.intervalId;
 		completingRef.current = intervalId;
 		let kind: "work" | "break" | null = null;
@@ -469,7 +510,13 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 			const cycle = nextCycle(s.cycle, cfg);
 			const sec = plannedFor(cycle, cfg);
 			kind = s.cycle.phase;
+			const monotonicProof = provenTime(s) >= s.plannedSec * 1000;
 			const credit = countable(s);
+			if (
+				!credit &&
+				performance.now() - mountedAtRef.current < START_ACCEPTANCE_MS
+			)
+				return current;
 			counted = credit;
 			const fields = intervalFields(cfg);
 			if (cfg.autoCycle) {
@@ -499,6 +546,9 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 							...current.pendingCompletions,
 							{
 								intervalId,
+								proof: monotonicProof
+									? ("monotonic" as const)
+									: ("server" as const),
 								...(kind === "work" && s.boundTaskId
 									? { taskId: s.boundTaskId }
 									: {}),
@@ -515,6 +565,10 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 		}).then((changed) => {
 			completingRef.current = null;
 			if (changed && mountedRef.current && keyRef.current === storageKey) {
+				if (counted)
+					setFailureNotice((notice) =>
+						notice?.message === m.focus_not_counted() ? null : notice,
+					);
 				cueIdRef.current += 1;
 				setCue({
 					id: cueIdRef.current,
@@ -536,7 +590,7 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 		storageKey,
 		timerNow,
 		countable,
-		startsComplete,
+		provenTime,
 	]);
 
 	const start = useCallback(() => {

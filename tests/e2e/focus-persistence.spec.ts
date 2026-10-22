@@ -147,9 +147,10 @@ test("a start acknowledgement lost before a reload is recovered from the synced 
 	}
 });
 
-test("an interval with no recorded start and no monotonic proof is reported as not counted", async ({
+test("an interval without current proof stays unresolved after the lookup timeout", async ({
 	page,
 }) => {
+	await page.clock.install();
 	const userId = await startTask(page, 15);
 	await serverStartObserved(page, userId);
 	// Restore an offline/legacy interval that never reached the server. A fresh
@@ -166,13 +167,16 @@ test("an interval with no recorded start and no monotonic proof is reported as n
 				)
 			).rows,
 		).toEqual([{ count: 0 }]);
+		await page.clock.setSystemTime(
+			(await page.evaluate(() => Date.now())) + 60_000,
+		);
 		await page.reload();
+		await expect(page.getByTestId("workspace")).toBeVisible();
+		await page.clock.runFor(10_500);
 		const timer = page.getByTestId("focus-timer");
-		await expect(timer.getByTestId("focus-phase")).toHaveText("Break", {
-			timeout: 40000,
-		});
+		await expect(timer.getByTestId("focus-phase")).toHaveText("Focus");
 		await expect(page.getByTestId("focus-error")).toContainText(
-			"wasn't counted",
+			"waiting for time confirmation",
 		);
 		expect(
 			(
@@ -304,7 +308,7 @@ async function serverStartObserved(
 	try {
 		if (backdateSec > 0)
 			await pool.query(
-				"update focus_interval_start set started_at = started_at - make_interval(secs => $2) where user_id=$1",
+				"update focus_interval_clock set started_at = started_at - make_interval(secs => $2) where user_id=$1",
 				[userId, backdateSec],
 			);
 		expect(
