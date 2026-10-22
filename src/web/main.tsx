@@ -23,6 +23,20 @@ applyDisplayPreferences(DEFAULT_DISPLAY_PREFERENCES, document.documentElement);
 // No-op outside dev and test; see the guard in dev/crypto-vectors.ts.
 installCryptoVectorHarness();
 
+// Compile-time gated: production bundles expose no retirement control.
+if (import.meta.env.MODE === "test") {
+	window.__diteroZeroLifecycle = { retireZeroClients, retirementErrorMessage };
+}
+
+declare global {
+	interface Window {
+		__diteroZeroLifecycle?: {
+			retireZeroClients: typeof retireZeroClients;
+			retirementErrorMessage: typeof retirementErrorMessage;
+		};
+	}
+}
+
 function PwaUpdate() {
 	const [waiting, setWaiting] = useState<ServiceWorker | null>(null);
 	const [busy, setBusy] = useState(false);
