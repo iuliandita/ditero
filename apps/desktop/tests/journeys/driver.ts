@@ -15,6 +15,14 @@ import {
 	until,
 } from "./stack.ts";
 
+export function scriptArgument(value: string): string {
+	return JSON.stringify(value).replace(
+		/[<\u2028\u2029]/g,
+		(character) =>
+			`\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`,
+	);
+}
+
 export async function desktop(application: string) {
 	let session = "";
 	let port = 0;
@@ -193,7 +201,7 @@ export async function desktop(application: string) {
 	async function click(selector: string) {
 		await until(`visible ${selector}`, () =>
 			evaluate(
-				`(() => { const e = document.querySelector(${JSON.stringify(selector)}); return !!e && e.getBoundingClientRect().width > 0 && !e.disabled })()`,
+				`(() => { const e = document.querySelector(${scriptArgument(selector)}); return !!e && e.getBoundingClientRect().width > 0 && !e.disabled })()`,
 			),
 		);
 		if (process.platform !== "darwin") {
@@ -208,15 +216,15 @@ export async function desktop(application: string) {
 			);
 		} else
 			await evaluate(
-				`(() => { const e = document.querySelector(${JSON.stringify(selector)}); e.dispatchEvent(new PointerEvent('pointerdown', {bubbles:true,button:0,pointerType:'mouse'})); e.dispatchEvent(new PointerEvent('pointerup', {bubbles:true,button:0,pointerType:'mouse'})); e.click(); return true })()`,
+				`(() => { const e = document.querySelector(${scriptArgument(selector)}); e.dispatchEvent(new PointerEvent('pointerdown', {bubbles:true,button:0,pointerType:'mouse'})); e.dispatchEvent(new PointerEvent('pointerup', {bubbles:true,button:0,pointerType:'mouse'})); e.click(); return true })()`,
 			);
 	}
 	async function fill(selector: string, value: string) {
 		await until(`input ${selector}`, () =>
-			evaluate(`!!document.querySelector(${JSON.stringify(selector)})`),
+			evaluate(`!!document.querySelector(${scriptArgument(selector)})`),
 		);
 		await evaluate(
-			`(() => { const e = document.querySelector(${JSON.stringify(selector)}); const setter = Object.getOwnPropertyDescriptor(e instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype, 'value').set; setter.call(e, ${JSON.stringify(value)}); e.dispatchEvent(new Event('input',{bubbles:true})); e.dispatchEvent(new Event('change',{bubbles:true})); return true })()`,
+			`(() => { const e = document.querySelector(${scriptArgument(selector)}); const setter = Object.getOwnPropertyDescriptor(e instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype, 'value').set; setter.call(e, ${scriptArgument(value)}); e.dispatchEvent(new Event('input',{bubbles:true})); e.dispatchEvent(new Event('change',{bubbles:true})); return true })()`,
 		);
 	}
 	async function close() {

@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { systemBrowser } from "./browser.ts";
-import { desktop } from "./driver.ts";
+import { desktop, scriptArgument } from "./driver.ts";
 import {
 	background,
 	evidence,
@@ -246,7 +246,7 @@ try {
 			"signed-in workspace",
 			() =>
 				native.evaluate(
-					`!!document.querySelector(${JSON.stringify(ids("workspace"))})`,
+					`!!document.querySelector(${scriptArgument(ids("workspace"))})`,
 				),
 			90,
 		);
@@ -254,15 +254,15 @@ try {
 	async function openList(name: string) {
 		await until(`synced list ${name}`, () =>
 			native.evaluate(
-				`Array.from(document.querySelectorAll('button')).some(e=>e.textContent.includes(${JSON.stringify(name)}))`,
+				`Array.from(document.querySelectorAll('button')).some(e=>e.textContent.includes(${scriptArgument(name)}))`,
 			),
 		);
 		await native.evaluate(
-			`(() => { Array.from(document.querySelectorAll('button')).find(e=>e.textContent.includes(${JSON.stringify(name)})).click(); return true })()`,
+			`(() => { Array.from(document.querySelectorAll('button')).find(e=>e.textContent.includes(${scriptArgument(name)})).click(); return true })()`,
 		);
 		await until("list input", () =>
 			native.evaluate(
-				`!!document.querySelector(${JSON.stringify(ids("new-task"))})`,
+				`!!document.querySelector(${scriptArgument(ids("new-task"))})`,
 			),
 		);
 	}
@@ -382,7 +382,7 @@ try {
 		network("after-cold-launch");
 		await until("offline workspace", () =>
 			native.evaluate(
-				`!!document.querySelector(${JSON.stringify(ids("workspace"))})`,
+				`!!document.querySelector(${scriptArgument(ids("workspace"))})`,
 			),
 		);
 		await openList("List journey_a");
@@ -738,7 +738,7 @@ try {
 		await native.click('button[type="submit"]');
 		await until("retained account restore", () =>
 			native.evaluate(
-				`!!document.querySelector(${JSON.stringify(ids("workspace"))})`,
+				`!!document.querySelector(${scriptArgument(ids("workspace"))})`,
 			),
 		);
 		await native.click(ids("nav-settings"));

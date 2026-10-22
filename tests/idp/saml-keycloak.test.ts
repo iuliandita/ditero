@@ -228,12 +228,22 @@ function attributes(tag: string): Record<string, string> {
 }
 
 function decode(value: string): string {
-	return value
-		.replaceAll("&amp;", "&")
-		.replaceAll("&#x2b;", "+")
-		.replaceAll("&#x3d;", "=")
-		.replaceAll("&#x2f;", "/")
-		.replaceAll("&quot;", '"');
+	const entities: Record<string, string> = {
+		"&amp;": "&",
+		"&lt;": "<",
+		"&gt;": ">",
+		"&quot;": '"',
+		"&#39;": "'",
+	};
+	return value.replace(/&(?:amp|lt|gt|quot|#\d+|#x[\da-f]+);/gi, (entity) => {
+		const named = entities[entity.toLowerCase()];
+		if (named !== undefined) return named;
+		const hex = entity[2].toLowerCase() === "x";
+		const point = Number.parseInt(entity.slice(hex ? 3 : 2, -1), hex ? 16 : 10);
+		return point <= 0x10ffff && !(point >= 0xd800 && point <= 0xdfff)
+			? String.fromCodePoint(point)
+			: "\ufffd";
+	});
 }
 
 // Plays the browser against Keycloak: follow redirects, submit the login form,
