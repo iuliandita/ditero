@@ -1,6 +1,13 @@
 import { useQuery, useZero } from "@rocicorp/zero/react";
 import { Copy, Paperclip, Pencil, Send, Trash2 } from "lucide-react";
-import { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+	type ComponentProps,
+	useId,
+	useLayoutEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { runMutation } from "@/lib/run-mutation";
@@ -73,7 +80,13 @@ function activeMention(
 	return { start: at, query };
 }
 
-export function CommentThread({
+// Keyed by task: the draft, picked files and any wait for file access belong to
+// one task and must not follow the dialog to the next.
+export function CommentThread(props: ComponentProps<typeof CommentComposer>) {
+	return <CommentComposer key={props.task.id} {...props} />;
+}
+
+function CommentComposer({
 	task,
 	workspaceId,
 	restricted = false,
@@ -90,7 +103,7 @@ export function CommentThread({
 	const [comments] = useQuery(queries.comments.mine());
 	const [memberships] = useQuery(queries.memberships.mine());
 	const [attachments] = useQuery(queries.attachments.mine());
-	const gate = useAttachmentGate(workspaceId);
+	const gate = useAttachmentGate(workspaceId, task.id);
 	const keyring = useKeyring();
 
 	const [error, setError] = useState<string | null>(null);
@@ -389,7 +402,15 @@ export function CommentThread({
 		files: PendingCommentFile[],
 		key: WorkspaceKeyMaterial,
 	) {
-		if (fileSubmissionPending.current) return;
+		if (fileSubmissionPending.current) {
+			setError(m.attachment_key_wait_busy());
+			return;
+		}
+		if (key.workspaceId !== workspaceId) {
+			console.error("attachments: key belongs to another workspace");
+			setError(m.attachment_error_upload_failed());
+			return;
+		}
 		const focusIntent = composerReturn.current;
 		fileSubmissionPending.current = true;
 		setBusy(true);
@@ -407,8 +428,11 @@ export function CommentThread({
 				if (!(await mutationServerSucceeded(mutation))) {
 					throw new Error("comment.add did not reach the server");
 				}
-				setBody("");
-				setCaret(0);
+				// A draft typed while access was pending is not this comment.
+				if (bodyRef.current.trim() === text) {
+					setBody("");
+					setCaret(0);
+				}
 				setPendingFiles((current) =>
 					current.map((file) =>
 						files.some((candidate) => candidate.id === file.id)
@@ -467,14 +491,20 @@ export function CommentThread({
 				let callbackStarted = false;
 				await gate.runWithFiles(
 					snapshot.map((file) => file.file),
-					(key) => {
+					(key, _files, automatic) => {
 						if (callbackStarted) return;
 						callbackStarted = true;
 						const selected = snapshot.filter(
 							(file) => !file.selectionController.signal.aborted,
 						);
 						if (selected.length === 0) return;
-						return submitWithFiles(bodyRef.current.trim(), selected, key);
+						// The wait's own retry posts what was sent; a resume the user triggers
+						// (rotation dialog) posts the draft as it stands.
+						return submitWithFiles(
+							automatic ? text : bodyRef.current.trim(),
+							selected,
+							key,
+						);
 					},
 				);
 				restoreFocus = !callbackStarted && !gate.hasPendingAction();

@@ -13,10 +13,12 @@ import { recoverCiphertextStages } from "./ciphertext-staging.ts";
 import { createDeriver } from "./derive.ts";
 import { deviceId } from "./device-id.ts";
 import { createDeviceStore } from "./device-store.ts";
+import { startKeyPoll } from "./key-poll.ts";
 import { createKeyring, type KeyringState } from "./keyring.ts";
 import { browserE2eRuntime, type E2eRuntime } from "./runtime.ts";
 import { createSession, type IdentityResponse } from "./session.ts";
 import {
+	fulfilPendingGrants,
 	type OwnWorkspaceKey,
 	reconcileWorkspaceKeys,
 } from "./workspace-keys.ts";
@@ -75,6 +77,12 @@ const KeyringContext = createContext<KeyringContextValue | null>(null);
 // for it. 15s is granular enough for a control whose shortest option is 15
 // minutes, and costs one comparison.
 const STATE_POLL_MS = 15_000;
+// Members request grants while the granter is already open, and no synced row
+// announces it, so an unlocked granter checks on the state poll's cadence.
+const GRANT_POLL_MAX_MS = 5 * 60_000;
+// workspaceKey waits on an in-flight pass, so a stalled request must not hold
+// a file pick for longer than this.
+const GRANT_PASS_TIMEOUT_MS = 20_000;
 
 export function KeyringProvider({
 	userId,
@@ -142,11 +150,14 @@ export function KeyringProvider({
 	const hydration = useRef<Promise<void> | null>(null);
 	const hydrationAbort = useRef<AbortController | null>(null);
 	const refreshAbort = useRef<AbortController | null>(null);
+	const fulfilment = useRef<Promise<unknown> | null>(null);
+	const fulfilmentAbort = useRef<AbortController | null>(null);
 	const mounted = useRef(true);
 	useEffect(() => {
 		const abortReads = () => {
 			hydrationAbort.current?.abort();
 			refreshAbort.current?.abort();
+			fulfilmentAbort.current?.abort();
 		};
 		mounted.current = true;
 		window.addEventListener("beforeunload", abortReads);
@@ -181,6 +192,9 @@ export function KeyringProvider({
 	const hydrateWorkspaceKeys = useCallback(
 		async (publicKey: string | null) => {
 			if (!publicKey || keyring.state() !== "ready") return;
+			if (hydration.current) return await hydration.current;
+			// Reconcile fulfils requests too; never alongside the poll's pass.
+			if (fulfilment.current) await fulfilment.current.catch(() => undefined);
 			if (hydration.current) return await hydration.current;
 			const controller = new AbortController();
 			hydrationAbort.current = controller;
@@ -257,6 +271,7 @@ export function KeyringProvider({
 		() => () => {
 			hydrationAbort.current?.abort();
 			refreshAbort.current?.abort();
+			fulfilmentAbort.current?.abort();
 			workspaceKeys.current = [];
 			session.lockNow();
 		},
@@ -272,6 +287,89 @@ export function KeyringProvider({
 		const timer = setInterval(sync, STATE_POLL_MS);
 		return () => clearInterval(timer);
 	}, [sync]);
+
+	const publicKey = identity?.publicKey ?? null;
+	useEffect(() => {
+		if (state !== "ready" || !publicKey) return;
+		// Versions this pass already sent to a full reconcile: one that still
+		// cannot open them would only repeat the same failure every tick.
+		const reloaded = new Set<string>();
+		const run = async () => {
+			if (
+				keyring.state() !== "ready" ||
+				hydration.current ||
+				fulfilment.current
+			)
+				return;
+			if (typeof navigator !== "undefined" && !navigator.onLine) return;
+			const controller = new AbortController();
+			fulfilmentAbort.current = controller;
+			let timedOut = false;
+			const timer = setTimeout(() => {
+				timedOut = true;
+				controller.abort();
+			}, GRANT_PASS_TIMEOUT_MS);
+			const pass = fulfilPendingGrants(keyring, (input, init) =>
+				runtime.fetcher(input, { ...init, signal: controller.signal }),
+			);
+			fulfilment.current = pass;
+			const result = await pass
+				.catch((error: unknown) => {
+					if (timedOut) throw new Error("e2e: grant fulfilment timed out");
+					if (controller.signal.aborted) return null;
+					throw error;
+				})
+				.finally(() => {
+					clearTimeout(timer);
+					if (fulfilment.current === pass) fulfilment.current = null;
+					if (fulfilmentAbort.current === controller)
+						fulfilmentAbort.current = null;
+				});
+			if (!result) return;
+			const fresh = result.missing
+				.map((row) => `${row.workspaceId}:${row.keyVersion}`)
+				.filter((id) => !reloaded.has(id));
+			if (fresh.length === 0) return;
+			for (const id of fresh) reloaded.add(id);
+			await hydrateWorkspaceKeys(publicKey);
+		};
+		// A hidden tab does not poll. Returning checks at once, unless failures
+		// had backed the poll off: it then resumes at that delay.
+		let poll: ReturnType<typeof startKeyPoll> | null = null;
+		let resumeDelayMs = 0;
+		const start = (initialDelayMs?: number) => {
+			poll = startKeyPoll({
+				intervalMs: STATE_POLL_MS,
+				maxIntervalMs: GRANT_POLL_MAX_MS,
+				initialDelayMs,
+				run,
+				onError: (error) => {
+					if (mounted.current)
+						console.error("e2e: grant fulfilment failed", error);
+				},
+			});
+		};
+		const hidden = () => typeof document !== "undefined" && document.hidden;
+		const onVisibility = () => {
+			if (hidden()) {
+				if (poll) {
+					const delay = poll.nextDelayMs();
+					resumeDelayMs = delay > STATE_POLL_MS ? delay : 0;
+					poll.stop();
+					poll = null;
+				}
+			} else if (!poll) start(resumeDelayMs);
+		};
+		if (!hidden()) start();
+		if (typeof document !== "undefined")
+			document.addEventListener("visibilitychange", onVisibility);
+		return () => {
+			if (typeof document !== "undefined")
+				document.removeEventListener("visibilitychange", onVisibility);
+			poll?.stop();
+			fulfilmentAbort.current?.abort();
+		};
+	}, [hydrateWorkspaceKeys, keyring, publicKey, runtime, state]);
 
 	const value = useMemo<KeyringContextValue>(
 		() => ({
@@ -297,6 +395,7 @@ export function KeyringProvider({
 			async signOut() {
 				refreshAbort.current?.abort();
 				hydrationAbort.current?.abort();
+				fulfilmentAbort.current?.abort();
 				workspaceKeys.current = [];
 				try {
 					await session.signOut();

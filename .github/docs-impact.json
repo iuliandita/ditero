@@ -2,9 +2,9 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "ddfe3e5e9ea909242861fc998b842107ed1dcd7d45f93cf8c696d3dfedcd1679",
-			"docs": ["docs/security.md", "docs/runbooks/sign-in-providers.md"],
-			"note": "Preserve the six-locale provider linking, registration refusals and forgot/reset-password flows; reset success explains revoked credentials and retained two-factor settings. Retain Zero loading/offline warnings and retirement checks, import retry/preview boundaries, focus reconciliation and consent-gated voice behavior. Add a standalone two-factor page that completes TOTP or recovery-code sign-in before navigating to a validated same-origin callback. Preserve native grant parameters without mounting sync while challenged. All six locales explain that provider sign-in still requires the enrolled local factor. Existing locale, theme, device approval and sign-up behavior remains."
+			"sourceDigest": "4d7ae697cc7da523a33fa6207f5ca6a49cab1a0cab860bac12fed3f24f69bd58",
+			"docs": ["docs/security.md"],
+			"note": "An open, visible, unlocked key holder fulfills pending workspace file-grant requests on the 15-second state cadence with backoff on failure and a bounded pass, never alongside a reconcile, skips requests another holder already won, pauses while hidden and stops on lock, sign-out and unmount. A member selection waiting for its grant checks its own request for up to ten minutes and uploads once the key arrives, only to the workspace and task or comment where it was picked, with the comment text captured at Send; a resume the user triggers, such as after key rotation, posts the draft as it stands, and a task change clears the composer's picked files. Moving elsewhere or the time limit stops the wait with a visible message in all six locales. Grant checks, sealing and server authorization are unchanged; no theme change."
 		},
 		"release": {
 			"sourceDigest": "da9d2a9a8dd15d82056e1e549dadf911af318e068add68ba2123191d65326cbd",

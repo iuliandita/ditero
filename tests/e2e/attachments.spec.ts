@@ -389,6 +389,112 @@ for (const role of ["member", "viewer"] as const) {
 	});
 }
 
+test("attachments: open owner fulfils a member's grant request and the waiting upload completes", async ({
+	browser,
+}) => {
+	test.setTimeout(240_000);
+	const ownerContext = await browser.newContext();
+	const memberContext = await browser.newContext();
+	const owner = await ownerContext.newPage();
+	const member = await memberContext.newPage();
+	for (const page of [owner, member]) page.setDefaultTimeout(20_000);
+	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
+	// Neither page may reload: the fix is that both open clients converge.
+	let reloads = 0;
+	for (const page of [owner, member])
+		page.on("load", () => {
+			reloads++;
+		});
+	try {
+		const stamp = `${Date.now()}-live`;
+		const ownerId = await signUp(owner, uniqueEmail("live-grant-owner"));
+		const memberId = await signUp(member, uniqueEmail("live-grant-member"));
+		const workspaceId = `w_live_${stamp}`;
+		const workspaceName = `Live grant ${stamp}`;
+		await pool.query(
+			"insert into workspace (id, name, owner_id, kind) values ($1, $2, $3, 'shared')",
+			[workspaceId, workspaceName, ownerId],
+		);
+		await pool.query(
+			`insert into membership (id, user_id, workspace_id, role) values
+			 ($1, $2, $3, 'owner'), ($4, $5, $3, 'member')`,
+			[`mo_${stamp}`, ownerId, workspaceId, `mm_${stamp}`, memberId],
+		);
+
+		await goToSettings(owner);
+		await owner.getByTestId("e2e-setup").click();
+		await finishEnrollment(owner);
+		await expect
+			.poll(
+				async () =>
+					(
+						await pool.query(
+							"select count(*)::int as n from workspace_key where workspace_id=$1 and active",
+							[workspaceId],
+						)
+					).rows[0]?.n,
+				{ timeout: DERIVE_TIMEOUT },
+			)
+			.toBe(1);
+		await expect(owner.getByTestId("e2e-status")).toHaveText(
+			m.e2e_status_ready(),
+		);
+		// The member files its request at enrollment. Until its file is waiting
+		// the owner sees no requests, so no poll tick can grant it before the pick.
+		let ownerSeesRequests = false;
+		await ownerContext.route("**/api/e2e/grants/pending", (route) =>
+			ownerSeesRequests
+				? route.continue()
+				: route.fulfill({ json: { requests: [] } }),
+		);
+
+		await goToSettings(member);
+		await member.getByTestId("e2e-setup").click();
+		await finishEnrollment(member);
+		await leaveSettings(member);
+		await switchWorkspace(member, workspaceName);
+		const listName = `Live list ${stamp}`;
+		const taskName = `Live task ${stamp}`;
+		await createListAndTask(member, listName, taskName);
+		const reloadsBefore = reloads;
+
+		const filename = `live-${stamp}.txt`;
+		const plaintext = Buffer.from("Uploaded once the owner grants access");
+		const finalized = member.waitForResponse("**/api/attachments/finalize", {
+			timeout: 90_000,
+		});
+		// Awaited below; a failed assertion before then must report itself, not
+		// this listener rejecting when the context closes.
+		finalized.catch(() => {});
+		await inputFor(member.getByTestId("task-attachments")).setInputFiles({
+			name: filename,
+			mimeType: "text/plain",
+			buffer: plaintext,
+		});
+		await expect(member.getByText(m.attachment_key_pending())).toBeVisible();
+		const requestState = async () =>
+			(
+				await pool.query(
+					"select state from key_grant_request where user_id=$1 and workspace_id=$2",
+					[memberId, workspaceId],
+				)
+			).rows;
+		expect(await requestState()).toEqual([{ state: "key_pending" }]);
+		ownerSeesRequests = true;
+		await expect
+			.poll(requestState, { timeout: 60_000 })
+			.toEqual([{ state: "ready" }]);
+		expect((await finalized).ok()).toBe(true);
+		await expect(member.getByText(m.attachment_key_pending())).toHaveCount(0);
+		await expectDownload(member, filename, plaintext);
+		expect(reloads).toBe(reloadsBefore);
+	} finally {
+		await pool.end();
+		await ownerContext.close();
+		await memberContext.close();
+	}
+});
+
 test("attachment canary: ciphertext, fragment grant, removal, rotation, and pending access", async ({
 	browser,
 }) => {

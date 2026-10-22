@@ -1,4 +1,9 @@
-import { isValidElement, type ReactNode } from "react";
+import {
+	type ComponentProps,
+	isValidElement,
+	type ReactElement,
+	type ReactNode,
+} from "react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { Task } from "../../../zero/schema.gen.ts";
 import { CommentThread } from "./CommentThread.tsx";
@@ -10,7 +15,7 @@ const fixture = vi.hoisted(() => ({
 		fetcher?: typeof fetch;
 		attachments?: { fetcher: typeof fetch };
 	},
-	key: { keyVersion: 1, wdk: new Uint8Array(32) },
+	key: { workspaceId: "workspace-1", keyVersion: 1, wdk: new Uint8Array(32) },
 	mutate: vi.fn(),
 	upload: vi.fn(),
 	reportUploadFailure: vi.fn(),
@@ -80,12 +85,18 @@ vi.mock("../attachments/AttachmentTile.tsx", () => ({
 vi.mock("@/components/ui/button", () => ({ Button: "button" }));
 vi.mock("@/components/ui/input", () => ({ Input: "input" }));
 
+// CommentThread is a keyed wrapper; the tests drive the composer it renders.
+function wrapper(taskId = "task-1") {
+	return CommentThread({
+		task: { id: taskId } as Task,
+		workspaceId: "workspace-1",
+	}) as ReactElement<ComponentProps<typeof CommentThread>>;
+}
+
 function render() {
 	fixture.cursor = 0;
-	return CommentThread({
-		task: { id: "task-1" } as Task,
-		workspaceId: "workspace-1",
-	});
+	const element = wrapper();
+	return (element.type as typeof CommentThread)(element.props);
 }
 
 function find(
@@ -205,4 +216,99 @@ test("retry keeps the native attachment transport and reuses the created comment
 		expect(input.parentId).toBe(fixture.mutate.mock.calls[0]?.[0].id);
 		expect(options.fetcher).toBe(nativeFetcher);
 	}
+});
+
+function type(value: string) {
+	const input = find(
+		render(),
+		(props) => props["data-testid"] === "comment-input",
+	);
+	(input.onChange as (event: unknown) => void)({
+		target: { value, selectionStart: value.length },
+	});
+}
+
+function alertText(): unknown {
+	return find(render(), (props) => props.role === "alert").children;
+}
+
+// The key arrives later: runWithFiles reports a wait and keeps the action.
+function deferKey() {
+	const waiting: Array<
+		(key: typeof fixture.key, files: File[], automatic: boolean) => unknown
+	> = [];
+	fixture.runWithFiles.mockImplementation(async (_files, action) => {
+		waiting.push(action);
+		return false;
+	});
+	return waiting;
+}
+
+// The wait's own retry (automatic) posts what Send captured and keeps a newer
+// draft; a resume the user triggers, such as the rotation dialog, posts the draft.
+test.each([
+	{ automatic: true, posted: "submitted text", left: "a newer draft" },
+	{ automatic: false, posted: "a newer draft", left: "" },
+])("a resume with automatic=$automatic posts $posted", async ({
+	automatic,
+	posted,
+	left,
+}) => {
+	const waiting = deferKey();
+	selectFile();
+	type("submitted text");
+	await send();
+	expect(fixture.mutate).not.toHaveBeenCalled();
+	type("a newer draft");
+	await waiting[0]?.(fixture.key, [], automatic);
+	expect(fixture.mutate).toHaveBeenCalledOnce();
+	expect(fixture.mutate.mock.calls[0]?.[0]).toMatchObject({
+		taskId: "task-1",
+		body: posted,
+	});
+	expect(fixture.upload).toHaveBeenCalledOnce();
+	const input = find(
+		render(),
+		(props) => props["data-testid"] === "comment-input",
+	);
+	expect(input.value).toBe(left);
+});
+
+test("a key that arrives while another file comment is sending says so", async () => {
+	const waiting = deferKey();
+	selectFile();
+	await send();
+	let acknowledge!: (result: { type: string }) => void;
+	fixture.mutate.mockImplementation(() => ({
+		client: Promise.resolve({ type: "success" }),
+		server: new Promise((resolve) => {
+			acknowledge = resolve;
+		}),
+	}));
+	fixture.runWithFiles.mockImplementation(async (_files, action) =>
+		action(fixture.key),
+	);
+	const sending = send();
+	await waiting[0]?.(fixture.key, [], true);
+	expect(fixture.mutate).toHaveBeenCalledOnce();
+	expect(alertText()).toBe("attachment_key_wait_busy");
+	acknowledge({ type: "success" });
+	await sending;
+});
+
+test("a key for another workspace never encrypts the comment's files", async () => {
+	vi.spyOn(console, "error").mockImplementation(() => {});
+	fixture.runWithFiles.mockImplementation(async (_files, action) =>
+		action({ ...fixture.key, workspaceId: "workspace-2" }),
+	);
+	selectFile();
+	await send();
+	expect(fixture.mutate).not.toHaveBeenCalled();
+	expect(fixture.upload).not.toHaveBeenCalled();
+	expect(alertText()).toBe("attachment_error_upload_failed");
+});
+
+test("the composer is keyed by task so picked files never follow a task change", () => {
+	expect(wrapper("task-1").key).toBe("task-1");
+	expect(wrapper("task-2").key).toBe("task-2");
 });

@@ -174,6 +174,11 @@ const pendingGrantsSchema = z.object({
 	),
 });
 
+const grantResultSchema = z.object({
+	requestId: z.string(),
+	outcome: z.enum(["granted", "already"]),
+});
+
 const rotationMemberSchema = z.object({
 	membershipId: z.string(),
 	userId: z.string(),
@@ -398,15 +403,36 @@ export async function reconcileWorkspaceKeys(
 		});
 	}
 
+	await fulfilPendingGrants(keyring, fetcher);
+	return rows;
+}
+
+/**
+ * Seals the caller's WDK to every pending request it can serve. The server
+ * lists only requests for versions the caller holds a wrap for; `missing`
+ * lists those whose WDK this keyring has not loaded yet.
+ */
+export async function fulfilPendingGrants(
+	keyring: Pick<ReconcileKeyring, "wdkFor">,
+	fetcher: E2eFetcher = defaultFetcher,
+): Promise<{ granted: number; missing: WorkspaceKeyFailure[] }> {
 	const grants = await jsonRequest(
 		fetcher,
 		"/api/e2e/grants/pending",
 		pendingGrantsSchema,
 	);
+	let granted = 0;
+	const missing: WorkspaceKeyFailure[] = [];
 	for (const request of grants.requests) {
 		if (!request.recipientPublicKey) continue;
 		const wdk = keyring.wdkFor(request.workspaceId, request.keyVersion);
-		if (!wdk) continue;
+		if (!wdk) {
+			missing.push({
+				workspaceId: request.workspaceId,
+				keyVersion: request.keyVersion,
+			});
+			continue;
+		}
 		const sealed = await sealedFor(
 			wdk,
 			request.recipientPublicKey,
@@ -414,19 +440,31 @@ export async function reconcileWorkspaceKeys(
 			request.keyVersion,
 			request.recipientUserId,
 		);
-		await jsonRequest(
-			fetcher,
-			"/api/e2e/grants",
-			z.object({
-				requestId: z.string(),
-				outcome: z.enum(["granted", "already"]),
-			}),
-			jsonPost({
+		const response = await fetcher("/api/e2e/grants", {
+			credentials: "include",
+			...jsonPost({
 				requestId: request.requestId,
 				recipientPublicKey: request.recipientPublicKey,
 				...sealed,
 			}),
-		);
+		});
+		// Another unlocked holder won this request first, with its own wrap or by
+		// completing it; the rest of the pass is still owed.
+		if (response.status === 409 || response.status === 404) {
+			const reason = (await response.text()).trim();
+			if (
+				(response.status === 409 && reason === "conflict") ||
+				(response.status === 404 && reason === "no-request")
+			)
+				continue;
+		}
+		if (!response.ok) {
+			throw new Error(
+				`workspace-keys: /api/e2e/grants failed (${response.status})`,
+			);
+		}
+		grantResultSchema.parse(await response.json());
+		granted += 1;
 	}
-	return rows;
+	return { granted, missing };
 }

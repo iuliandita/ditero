@@ -194,8 +194,12 @@ foreign and missing IDs, including thumbnails and native routes.
 
 Any current workspace member, including a Viewer, may download committed files. After
 enrollment or unlock, members automatically request a grant for an existing active workspace
-key they lack. A current member who already holds that key can fulfill the request when
-they open Ditero and unlock encryption. Only Owners and Admins may provision or rotate
+key they lack. A current member who already holds that key fulfills the request while Ditero
+is open, visible and unlocked, checking about every 15 seconds, or when they next open Ditero and
+unlock encryption. A file selection waiting for that grant checks its request for up to ten
+minutes and uploads once the key arrives, without a reload, to the workspace and task or comment
+where it was picked. Moving elsewhere or reaching the time limit stops the wait and says so;
+nothing is attached until you try again (pick the file again, or press Send again in a comment). Only Owners and Admins may provision or rotate
 workspace keys; joining before encryption is provisioned does not change file-read access.
 
 Each user has an X25519 identity keypair. The private key is wrapped independently under an

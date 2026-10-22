@@ -17,12 +17,14 @@ import { queries } from "../../../zero/queries.ts";
 import type { schema } from "../../../zero/schema.gen.ts";
 import {
 	fetchAttachmentConfig,
+	fetchMyGrants,
 	type MyAttachmentGrant,
 } from "../../lib/e2e/attachment-api.ts";
 import {
 	useKeyring,
 	type WorkspaceKeyMaterial,
 } from "../../lib/e2e/KeyringProvider.tsx";
+import { startKeyPoll } from "../../lib/e2e/key-poll.ts";
 import {
 	AttachmentUploadCapabilityError,
 	AttachmentUploadError,
@@ -36,14 +38,20 @@ import { formatBytes, formatList } from "../../lib/intl-format.ts";
 import { EnrollmentWizard } from "../e2e/EnrollmentWizard.tsx";
 import { UnlockDialog } from "../e2e/UnlockDialog.tsx";
 
+// `automatic` is true when the key-wait retry runs the action without the user
+// acting; an explicit resume (rotation dialog) or the first attempt is false.
 type ReadyAction = (
 	key: WorkspaceKeyMaterial,
 	files: File[],
+	automatic: boolean,
 ) => void | Promise<void>;
 type PendingAction = {
 	files: File[];
 	keyVersion?: number;
 	action: ReadyAction;
+	// Where the selection was made; a wait never completes anywhere else.
+	workspaceId: string;
+	scope: string;
 };
 
 export type AttachmentGateController = {
@@ -71,6 +79,12 @@ export type AttachmentGateController = {
 	pendingFileName: string | null;
 };
 
+// A selection waiting on a grant keeps its files and retries until the key
+// arrives, for at most ten minutes; picking again starts a fresh wait. Moving
+// to another workspace or parent (the scope) abandons it.
+const KEY_WAIT_MS = 10_000;
+const KEY_WAIT_RUNS = 60;
+
 function displayNames(names: string[]): string {
 	if (names.length <= 3) return formatList(names);
 	return `${formatList(names.slice(0, 3), "unit")} ${m.e2e_grant_who_overflow({ count: names.length - 3 })}`;
@@ -78,6 +92,7 @@ function displayNames(names: string[]): string {
 
 export function useAttachmentGate(
 	workspaceId: string,
+	scope = "",
 ): AttachmentGateController {
 	const zero = useZero<typeof schema>();
 	const [workspaces] = useQuery(queries.workspaces.mine());
@@ -98,6 +113,18 @@ export function useAttachmentGate(
 	const [pendingFileName, setPendingFileName] = useState<string | null>(null);
 	const pending = useRef<PendingAction | null>(null);
 	const maxFileBytes = useRef<number | null>(null);
+	// Zero is idle; every failed selection gets a new generation.
+	const [keyWait, setKeyWait] = useState(0);
+	const keyWaits = useRef(0);
+	const alive = useRef(true);
+	const context = useRef({ workspaceId, scope });
+	context.current = { workspaceId, scope };
+	useEffect(() => {
+		alive.current = true;
+		return () => {
+			alive.current = false;
+		};
+	}, []);
 	const blocked =
 		Boolean(workspace?.rotationRequired || serverBlocked) && !rotationCleared;
 
@@ -125,27 +152,109 @@ export function useAttachmentGate(
 		};
 	}, [blocked, runtimeFetcher, workspaceId]);
 
+	const abandon = useCallback((current: PendingAction, message: string) => {
+		if (pending.current !== current) return;
+		pending.current = null;
+		setKeyWait(0);
+		setPendingFileName(null);
+		setError(message);
+	}, []);
+
+	useEffect(() => {
+		const current = pending.current;
+		if (
+			current &&
+			(current.workspaceId !== workspaceId || current.scope !== scope)
+		)
+			abandon(current, m.attachment_key_wait_moved());
+	}, [abandon, scope, workspaceId]);
+
 	const continueWithKey = useCallback(
-		async (current: PendingAction): Promise<boolean> => {
-			let key = await keyring.workspaceKey(workspaceId, current.keyVersion);
-			if (!key) {
+		async (current: PendingAction, waiting = false): Promise<boolean> => {
+			// workspaceKey reconciles first, so one call is a full retry.
+			let key = await keyring.workspaceKey(
+				current.workspaceId,
+				current.keyVersion,
+			);
+			if (!key && !waiting) {
 				await keyring.refreshWorkspaceKeys();
-				key = await keyring.workspaceKey(workspaceId, current.keyVersion);
+				key = await keyring.workspaceKey(
+					current.workspaceId,
+					current.keyVersion,
+				);
+			}
+			// A newer selection or an unmount superseded this one meanwhile.
+			if (!alive.current || pending.current !== current) return false;
+			if (
+				current.workspaceId !== context.current.workspaceId ||
+				current.scope !== context.current.scope
+			) {
+				abandon(current, m.attachment_key_wait_moved());
+				return false;
+			}
+			if (key && key.workspaceId !== current.workspaceId) {
+				console.error("attachments: key belongs to another workspace");
+				abandon(current, m.attachment_error_upload_failed());
+				return false;
 			}
 			if (!key) {
 				setError(m.attachment_key_pending());
+				if (!waiting) {
+					keyWaits.current += 1;
+					setKeyWait(keyWaits.current);
+				}
 				return false;
 			}
 			pending.current = null;
-			await current.action(key, current.files);
+			setKeyWait(0);
+			if (waiting) setError(null);
+			await current.action(key, current.files, waiting);
 			return true;
 		},
-		[keyring, workspaceId],
+		[abandon, keyring],
 	);
+	const continueRef = useRef(continueWithKey);
+	continueRef.current = continueWithKey;
+
+	useEffect(() => {
+		if (keyWait === 0 || keyring.state !== "ready") return;
+		const poll = startKeyPoll({
+			intervalMs: KEY_WAIT_MS,
+			maxRuns: KEY_WAIT_RUNS,
+			run: async () => {
+				const current = pending.current;
+				if (!current) return true;
+				// An open request means no granter has answered; skip the full
+				// reconcile until one has.
+				const requests = await fetchMyGrants(runtimeFetcher);
+				if (pending.current !== current) return true;
+				const asked = requests.some(
+					(request) =>
+						request.workspaceId === current.workspaceId &&
+						request.state === "pending" &&
+						(current.keyVersion === undefined ||
+							request.keyVersion === current.keyVersion),
+				);
+				if (asked) return false;
+				return await continueRef.current(current, true);
+			},
+			onExhausted: () => {
+				const current = pending.current;
+				if (current) abandon(current, m.attachment_key_wait_expired());
+			},
+			onError: (caught) =>
+				console.error("attachments: waiting for file access failed", caught),
+		});
+		return () => poll.stop();
+	}, [abandon, keyWait, keyring.state, runtimeFetcher]);
 
 	const begin = useCallback(
-		async (current: PendingAction): Promise<boolean> => {
+		async (
+			selection: Omit<PendingAction, "workspaceId" | "scope">,
+		): Promise<boolean> => {
+			const current = { ...selection, ...context.current };
 			setError(null);
+			setKeyWait(0);
 			pending.current = current;
 			setPendingFileName(current.files[0]?.name ?? null);
 			// Historical reads retain their key version; only new files need rotation.
@@ -260,6 +369,7 @@ export function useAttachmentGate(
 	}, []);
 	const cancelEnrollment = useCallback(() => {
 		pending.current = null;
+		setKeyWait(0);
 		setPendingFileName(null);
 		setError(m.e2e_enroll_discard_notice());
 	}, []);
