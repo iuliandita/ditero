@@ -90,6 +90,27 @@ if ($Mode -eq 'prepare') {
     }
     $button = Notification-Button
     if ($null -ne $button -and $button.Current.Name -like '*Do not disturb on*') { throw 'Taskbar contradicts OS Do not disturb setting' }
+    # Opening the normal clock surface starts the notification shell on demand.
+    $root = [System.Windows.Automation.AutomationElement]::RootElement
+    $clock = $null
+    foreach ($window in $root.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)) {
+        if ($window.Current.ClassName -ne 'Shell_TrayWnd') { continue }
+        foreach ($element in $window.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)) {
+            if ($element.Current.Name -like 'Clock *') { $clock = $element; break }
+        }
+    }
+    if ($null -eq $clock) { throw 'Normal OS clock surface missing' }
+    Click-Element $clock
+    Start-Sleep -Seconds 3
+    $shellSnapshot = [System.Collections.Generic.List[string]]::new()
+    foreach ($window in $root.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)) {
+        $process = Get-Process -Id $window.Current.ProcessId -ErrorAction SilentlyContinue
+        if ($null -ne $process) { $shellSnapshot.Add("$($process.ProcessName) | $($window.Current.ClassName) | $($window.Current.Name)") }
+    }
+    $shellSnapshot | Set-Content (Join-Path $evidence 'notification-shell-open-uia.txt')
+    [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
+    $hosts = @(Get-Process | Where-Object {$_.ProcessName -match 'Shell|explorer|Notification'} | Select-Object ProcessName, SessionId)
+    @{hosts=$hosts; method='normal-os-clock-surface'} | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $evidence 'notification-shell-open.json')
     Write-Output 'OS UI confirms Do not disturb is off; app notification permissions are unchanged'
     exit 0
 }
