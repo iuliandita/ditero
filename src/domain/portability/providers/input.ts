@@ -12,6 +12,15 @@ import {
 	TRELLO_ADAPTER_VERSION,
 	TRELLO_V1_EXCLUSIONS,
 } from "./common.ts";
+import { parseContentProvider } from "./content.ts";
+import { CONTENT_ADAPTER } from "./content-common.ts";
+import {
+	type ContentImportInput,
+	type ContentInputBinding,
+	contentBinding,
+	parseContentBinding,
+	parseContentInput,
+} from "./content-input.ts";
 import { parseTaskCsv } from "./csv.ts";
 import { parseTodoistProjectCsv } from "./todoist.ts";
 import { parseTrelloBoardJson } from "./trello.ts";
@@ -143,10 +152,12 @@ const trelloInputSchema = z
 	);
 export type CsvProviderImportInput = z.infer<typeof csvInputSchema>;
 export type ProviderInputBinding =
+	| ContentInputBinding
 	| z.infer<typeof csvBindingSchema>
 	| z.infer<typeof todoistBindingSchema>
 	| z.infer<typeof trelloBindingSchema>;
 export type ProviderImportInput =
+	| ContentImportInput
 	| CsvProviderImportInput
 	| z.infer<typeof todoistInputSchema>
 	| z.infer<typeof trelloInputSchema>;
@@ -211,6 +222,7 @@ export function parseProviderBinding(
 	const checkpoint = providerCheckpoint(options);
 	checkpoint();
 	const adapter = declaredAdapter(value);
+	if (adapter === CONTENT_ADAPTER) return parseContentBinding(value);
 	const parsed =
 		adapter === TRELLO_ADAPTER
 			? trelloBindingSchema.safeParse(
@@ -282,6 +294,17 @@ export function parseProviderInput(
 	const checkpoint = providerCheckpoint(options);
 	checkpoint();
 	const adapter = declaredAdapter(value);
+	if (adapter === CONTENT_ADAPTER) {
+		const parsed = parseContentInput(value);
+		base64ByteLength(parsed.originalBase64);
+		decodeBase64(parsed.originalBase64.slice(-4), checkpoint);
+		if (
+			new TextEncoder().encode(JSON.stringify(parsed)).byteLength >
+			PROVIDER_REQUEST_MAX_BYTES
+		)
+			throw new ProviderInputError("byte-limit");
+		return parsed;
+	}
 	const trello = adapter === TRELLO_ADAPTER;
 	const todoist = adapter === TODOIST_ADAPTER;
 	const payloadKey = trello ? "originalJsonBase64" : "originalCsvBase64";
@@ -375,6 +398,28 @@ export async function prepareProviderImportRequest(
 	const input = parseProviderInput(value, boundedOptions);
 	if (input.adapter === CSV_ADAPTER)
 		return prepareProviderImport(input, boundedOptions);
+	if (input.adapter === CONTENT_ADAPTER) {
+		const bytes = decodeBase64(input.originalBase64, checkpoint);
+		const conversion = await parseContentProvider(input.provider, bytes, {
+			...boundedOptions,
+			projectFolderName: input.projectFolderName,
+			unsectionedListName: input.unsectionedListName,
+			timezone: input.timezone,
+			dateOrder: input.dateOrder ?? "auto",
+			anchorDay: input.anchorDay,
+		});
+		const binding = contentBinding(conversion);
+		const { originalBase64: _originalBase64, ...claimed } = input;
+		if (JSON.stringify(binding) !== JSON.stringify(claimed))
+			throw new ProviderInputError("metadata-mismatch");
+		return {
+			binding,
+			conversion,
+			sourceFormat: `${CONTENT_ADAPTER}:${input.provider}`,
+			sourceSchemaVersion: 1 as const,
+			originalBytes: bytes.byteLength,
+		};
+	}
 	if (input.adapter === TRELLO_ADAPTER) {
 		// Everything below comes from the reparsed bytes; claimed metadata only has to agree.
 		const bytes = decodeBase64(input.originalJsonBase64, checkpoint);

@@ -82,8 +82,10 @@ templates use the name you enter, or the template name when you leave it blank.
 - Authenticated encrypted attachment archives and reviewed, resumable attachment
   migration with explicit parent mapping and durable replay
 - JSON export and reviewed, resumable native import, including version 2 history
-  and attribution, plus Ditero CSV, Todoist project CSV snapshots and plain Trello
-  board JSON imports; see
+  and attribution, plus Ditero and generic CSV, Todoist project CSV, TickTick backup
+  CSV, Microsoft To Do via classic Outlook task CSV, and Trello board JSON, with
+  located preview notices for skipped rows, bound Outlook date order and reuse of
+  same-named workspace labels; see
   [data portability](docs/runbooks/data-portability.md) for exclusions
 - Browser installation plus Android and desktop development apps; see
   [native app status](#browser-installation-and-native-development-apps)
@@ -98,7 +100,8 @@ templates use the name you enter, or the template name when you leave it blank.
   and reordering, with read-only comments; released as JavaScript bundles that run on
   an installed Bun 1.3.14 or newer ([install](docs/cli.md#release-bundles))
 
-iOS, TickTick and Microsoft To Do import remain pending. Wider attachment migration
+iOS and direct Microsoft PST import remain pending. Provider imports require review
+of exclusions and exact snapshot identity; they are not account synchronization. Wider attachment migration
 runtime, terminal, native and deployment qualification remain pending. Voice capture is
 pending final qualification. Calendar subscriptions can be created and revoked
 in web settings; a new subscription URL is shown only once.

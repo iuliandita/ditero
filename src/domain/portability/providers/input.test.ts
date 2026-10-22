@@ -385,6 +385,8 @@ describe("Trello provider original-input contract", () => {
 		expect(prepared.sourceSchemaVersion).toBe(1);
 		expect(prepared.originalBytes).toBe(trelloFixture.length);
 		expect(prepared.conversion.adapter).toBe("trello-board-json");
+		if (prepared.conversion.adapter !== "trello-board-json")
+			throw new Error("Wrong adapter");
 		expect(prepared.conversion.document.exportedAt).toBe(exportedAt);
 		expect(prepared.conversion.document.sourceUserId).toBe(
 			`migration:trello-board-json:1:${namespace}:owner`,

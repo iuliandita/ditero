@@ -89,6 +89,8 @@ export type ProviderImportCode =
 	| "invalid-graph"
 	| "invalid-result"
 	| "unsupported-content"
+	| "date-order-required"
+	| "date-order-conflict"
 	| "secure-context-required"
 	| "cancelled"
 	| "timeout";

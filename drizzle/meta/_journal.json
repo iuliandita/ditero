@@ -610,6 +610,13 @@
       "when": 1792613619413,
       "tag": "0086_account_provider_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1792613619414,
+      "tag": "0087_provider_content_binding",
+      "breakpoints": true
     }
   ]
 }

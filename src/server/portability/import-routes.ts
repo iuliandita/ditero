@@ -14,7 +14,6 @@ import { ProviderImportError } from "../../domain/portability/providers/common.t
 import {
 	PROVIDER_REQUEST_MAX_BYTES,
 	ProviderInputError,
-	prepareProviderImportRequest,
 } from "../../domain/portability/providers/input.ts";
 import { PortableExportValidationError } from "../../domain/portability/validate.ts";
 import type { Guards } from "../guards.ts";
@@ -31,6 +30,7 @@ import {
 import { V4ApplyConflict } from "./import-activation.ts";
 import { importActivationRoutes } from "./import-activation-routes.ts";
 import { applyImportBatch, getImportRunStatus } from "./import-apply-store.ts";
+import { prepareAnchoredProviderImport } from "./import-content-anchor.ts";
 import {
 	discardImportPlan,
 	discardImportSource,
@@ -631,11 +631,17 @@ export function importPlanRoutes(
 						)
 							throw new ImportRequestError("request-limit", 413);
 						const provider = Object.hasOwn(raw, "input")
-							? await prepareProviderImportRequest(raw.input, {
-									exportedAt: new Date().toISOString(),
-									signal: request.signal,
-									deadline,
-								})
+							? await prepareAnchoredProviderImport(
+									pool,
+									session.user.id,
+									source.data,
+									raw.input,
+									{
+										exportedAt: new Date().toISOString(),
+										signal: request.signal,
+										deadline,
+									},
+								)
 							: null;
 						const document =
 							provider?.conversion.document ??

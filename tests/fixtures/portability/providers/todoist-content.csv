@@ -1,0 +1,9 @@
+TYPE,CONTENT,DESCRIPTION,PRIORITY,INDENT,AUTHOR,RESPONSIBLE,DATE,DATE_LANG,TIMEZONE,DURATION,DURATION_UNIT,DEADLINE,DEADLINE_LANG,IS_COLLAPSED
+section,Weekend,Section context,,,,,,,,,,,,TRUE
+task,Plan groceries @household,"=literal note, not a formula",1,1,,Example (12345),2026-01-16 09:30,en,Europe/Berlin,,,,,
+note,"Keep the receipt.
+No personal data.",,,,,,,,,,,,,
+task,Check pantry,,3,2,,,,,,,,,,
+task,Check rice,,4,3,,,,,,,,,,
+task,Water plants,,2,1,,,every day starting 2026-01-17,en,UTC,,,,,
+task,Unsupported natural date,,4,1,,,tomorrow afternoon,en,,,,,,

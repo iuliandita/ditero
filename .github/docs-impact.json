@@ -2,33 +2,24 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "4fc393c030dc05874faec58bb7e643bf75403c8ed35c028e025cb7edecdb75f7",
-			"docs": [
-				"docs/runbooks/database-roles.md",
-				"docs/runbooks/sign-in-providers.md"
-			],
-			"note": "Upgrade Better Auth and passkey together to 1.7.12. TOTP enrollment explicitly requests totp and checks the response method before reading setup keys or backup codes. Document the response boundary and unchanged explicit native approval. Session startup, transport retry, locale and theme behavior are preserved. Zero 1.11 cached query results retain the prior unknown-result loading and import-activation policies; initializing remains a pending sync state. Document the client database boundary and durable retirement behavior. Add the SAML sign-in button and the Settings > Security link control, both driven by the server list in /api/config; the sign-in guide documents linking and errors."
+			"sourceDigest": "70c1ecafa4446768707ecb3f91dfed84e70aac9f66ce3fc63f8b9d5ec0f2dc08",
+			"docs": ["docs/runbooks/data-portability.md"],
+			"note": "Document bounded per-cell truncation with row notices, skipped Todoist descendants, restored ISO clocks, cross-day retained anchors, all-day TickTick precedence, valid-date-only Outlook order detection and immediate timezone preview invalidation. Preserve immutable snapshot settings, notification exclusions and real-export qualification limits."
 		},
 		"release": {
-			"sourceDigest": "e39ab8ea979d2a4ed1b134610a8fd5a7c47393732eff31f7f5c35e030033e2e5",
+			"sourceDigest": "a675a1dc3668f040faf1c5a69a6adb43d3852b9e3a461a9a6b5aebc3fb0eaf76",
 			"docs": ["RELEASING.md"],
-			"note": "Releases add ditero-VERSION-clients.tar.gz (CLI, MCP and TUI bundles, third-party notices, per-file checksums, build provenance attestation) and publication rejects an archive missing a bundle, its checksum, the notices or its attestation, verified with a read-only attestations token. The packaging check qualifies the bundles on the current and the minimum Bun. Standalone executables are not published and move to the roadmap. Existing assets, signing and the stable promotion rules are unchanged. The publish gate also rejects a bundle containing code from a package missing in the notices, an absolute home or build path, a private-looking host or address, environment-file content or a common secret shape, and a build identity without the building Bun."
+			"note": "Prepare the first beta, 0.1.0-beta.1 with Android code 13, retain the existing signing certificate and documentation epoch, align release commands, and describe the remaining prerelease and native qualification limits. Generated publication notes now describe a prerelease rather than an alpha."
 		},
 		"configuration": {
-			"sourceDigest": "9593ba2bcf82c18897ed1d31b0af52ff9944e657f2a26c14cca75bde4ef6094d",
-			"docs": [
-				"docs/runbooks/database-roles.md",
-				"docs/runbooks/sign-in-providers.md"
-			],
-			"note": "Align Zero client and cache at 1.11.1 with both upstream Litestream configurations and forks. Preserve app IDs, publications, replication slots and restricted application roles. Document V5 backup defaults, connection budgets and upgrade sequencing. Document the DITERO_SAML_* settings with their _FILE forms, defaults and failure behavior."
+			"sourceDigest": "f5dcb8333e83ba0e549930eafc17a64209b627b97b5b603cfd8da83511f04abf",
+			"docs": ["deploy/helm/ditero/README.md", "deploy/kustomize/README.md"],
+			"note": "Align the default app and Zero image pair with beta.1 in the packaged guides. This release changes image versions, not operator settings or the retained credentials required for upgrades."
 		},
 		"deployment": {
-			"sourceDigest": "14e7e192837829c83ac098f96adf784ee1ebcd2530020fba2245a7f21275337a",
-			"docs": [
-				"docs/runbooks/database-roles.md",
-				"deploy/docker/aio/README.md"
-			],
-			"note": "Rebuild the aligned Zero runtime and optional all-in-one runtime from the same reviewed package and PostgreSQL patch. Retain pinned Node and hardened backup dependencies, add the V5 configuration, and document existing-replica migration, backup and rollback procedures. Pass the DITERO_SAML_* settings through Compose and the all-in-one bundle (file forms only there); mount key, certificate and metadata files read-only."
+			"sourceDigest": "eed8f93a8a2f450565cfaf511f278cd90bfc66bf6ac1788f125d6df379766a35",
+			"docs": ["deploy/helm/ditero/README.md", "deploy/kustomize/README.md"],
+			"note": "Align chart metadata, resource labels and packaged deployment image examples with 0.1.0-beta.1. Preserve app/Zero pairing, storage and recovery guidance, and cluster qualification limits; the optional one-image bundle remains separate from standard release assets."
 		},
 		"native": {
 			"sourceDigest": "1a9f39a14e3af1c56084dfde8ae3128ffbf181e5aef396f1e8764ab37fd6a27b",
@@ -36,23 +27,23 @@
 			"note": "Document desktop cold offline activation from complete unexpired evidence in the OS credential store, exact session binding, fail-closed verification and revocation markers, and native token refresh on socket retry. Existing records need one complete online start; downgrades require signing out stored accounts before installing an older build. Retain queued edits, refuse fallback for trust, HTTP, validation or storage failures, and keep platform runtime qualification explicit. Android cached activation policy is unchanged. Every authenticated native request now persists a refusal fence before I/O, including attachment, notification, cleanup and sync-handshake requests. Binary keyring chunks stay within the Windows blob limit, share credential references, and use a bounded recovery journal. Both earlier protected-record formats require fresh online evidence after upgrade; downgrades require OS credential-manager cleanup. The desktop TLS refusal test fixture now carries a fixed non-secret password because macOS refuses empty-password PKCS#12 imports; test-only, no runtime or documented behavior change."
 		},
 		"authentication": {
-			"sourceDigest": "735f51dcd86a2e9d78c45a760d1ce2550ec863442d41ee167d7bf83397a9d6df",
+			"sourceDigest": "94708677c42d414b0287be7f48a38f511b95039dce4a14a4b33939cc3d3dd213",
 			"docs": ["docs/runbooks/native-authentication.md"],
-			"note": "Upgrade Better Auth and passkey together to 1.7.12. Google keeps its callback URI, PKCE and pending native consent return URL. OAuth callbacks now preserve APIError codes, so remove the message-as-code workaround and retain readable error descriptions. Document the required additive JWT key migration; account schema, credential formats, registration policies and trusted origins are unchanged. Add optional SAML single sign-on: operator-configured, signed assertions required, IdP-initiated off, identity keyed on IdP entity ID plus NameID, registration gate unchanged, explicit linking; the drizzle adapter now declares native transactions. Native sign-in returns through the same page."
+			"note": "OAuth registration denials preserve their stable policy code through Better Auth callback redirects. Native browser sign-in retains the grant ID and displays the localized policy message. Document periodic stream revalidation after session revocation; HTTP authorization remains checked against live session state. Invitations remain HTTPS browser links with fragment tokens and backward-compatible acceptance; native task scheme handling is unchanged. Document the current account name, identity update validation, synced display behavior, and managed-account normalization with JSON validation errors. Production startup validates secret length and retained JWKS decryption. The authentication guide links the stopped-replica secret rotation procedure instead of direct replacement. Browser sign-in checks the per-IP ceiling before creating IP-plus-email buckets. The handoff and trusted-proxy guides document that order, unchanged limits and batch-drained cleanup; docs/security.md records the body bound and unchanged TOTP lockout. The authentication guides already changed in this branch document neutral public email sign-up, explicit sign-in without SMTP, admission policy and unchanged native approval. This follow-up preserves that public and native protocol: only identity and password fields reach account creation, and persistence failures use the existing neutral result and timing floor. docs/security.md now describes discarded fields and operator-visible failure logs. No new setup, recovery, native trust, account admission, or credential storage procedure is introduced; managed-account creation retains explicit failures. Unexpected registration-policy failures are logged and return a generic unavailable error instead of a policy refusal carrying the raw message; documented refusals are unchanged."
 		},
 		"compatibility": {
-			"sourceDigest": "edb8f322a978f64346d1beafefc7750164cc6c94cfc07b9c5bedd45a0a79e6bf",
-			"docs": ["docs/runbooks/database-roles.md"],
-			"note": "Better Auth 1.7 requires nullable jwks.alg and jwks.crv columns. The additive migration retains encrypted Ed25519 keys and the existing restricted runtime-role grants; account and client credential formats are unchanged. Document upgrade, backup, rollback and client guidance. Align Zero at 1.11.1 and re-port durable close and outage retry. Healthy server replicas migrate incrementally; 1.9 clients start a new local database and lose unsent mutations unless drained first. Preference saves and export journals accept the new success data field while retaining both-result acknowledgement and unknown-result guards.",
-			"upgrade": "Stop app replicas and Zero, back up the matching recovery set, and run the additive better_auth_jwks migration as the migration owner before starting the new app and Zero. Preserve NOSUPERUSER NOBYPASSRLS runtime credentials. Drain all browser and native queues before replacing 1.9 clients. Start the updated Zero server before 1.11 clients; retain publications and slots and verify migrated replica catch-up.",
-			"backup": "Keep coordinated database and attachment backups with the original authentication secret and encryption keys. Existing encrypted keys are preserved without conversion. Retain the Zero replica snapshot and both legacy and V5 backup formats through the rollback window; test V5 restores.",
-			"rollback": "The previous app with Better Auth 1.6.23 tolerates and ignores the added nullable columns. Leave them in place during application rollback; restore older database snapshots only with matching secrets and attachments, accounting for newer data loss. Drain 1.11 client queues and downgrade clients before the server. Prefer a fresh disposable old cache over reusing migrated SQLite files. A 1.9 server cannot read V5 backup paths and resyncs; preserve current authoritative PostgreSQL.",
-			"clientVersions": "Better Auth sessions and native consent remain compatible; reload TOTP callers as described in the guide. Zero 1.11 clients require a 1.11 server. The 1.9-to-1.11 client upgrade discards its old local database, so every client must sync pending edits before updating. Keep offline clients on the old bundle until drained; never clear their storage or uninstall them."
+			"sourceDigest": "c3d5648373ef515e4e2cb1b5ecbfd499722bc139c7704517a5884a9e1e94a1af",
+			"docs": ["docs/runbooks/native-format.md"],
+			"note": "Add version 2 provider-content input binding validation (including dateOrder and anchorDay and the nesting bound) alongside unchanged native and legacy provider contracts. Conversion reuses the existing version 1 intermediate document, planner 4, authorized writer and notification activation.",
+			"upgrade": "Back up the database and run the additive binding migration before deploying the updated application.",
+			"backup": "Keep coordinated database, attachment ciphertext and original encryption/authentication secrets; retain provider export files privately for a fresh preview.",
+			"rollback": "Keep the additive migration. Stop new provider imports and use the updated application to resume or discard new binding plans before using an older build. Do not replace newer content with an older database.",
+			"clientVersions": "Updated browser bundles expose the five content pickers. Older browser clients retain legacy import paths and cannot parse the new saved bindings. The existing native browser-import guard remains closed; no native runtime qualification is claimed."
 		},
 		"clients": {
-			"sourceDigest": "9e440d49e6f7aff5f7588c9a2af8fc981c6308406af74aa088714980d766f668",
+			"sourceDigest": "c07b7e0e2396b7810724d8c3f3a6fcda8106a124fc26874383e6c843e1a708ff",
 			"docs": ["docs/cli.md"],
-			"note": "Terminal clients now ship as JavaScript bundles for a user-installed Bun 1.3.14 or newer instead of standalone binaries. Document the release archive, checksum verification, the bundle shebang that passes --no-env-file and --config=/dev/null so a hostile working directory cannot inject a .env or bunfig.toml preload, the minimum Bun check (exit 2), the JSON --version identity, third-party notices, platform scope (any OS with Bun; qualified on Linux x64) and the MCP launch command. Commands, API envelopes, exit codes other than the new unsupported-Bun case, and credentials from the environment are unchanged. Bundles record the building Bun in BUILDINFO.json, mark every package they contain, including packages inlined into a dependency, and ship its license text in the notices; the Bun check tolerates a version suffix; the rebuild instructions name the tagged commit, the building Bun and the GNU tar requirement."
+			"note": "Document the retained runtime notice manifest, exact source URLs and SHA-256 checksums, extracted-archive integrity qualification, and unchanged incomplete runtime license coverage and binary publication block."
 		}
 	}
 }

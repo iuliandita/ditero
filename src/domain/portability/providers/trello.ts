@@ -112,7 +112,7 @@ function array(value: unknown): unknown[] {
 function parseJson(source: string, checkpoint: () => void): unknown {
 	checkpoint();
 	try {
-		return parseBoundedPortableJson(source);
+		return parseBoundedPortableJson(source, checkpoint);
 	} catch (error) {
 		if (error instanceof ProviderImportError) throw error;
 		if (!(error instanceof PortableExportValidationError))

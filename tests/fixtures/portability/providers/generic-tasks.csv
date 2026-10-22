@@ -1,0 +1,7 @@
+id,list,section,parent_id,title,notes,due,timezone,priority,labels,completed,completed_at,recurrence,estimate
+root,Home,Weekend,,"=SUM(1,2)","@literal
+line two",2026-01-18,UTC,3,home;urgent,false,,FREQ=WEEKLY,60
+child,Home,Weekend,root,Child,,,,1,,true,2026-01-15T12:00:00Z,,
+deep,Home,Weekend,child,Deeper child,,2026-01-18T09:30:00-05:00,,,,false,,,
+root,Home,Weekend,,"=SUM(1,2)","@literal
+line two",2026-01-18,UTC,3,home;urgent,false,,FREQ=WEEKLY,60
