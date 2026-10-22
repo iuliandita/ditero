@@ -25,7 +25,7 @@ if ($Worker) {
     exit $code
 }
 $environment = @{}
-Get-ChildItem Env: | Where-Object {$_.Name -match '^(PATH|HOME|USERPROFILE|LOCALAPPDATA|APPDATA|TEMP|TMP|RUNNER_TEMP|RUNNER_OS|NODE_EXTRA_CA_CERTS|JOURNEY_.*)$'} | ForEach-Object {$environment[$_.Name]=$_.Value}
+Get-ChildItem Env: | Where-Object {$_.Name -match '^(PATH|HOME|USERPROFILE|LOCALAPPDATA|APPDATA|TEMP|TMP|RUNNER_TEMP|RUNNER_OS|GITHUB_SHA|NODE_EXTRA_CA_CERTS|JOURNEY_.*)$'} | ForEach-Object {$environment[$_.Name]=$_.Value}
 @{environment=$environment; root=(Get-Location).Path; node=(Get-Command node).Source} | ConvertTo-Json -Depth 4 | Set-Content $environmentFile
 $taskName = 'Ditero-Journey-' + [Guid]::NewGuid().ToString('N')
 $script = $PSCommandPath
