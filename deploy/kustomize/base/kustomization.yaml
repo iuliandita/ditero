@@ -13,5 +13,16 @@ configMapGenerator:
 - name: ditero-app-config
   envs:
   - app.env
+replacements:
+- source:
+    kind: Deployment
+    name: ditero-app
+    fieldPath: spec.template.spec.containers.[name=app].image
+  targets:
+  - select:
+      kind: Deployment
+      name: ditero-app
+    fieldPaths:
+    - spec.template.spec.containers.[name=app].env.[name=DITERO_REPLICA_ID].value
 configurations:
 - name-reference.yaml

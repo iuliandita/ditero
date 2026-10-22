@@ -76,6 +76,11 @@ shard grants and RLS isolation. Local rendering cannot establish these gates.
 
 ## Recovery and retention
 
+For an isolated logical restore, follow the [Kubernetes recovery procedure](../../../docs/runbooks/backup-restore.md#kubernetes-logical-backup-and-restore),
+including managed-role reconciliation, verified CA mounts, an empty Zero cache,
+and app-before-Zero startup. Preserve the original role passwords and service
+secrets; bootstrap SQL cannot reconstruct existing encrypted data.
+
 Configure a maintained CloudNativePG backup plugin and object-store credentials
 through your operator configuration. This overlay does not install a backup
 plugin or provide a working archive destination. A PostgreSQL PVC is not a

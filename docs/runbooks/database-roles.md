@@ -201,6 +201,10 @@ PostgreSQL backups or guarantee repair of every failed initial sync.
 Run application migrations and wait for app `/health` before starting Zero.
 Without superuser DDL event triggers, Zero uses degraded schema-change detection;
 keep automatic reset enabled and verify fresh-client sync after migrations.
+`MissingEventTriggerSupport` with a tables-created-or-dropped diagnostic means
+Zero observed schema changes it cannot replicate incrementally. Capture its
+previous log, stop Zero, finish migrations, and restart using the documented reset
+setting. Do not grant the app runtime superuser access to repair this failure.
 
 ## Zero's shard schema
 
@@ -333,7 +337,8 @@ for upstream details; managed providers may impose additional replication limits
 
 Start the application and wait for `/health` before starting Zero. Compose gates
 Zero on app health; the AIO bundle additionally waits for its migration service.
-The Helm chart waits for the app belonging to the current release revision.
+The Helm chart waits for the app belonging to the current release revision, and
+the Kustomize base waits for the app serving the current image reference.
 When migrating manually, stop Zero first and wait for app migrations to finish.
 
 `ZERO_AUTO_RESET=true` handles supported replication/schema-change resets; it is

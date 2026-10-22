@@ -13,19 +13,19 @@
 			"note": "Document neutral sign-up followed by explicit sign-in, including email-bound invitation and pending native approval journeys in all six locales. Document local timer persistence and the reload limit: a forward device-clock correction can credit unworked time up to the interval length. Start and resume now anchor elapsed time at the action. Completion replay, dismissible logging errors, server permissions, timestamp validation and persisted formats remain unchanged. Import completion and conflict transfer focus during the DOM commit; moving focus during a status retry cancels the handoff, which also rechecks focus before committing. Import inputs, acknowledgment and persistence are unchanged. Document the browser connection requirement on opening or reloading, automatic and manual retries for transport failures, and continued offline editing in already-open tabs. HTTP session and startup refusals keep their existing behavior; no cached identity or offline startup is added. Once the session has resolved, a signed-out refetch after a sign-up or sign-in attempt no longer remounts Login, while the first fetch keeps the boot skeleton, so the entered email, the sign-up notice and sign-in errors stay visible; no documented flow changes."
 		},
 		"release": {
-			"sourceDigest": "a675a1dc3668f040faf1c5a69a6adb43d3852b9e3a461a9a6b5aebc3fb0eaf76",
+			"sourceDigest": "00190552d050f2e8c1ee4d08a9e341e5189a66adf870c98bea7cc8224dca67db",
 			"docs": ["RELEASING.md"],
-			"note": "Prepare the first beta, 0.1.0-beta.1 with Android code 13, retain the existing signing certificate and documentation epoch, align release commands, and describe the remaining prerelease and native qualification limits. Generated publication notes now describe a prerelease rather than an alpha."
+			"note": "Prepare the first beta, 0.1.0-beta.1 with Android code 13, retain the existing signing certificate and documentation epoch, align release commands, and describe the remaining prerelease and native qualification limits. Generated publication notes now describe a prerelease rather than an alpha. Validate the current Kustomize overlay example as two tag-matched image names and replacement tags, rejecting stale examples before packaging."
 		},
 		"configuration": {
-			"sourceDigest": "f5dcb8333e83ba0e549930eafc17a64209b627b97b5b603cfd8da83511f04abf",
-			"docs": ["deploy/helm/ditero/README.md", "deploy/kustomize/README.md"],
-			"note": "Align the default app and Zero image pair with beta.1 in the packaged guides. This release changes image versions, not operator settings or the retained credentials required for upgrades."
+			"sourceDigest": "eba1819cada8ea9cf9b8b75ed7e432e334d60d343d7435da7d90dd438d49d605",
+			"docs": ["deploy/kustomize/README.md"],
+			"note": "Document the explicit Compose Zero image tag for commit-pinned nightly pairs and preserve the release suffix default. Document staged Kustomize startup and the shared Kubernetes logical restore path with original credentials, attachment ciphertext and a fresh Zero cache. Existing clients and stored formats are unchanged. Kustomize now gates Zero on the current app build through an init container that compares the commit baked into the Zero image with the app health revision, replacing the manual zero-replica hold; image overrides need one tag-matched entry per image and no extra fields, and images with a missing or empty commit fail closed instead of falling back to replica identifiers. Local builds must supply the same build commit for both images. Existing clients, stored formats and Helm values are unchanged; roll back by reverting the manifests."
 		},
 		"deployment": {
-			"sourceDigest": "eed8f93a8a2f450565cfaf511f278cd90bfc66bf6ac1788f125d6df379766a35",
-			"docs": ["deploy/helm/ditero/README.md", "deploy/kustomize/README.md"],
-			"note": "Align chart metadata, resource labels and packaged deployment image examples with 0.1.0-beta.1. Preserve app/Zero pairing, storage and recovery guidance, and cluster qualification limits; the optional one-image bundle remains separate from standard release assets."
+			"sourceDigest": "f389246246464ed98c22664211d5664d02147bc3837a17f5db3cab59b94f3be5",
+			"docs": ["deploy/kustomize/README.md"],
+			"note": "Qualify published Compose, Helm and Kustomize recovery paths. Document database-first blob snapshots, original secrets, app-before-Zero startup, CNPG managed roles and logical restore, and bounded diagnostics before cleanup. Add a Compose Zero tag override without changing existing release defaults; the optional all-in-one bundle is unchanged. The Kustomize base now enforces app-before-Zero startup automatically, matching the Helm gate; no manual staging remains and operators upgrading from alpha.12 drop any hold patch."
 		},
 		"native": {
 			"sourceDigest": "16404722853c730514bad6204c83a20573b64f525c9b35663cbbcfdde464b93c",

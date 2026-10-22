@@ -4,6 +4,10 @@
 
 1. Record the running Ditero and Zero versions and deployment configuration, including
    `DITERO_E2E_ENABLED` (defaults to `false`) and attachment storage settings.
+   Quiesce application writes and attachment garbage collection until the database
+   and blob snapshots are complete. A blob deleted after the database snapshot
+   can otherwise be missing from the restored backup set. Keep maintenance traffic
+   isolated; a running process alone does not establish a quiet backup window.
 2. Run `pg_dump --format=custom` with a role that can read the entire database.
    For the bundled stack, use its administrator login `postgres`. The app's
    `ditero_migrator` cannot read Zero's CDC/CVR schemas and is not a full backup
@@ -81,6 +85,73 @@ secret backups together.
 Never test a restore by pointing it at the production Zero replica or notification channels.
 Read [E2E Key Loss](e2e-key-loss.md) before treating a successful infrastructure restore as proof
 that encrypted files remain decryptable.
+
+## Kubernetes logical backup and restore
+
+The same logical path applies to Helm, bare Kustomize and CloudNativePG. Record
+an explicit context and namespace for every command. Provision a fresh namespace,
+original role passwords and service secrets, verified database connections, and
+empty application/Zero claims for the target. Use an administrator connection
+inside the database pod or an approved backup client; the application runtime
+connection cannot produce a complete backup.
+
+For a database pod with local administrator access, use the following pattern,
+substituting the recorded context, namespace and database pod:
+
+```sh
+(
+set -eC
+umask 077
+kubectl --context CONTEXT --namespace SOURCE exec DATABASE_POD -- \
+  pg_dump -U postgres -d ditero --format=custom > database.dump
+)
+```
+
+For CloudNativePG, this uses the database pod's local Unix socket; it does not
+require enabling remote access for the reserved `postgres` login. The operator
+and managed role passwords must reconcile before restoring. A logical dump does
+not contain cluster logins, replication slots, operator configuration or Secrets.
+A maintained backup plugin is required for continuous WAL archival/PITR; it is
+not required for this logical backup path.
+
+After the dump, snapshot the attachment claim. For a quiet qualification stack,
+stop Zero first and block user writes for the entire database/blob backup window.
+The running app can supply the archive through `kubectl exec` and `tar`; an
+operator may instead use its CSI snapshot mechanism. Retain and encrypt the
+matching configuration and original secrets separately. Decrypt the recovery
+archive and verify every recorded checksum before restoring.
+
+On the fresh target, keep app and Zero replicas at zero while restoring:
+
+```sh
+kubectl --context CONTEXT --namespace TARGET exec -i DATABASE_POD -- \
+  pg_restore -U postgres -d ditero --clean --if-exists --exit-on-error < database.dump
+```
+
+Restore the attachment archive into the app claim using a temporary pod with
+the app's UID/GID 1000, `fsGroup: 1000`, and explicit resource requests/limits.
+Wait for that writer to exit before starting the app. Keep the Zero claim empty.
+Start only the app, wait for migrations and `/health`, then start Zero. Both the
+Helm chart and the Kustomize base gate Zero on the current app's health through
+an init container, so scaling both Deployments up together is safe; Helm uses the
+release revision and Kustomize the app image reference.
+
+Before replacing or removing a failed pod, capture its current and previous
+logs, events and description. From a source checkout, the bounded read-only
+collector saves private files and records truncation, timeouts and command errors:
+
+```sh
+node tests/container/kubernetes-diagnostics.mjs CONTEXT NAMESPACE NEW_PRIVATE_DIRECTORY
+```
+
+A missing previous log is recorded as an error; it does not prove that the
+container never failed. Keep the first failing capture and inspect `capture.json`
+before cleanup. Readiness alone is insufficient: sign in as the original user,
+unlock the retained keys, decrypt the original attachment, and confirm a mutation
+reaches PostgreSQL and a fresh sync client. Retain the source until these checks
+pass. An image rollback does not reverse migrations; restore a matching backup
+set into an isolated target when database rollback is required. Existing clients
+keep the same data and attachment formats.
 
 ## Workspace Leave Upgrade
 

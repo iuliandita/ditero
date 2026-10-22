@@ -76,8 +76,8 @@ def deployment_guides(version: str) -> None:
             (r"Images default to `ghcr\.io/iuliandita/ditero:([^`]+)` and\s*`ghcr\.io/iuliandita/ditero:([^`]+)`", [(version, f"{version}-zero")]),
         ),
         "deploy/kustomize/README.md": (
-            (r"(?m)^  newTag: (\S+)$", [version]),
-            (r"(?m)^      value: docker\.io/iuliandita/ditero:(\S+)$", [f"{version}-zero"]),
+            (r"(?m)^- name: ghcr\.io/iuliandita/ditero:(\S+)$", [version, f"{version}-zero"]),
+            (r"(?m)^  newTag: (\S+)$", [version, f"{version}-zero"]),
         ),
     }
     for name, examples in guides.items():

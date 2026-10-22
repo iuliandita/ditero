@@ -44,7 +44,7 @@ fi
 
 s3_config=$(
   DITERO_ATTACHMENT_STORAGE_DRIVER=s3 \
-  DITERO_ATTACHMENT_FS_PATH= \
+  DITERO_ATTACHMENT_FS_PATH='' \
     docker compose --file "$compose_file" --profile bundled config
 )
 if ! printf '%s\n' "$s3_config" | grep -q 'DITERO_ATTACHMENT_FS_PATH: ""'; then
@@ -62,3 +62,19 @@ if printf '%s\n' "$dry_run" | grep -q upstream-db; then
   echo "external database dry-run creates upstream-db" >&2
   exit 1
 fi
+
+for pair in '0.0.1-alpha.12 0.0.1-alpha.12-zero' 'nightly-09d16cf nightly-zero-09d16cf'; do
+  app_tag=${pair% *}
+  zero_tag=${pair#* }
+  if [ "$app_tag" = 0.0.1-alpha.12 ]; then
+    images=$(DITERO_IMAGE_TAG=$app_tag DITERO_ZERO_IMAGE_TAG='' docker compose --file "$compose_file" config --images)
+  else
+    images=$(DITERO_IMAGE_TAG=$app_tag DITERO_ZERO_IMAGE_TAG=$zero_tag docker compose --file "$compose_file" config --images)
+  fi
+  for tag in "$app_tag" "$zero_tag"; do
+    if ! printf '%s\n' "$images" | grep -qx "ghcr.io/iuliandita/ditero:$tag"; then
+      printf 'missing matching published image: %s\n' "$tag" >&2
+      exit 1
+    fi
+  done
+done

@@ -521,8 +521,10 @@ class ReleaseTests(unittest.TestCase):
             (guides[0], f"The chart version is `{version}`"),
             (guides[0], f"ghcr.io/iuliandita/ditero:{version}`"),
             (guides[0], f"ghcr.io/iuliandita/ditero:{version}-zero`"),
-            (guides[1], f"newTag: {version}"),
-            (guides[1], f"docker.io/iuliandita/ditero:{version}-zero"),
+            (guides[1], f"- name: ghcr.io/iuliandita/ditero:{version}\n"),
+            (guides[1], f"- name: ghcr.io/iuliandita/ditero:{version}-zero\n"),
+            (guides[1], f"newTag: {version}\n"),
+            (guides[1], f"newTag: {version}-zero\n"),
         )
         with tempfile.TemporaryDirectory() as directory, patch.object(release.subprocess, "run") as run:
             root = Path(directory)

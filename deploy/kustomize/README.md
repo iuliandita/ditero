@@ -65,9 +65,12 @@ resources:
 namespace: household
 namePrefix: home-
 images:
-- name: ghcr.io/iuliandita/ditero
+- name: ghcr.io/iuliandita/ditero:0.1.0-beta.1
   newName: docker.io/iuliandita/ditero
   newTag: 0.1.0-beta.1
+- name: ghcr.io/iuliandita/ditero:0.1.0-beta.1-zero
+  newName: docker.io/iuliandita/ditero
+  newTag: 0.1.0-beta.1-zero
 configMapGenerator:
 - name: ditero-app-config
   behavior: merge
@@ -75,20 +78,15 @@ configMapGenerator:
   - BETTER_AUTH_URL=https://tasks.example.com
   - PUBLIC_ZERO_URL=https://sync.example.com
   - DITERO_REGISTRATION_MODE=closed
-patches:
-- target:
-    kind: Deployment
-    name: ditero-zero
-  patch: |-
-    - op: replace
-      path: /spec/template/spec/containers/0/image
-      value: docker.io/iuliandita/ditero:0.1.0-beta.1-zero
 ```
 
 Always upgrade the app/Zero image pair together. Pin both images to verified
-immutable digests for production. Since both use the same repository with
-different tags, a repository-wide image override also rewrites the Zero tag;
-set the Zero image explicitly as shown when overriding the pair. Kustomize
+immutable digests for production. The base pins the pair as
+`ghcr.io/iuliandita/ditero:<version>` and `<version>-zero`, and an `images` entry
+that includes the tag matches only that reference. Use one entry per image, as
+shown, with the tags of the base you build on. The Zero container and its
+`wait-for-app` init container share a reference, so one entry rewrites both. A
+name-only entry would also rewrite the Zero tag. Kustomize
 rewrites generated ConfigMap references and internal app Service references when
 renaming resources. The external Secret remains named `ditero-secrets`; patch the
 projected Secret references if your operator uses another name.
@@ -138,6 +136,34 @@ verify your kube context and namespace, run server-side dry-run and diff against
 that target, and obtain your normal deployment approval. The base can be applied
 with `kubectl apply -k` by the authorized operator after those checks.
 
+Zero must not start while application migrations run, because Zero's DDL event
+triggers would otherwise see a partially migrated schema. The Zero Deployment has
+a `wait-for-app` init container that runs the Zero image and polls the app
+`/health` until the reported `revision` equals the init container's own
+`DITERO_GIT_SHA`. Both published images carry their build commit in that variable,
+and the app answers 200 only after its migrations finish. The old app pod, or a new
+one still migrating, reports another revision, so Zero starts only after the new
+app is migrated and healthy. Because the commit comes from the images, any `images`
+override keeps the gate correct without extra overlay fields. A pair built from
+different commits never opens the gate. Apply the base or overlay once; no staged
+replicas are needed.
+
+The gate fails closed when the Zero image's `DITERO_GIT_SHA` is empty or missing,
+or when the app reports a missing, empty or different revision. It never falls
+back to image tags or replica identifiers, which can stay unchanged across an
+upgrade. Build local app and Zero images from the same commit with
+`--build-arg DITERO_GIT_SHA=<full-commit-sha>`; unlabeled images remain waiting.
+Do not override `DITERO_GIT_SHA` in deployment configuration. If the gate stays
+blocked, verify both images' baked commit and the app's migration/startup logs,
+then deploy the matching image pair. The app starts independently of Zero, so a
+matching healthy app releases the gate without a circular startup dependency.
+
+Operators upgrading from `0.0.1-alpha.12` or earlier, or from a render without the
+init container, should remove any manual zero-replica hold patch; applying it
+with the gate present is harmless but blocks Zero. Use explicit context and
+namespace arguments for every operation. The init container uses the Zero image,
+`node`, and no Kubernetes API access; a Zero image without `node` cannot run it.
+
 ## Operations and boundaries
 
 Zero uses `ZERO_AUTH_REVALIDATE_INTERVAL_SECONDS=30`. After sign-out or session
@@ -169,7 +195,12 @@ TLS, CSI compatibility, runtime readiness, or restore. Neither container needs
 Kubernetes API permissions.
 
 Back up PostgreSQL, the attachment claim, and the authentication/encryption
-Secrets together. Preserve the Zero claim for normal restarts; its replica cache
+Secrets together using the [logical recovery procedure](../../docs/runbooks/backup-restore.md#kubernetes-logical-backup-and-restore).
+On first install, upgrade and restore, the Zero init container holds Zero until
+the new app has finished migrations and is healthy. For restore, keep both
+Deployments at zero replicas until the database and attachment data are restored.
+Preserve the Zero claim for normal
+restarts; its replica cache
 can be rebuilt from PostgreSQL when necessary. Test recovery in an isolated
 environment before relying on backups. An image rollback does not undo database
 migrations; the app entrypoint applies migrations before starting.
