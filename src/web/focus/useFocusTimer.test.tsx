@@ -161,12 +161,14 @@ async function storageEvent(key: string | null) {
 	await settle();
 }
 async function settle() {
+	let quiet = 0;
 	for (let i = 0; i < 20; i++) {
 		await accessFocusState(focusStorageKey("owner"));
 		await new Promise<void>((resolve) => setImmediate(resolve));
 		const dirty = tabs.filter((tab) => tab.dirty);
 		for (const tab of dirty) render(tab);
-		if (!dirty.length) return;
+		if (dirty.length) quiet = 0;
+		else if (++quiet === 3) return;
 	}
 	throw new Error("Provider failed to settle asynchronous actions");
 }
@@ -1092,4 +1094,87 @@ test("review: restored database missing a formerly acknowledged start must not c
 	expect(logs()).toHaveLength(0);
 	expect((await stored()).session?.serverStarted).toBe(false);
 	expect(tab.api.session?.cycle.phase).toBe("work");
+});
+
+test("a 14-day-idle observer cannot discard a fresh interval", async () => {
+	open();
+	await settle();
+	vi.advanceTimersByTime(14 * 86400000);
+	await settle();
+	const proving = open();
+	proving.api.start();
+	await settle();
+	vi.advanceTimersByTime(7000);
+	await settle();
+	await storageEvent(focusStorageKey("owner"));
+	// observer appears first and receives its expiry tick before the proving tab.
+	vi.advanceTimersByTime(3000);
+	await settle();
+	await storageEvent(focusStorageKey("owner"));
+	expect(logs()).toHaveLength(1);
+});
+
+test("online auto-cycle retains fully observed work after delayed start", async () => {
+	vi.stubGlobal("navigator", {});
+	fixture.pref.focus = { ...DEFAULT_FOCUS, autoCycle: true };
+	const clocks = new Map<string, { start: number; close: number | null }>();
+	const accepted: string[] = [];
+	fixture.mutate.mockImplementation((args: object) => {
+		if (isStart(args)) {
+			const intervalId = args.startInterval.intervalId;
+			const accept = () => {
+				for (const row of clocks.values())
+					if (row.close === null) row.close = performance.now();
+				clocks.set(intervalId, { start: performance.now(), close: null });
+				return { type: "success" };
+			};
+			if (!clocks.size)
+				return {
+					...OK,
+					server: new Promise((resolve) =>
+						setTimeout(() => resolve(accept()), 2000),
+					),
+				};
+			return { ...OK, server: Promise.resolve(accept()) };
+		}
+		const c = args as { intervalId: string; durationSec: number };
+		const row = clocks.get(c.intervalId);
+		if (!row) throw new Error("completion precedes its start");
+		const elapsed = (row.close ?? performance.now()) - row.start;
+		if (elapsed < c.durationSec * 1000) {
+			if (row.close !== null)
+				return {
+					...OK,
+					server: Promise.resolve({
+						type: "error",
+						error: {
+							type: "app",
+							message: "focus interval was superseded [focus-unverified]",
+						},
+					}),
+				};
+			return EARLY(c.durationSec * 1000 - elapsed);
+		}
+		accepted.push(c.intervalId);
+		return ok();
+	});
+	const tab = open();
+	tab.api.start();
+	await settle();
+	vi.advanceTimersByTime(2000);
+	await settle();
+	vi.advanceTimersByTime(8000);
+	await settle();
+	expect(logs()[0]).toMatchObject({ proof: "monotonic", durationSec: 10 });
+	expect(starts()).toHaveLength(1);
+	expect((await stored()).session).toMatchObject({
+		running: false,
+		waitingForCompletion: true,
+	});
+	vi.advanceTimersByTime(2250);
+	await settle();
+	expect(
+		fixture.mutate.mock.calls.map(([a]) => (isStart(a) ? "start" : "complete")),
+	).toEqual(["start", "complete", "complete", "start"]);
+	expect(accepted).toHaveLength(1);
 });

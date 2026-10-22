@@ -11,6 +11,7 @@ import {
 	jsonb,
 	pgEnum,
 	pgPolicy,
+	pgSchema,
 	pgTable,
 	primaryKey,
 	smallint,
@@ -1249,44 +1250,48 @@ export const focusIntervalStart = pgTable(
 	],
 ).enableRLS();
 
-export const focusIntervalClock = pgTable(
-	"focus_interval_clock",
-	{
-		userId: text("user_id")
-			.notNull()
-			.references(() => user.id, { onDelete: "cascade" }),
-		intervalId: uuid("interval_id").notNull(),
-		closedAt: timestamp("closed_at", { withTimezone: true }),
-		startedAt: timestamp("started_at", { withTimezone: true })
-			.defaultNow()
-			.notNull(),
-	},
-	(t) => [
-		primaryKey({ columns: [t.userId, t.intervalId] }),
-		index("focus_interval_clock_expiry").on(t.startedAt),
-		pgPolicy("focus_interval_clock_owner_update", {
-			for: "update",
-			to: "public",
-			using: sql`${t.userId} = current_setting('ditero.user_id', true)`,
-			withCheck: sql`${t.userId} = current_setting('ditero.user_id', true)`,
-		}),
-		pgPolicy("focus_interval_clock_owner_select", {
-			for: "select",
-			to: "public",
-			using: sql`${t.userId} = current_setting('ditero.user_id', true)`,
-		}),
-		pgPolicy("focus_interval_clock_owner_insert", {
-			for: "insert",
-			to: "public",
-			withCheck: sql`${t.userId} = current_setting('ditero.user_id', true)`,
-		}),
-		pgPolicy("focus_interval_clock_owner_delete", {
-			for: "delete",
-			to: "public",
-			using: sql`${t.userId} = current_setting('ditero.user_id', true)`,
-		}),
-	],
-).enableRLS();
+export const serverPrivate = pgSchema("server_private");
+
+export const focusIntervalClock = serverPrivate
+	.table(
+		"focus_interval_clock",
+		{
+			userId: text("user_id")
+				.notNull()
+				.references(() => user.id, { onDelete: "cascade" }),
+			intervalId: uuid("interval_id").notNull(),
+			closedAt: timestamp("closed_at", { withTimezone: true }),
+			startedAt: timestamp("started_at", { withTimezone: true })
+				.defaultNow()
+				.notNull(),
+		},
+		(t) => [
+			primaryKey({ columns: [t.userId, t.intervalId] }),
+			index("focus_interval_clock_expiry").on(t.startedAt),
+			pgPolicy("focus_interval_clock_owner_update", {
+				for: "update",
+				to: "public",
+				using: sql`${t.userId} = current_setting('ditero.user_id', true)`,
+				withCheck: sql`${t.userId} = current_setting('ditero.user_id', true)`,
+			}),
+			pgPolicy("focus_interval_clock_owner_select", {
+				for: "select",
+				to: "public",
+				using: sql`${t.userId} = current_setting('ditero.user_id', true)`,
+			}),
+			pgPolicy("focus_interval_clock_owner_insert", {
+				for: "insert",
+				to: "public",
+				withCheck: sql`${t.userId} = current_setting('ditero.user_id', true)`,
+			}),
+			pgPolicy("focus_interval_clock_owner_delete", {
+				for: "delete",
+				to: "public",
+				using: sql`${t.userId} = current_setting('ditero.user_id', true)`,
+			}),
+		],
+	)
+	.enableRLS();
 
 export const dashboard = pgTable("dashboard", {
 	id: text("id").primaryKey(),

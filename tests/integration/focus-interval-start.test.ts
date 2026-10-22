@@ -69,7 +69,7 @@ const log = (
 	});
 const backdate = (userId: string, intervalId: string, ms: number) =>
 	admin.query(
-		`update focus_interval_clock set started_at = now() - make_interval(secs => $3 / 1000.0)
+		`update server_private.focus_interval_clock set started_at = now() - make_interval(secs => $3 / 1000.0)
 		 where user_id = $1 and interval_id = $2`,
 		[userId, intervalId, ms],
 	);
@@ -84,11 +84,16 @@ beforeAll(async () => {
 	await admin.query(
 		`create role "${role}" nosuperuser nocreatedb nocreaterole noinherit nobypassrls`,
 	);
-	await admin.query(`grant usage on schema public to "${role}"`);
+	await admin.query(
+		`grant usage on schema public, server_private to "${role}"`,
+	);
 	// The runtime role's DML grants (docs/runbooks/database-roles.md); only RLS
 	// separates one user's rows from another's.
 	await admin.query(
 		`grant select,insert,update,delete on all tables in schema public to "${role}"`,
+	);
+	await admin.query(
+		`grant select,insert,update on server_private.focus_interval_clock to "${role}"`,
 	);
 	for (const id of [A, B])
 		await admin.query(
@@ -99,7 +104,7 @@ beforeAll(async () => {
 });
 beforeEach(async () => {
 	await admin.query(
-		"delete from focus_interval_clock where user_id = any($1)",
+		"delete from server_private.focus_interval_clock where user_id = any($1)",
 		[[A, B]],
 	);
 	await admin.query("delete from focus_session where user_id = any($1)", [
@@ -149,7 +154,7 @@ describe("focus interval start on the server path", () => {
 			startedAt: 1,
 		} as never);
 		const { rows } = await admin.query(
-			"select extract(epoch from now() - started_at) as age from focus_interval_clock where user_id=$1 and interval_id=$2",
+			"select extract(epoch from now() - started_at) as age from server_private.focus_interval_clock where user_id=$1 and interval_id=$2",
 			[A, id],
 		);
 		expect(rows).toHaveLength(1);
@@ -157,7 +162,7 @@ describe("focus interval start on the server path", () => {
 		await backdate(A, id, 600_000);
 		await start(A, id);
 		const again = await admin.query(
-			"select extract(epoch from now() - started_at) as age from focus_interval_clock where user_id=$1 and interval_id=$2",
+			"select extract(epoch from now() - started_at) as age from server_private.focus_interval_clock where user_id=$1 and interval_id=$2",
 			[A, id],
 		);
 		expect(Number(again.rows[0].age)).toBeGreaterThan(500);
@@ -327,19 +332,20 @@ describe("focus interval start on the server path", () => {
 			),
 		).rejects.toThrow(/row-level security/);
 		expect(
-			(await asB("select interval_id from focus_interval_clock")).rows,
+			(await asB("select interval_id from server_private.focus_interval_clock"))
+				.rows,
 		).toEqual([{ interval_id: own }]);
 		expect(
 			(
 				await asB(
-					"update focus_interval_clock set closed_at=now() where user_id=$1",
+					"update server_private.focus_interval_clock set closed_at=now() where user_id=$1",
 					[A],
 				)
 			).rowCount,
 		).toBe(0);
 		await expect(
 			asB(
-				"insert into focus_interval_clock(user_id,interval_id) values ($1,$2)",
+				"insert into server_private.focus_interval_clock(user_id,interval_id) values ($1,$2)",
 				[A, randomUUID()],
 			),
 		).rejects.toThrow(/row-level security/);
@@ -354,7 +360,7 @@ describe("focus interval start on the server path", () => {
 		await backdate(A, id, 600_000);
 		await start(B, id);
 		const { rows } = await admin.query(
-			"select user_id, extract(epoch from now() - started_at) as age from focus_interval_clock where interval_id=$1 order by user_id",
+			"select user_id, extract(epoch from now() - started_at) as age from server_private.focus_interval_clock where interval_id=$1 order by user_id",
 			[id],
 		);
 		expect(rows.map((r) => r.user_id)).toEqual([A, B]);
@@ -368,12 +374,12 @@ describe("focus interval start on the server path", () => {
 
 	test("the scheduler prunes dormant owners in bounded batches", async () => {
 		await admin.query(
-			`insert into focus_interval_clock(user_id,interval_id,started_at)
+			`insert into server_private.focus_interval_clock(user_id,interval_id,started_at)
 			select $1, gen_random_uuid(), now() - interval '15 days' from generate_series(1,502)`,
 			[A],
 		);
 		await admin.query(
-			"insert into focus_interval_start(user_id,interval_id) select user_id,interval_id from focus_interval_clock where user_id=$1",
+			"insert into focus_interval_start(user_id,interval_id) select user_id,interval_id from server_private.focus_interval_clock where user_id=$1",
 			[A],
 		);
 		await start(B, randomUUID());
@@ -391,7 +397,7 @@ describe("focus interval start on the server path", () => {
 		expect(
 			(
 				await admin.query(
-					"select count(*)::int as n from focus_interval_clock where user_id=$1",
+					"select count(*)::int as n from server_private.focus_interval_clock where user_id=$1",
 					[A],
 				)
 			).rows[0].n,
@@ -439,7 +445,10 @@ describe("focus interval start on the server path", () => {
 	test("restoring away a previously acknowledged start rejects its pending completion", async () => {
 		const id = randomUUID();
 		await start(A, id);
-		await admin.query("delete from focus_interval_clock where user_id=$1", [A]);
+		await admin.query(
+			"delete from server_private.focus_interval_clock where user_id=$1",
+			[A],
+		);
 		await expect(log(A, id, 60)).rejects.toThrow("focus-unverified");
 		expect(await sessions(A)).toHaveLength(0);
 	});
@@ -459,4 +468,73 @@ test("the real Zero hydrate and wire serializer emit only acknowledgement ids", 
 	});
 	expect(wire.status, wire.stderr).toBe(0);
 	expect(JSON.parse(wire.stdout)).toEqual({ user_id: A, interval_id: id });
+});
+
+test("private clock runtime grants and ownership checks hold under NOBYPASSRLS", async () => {
+	const a = randomUUID(),
+		b = randomUUID();
+	await start(A, a);
+	await start(B, b);
+	const client = await pool.connect();
+	try {
+		await client.query("begin");
+		expect(
+			(
+				await client.query(
+					"select rolsuper,rolbypassrls from pg_roles where rolname=current_user",
+				)
+			).rows,
+		).toEqual([{ rolsuper: false, rolbypassrls: false }]);
+		expect(
+			(
+				await client.query(
+					"select interval_id from server_private.focus_interval_clock",
+				)
+			).rows,
+		).toEqual([]);
+		await client.query("select set_config('ditero.user_id',$1,true)", [B]);
+		expect(
+			(
+				await client.query(
+					"select interval_id from server_private.focus_interval_clock",
+				)
+			).rows,
+		).toEqual([{ interval_id: b }]);
+		expect(
+			(
+				await client.query(
+					"update server_private.focus_interval_clock set closed_at=clock_timestamp() where user_id=$1",
+					[A],
+				)
+			).rowCount,
+		).toBe(0);
+		expect(
+			(
+				await client.query(
+					"update server_private.focus_interval_clock set closed_at=clock_timestamp() where user_id=$1",
+					[B],
+				)
+			).rowCount,
+		).toBe(1);
+		await client.query("savepoint owner_check");
+		await expect(
+			client.query(
+				"update server_private.focus_interval_clock set user_id=$1 where user_id=$2",
+				[A, B],
+			),
+		).rejects.toThrow(/row-level security/);
+		await client.query("rollback to owner_check");
+		const privileges = await client.query(`select
+   has_table_privilege('server_private.focus_interval_clock','SELECT') as sel,
+   has_table_privilege('server_private.focus_interval_clock','INSERT') as ins,
+   has_table_privilege('server_private.focus_interval_clock','UPDATE') as upd,
+   has_table_privilege('server_private.focus_interval_clock','DELETE') as del,
+   has_schema_privilege('server_private','CREATE') as ddl`);
+		expect(privileges.rows).toEqual([
+			{ sel: true, ins: true, upd: true, del: false, ddl: false },
+		]);
+	} finally {
+		await client.query("rollback");
+		client.release();
+	}
 });

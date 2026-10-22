@@ -24,6 +24,11 @@ alter database ditero owner to ditero_migrator;
 alter schema public owner to ditero_migrator;
 grant connect on database ditero to ditero_runtime;
 grant usage on schema public to ditero_runtime;
+create schema server_private authorization ditero_migrator;
+revoke all on schema server_private from public;
+grant usage on schema server_private to ditero_runtime;
+alter default privileges for role ditero_migrator in schema server_private
+  grant select, insert, update on tables to ditero_runtime;
 alter default privileges for role ditero_migrator in schema public
   grant select, insert, update, delete on tables to ditero_runtime;
 alter default privileges for role ditero_migrator in schema public
@@ -36,6 +41,29 @@ this fix. Existing coordinated database/blob backups and client versions remain
 compatible. Application rollback can restore the former TEMP requirement
 and the 403 response for foreign attachment downloads; current downloads return
 404 for both foreign and missing IDs. Rollback needs no data conversion.
+
+## Private server clocks
+
+Migrations move focus timing evidence to `server_private.focus_interval_clock`.
+The migration owner owns this schema and table. The runtime needs schema `USAGE`
+and table `SELECT`, `INSERT`, `UPDATE`, with owner-scoped RLS; it needs no `DELETE`,
+`CREATE`, or ownership. The bounded expiry function deletes expired rows with the
+migration owner's privileges. For custom runtime role names, apply after migration:
+
+```sql
+grant usage on schema server_private to ditero_runtime;
+revoke all on server_private.focus_interval_clock from ditero_runtime;
+grant select, insert, update on server_private.focus_interval_clock to ditero_runtime;
+```
+
+Do not grant Zero access to this schema or include it in any publication. Both the
+default Zero publication and `ditero_public` below publish only `public`. Before
+upgrading, back up the full database, stop Zero, apply migrations and verify role
+grants. Rebuild a retained disposable Zero cache that previously copied the clock
+table; then verify fresh-client sync and absence from `pg_publication_tables`.
+A schema move does not erase old cache files. Preserve PostgreSQL and pending
+browser edits. Intermediate builds querying the old public table need a matching
+database rollback from backup; the preceding published release ignores the table.
 
 ## Non-superuser Zero login and publication
 

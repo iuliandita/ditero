@@ -94,9 +94,10 @@ changes. Leaving and owner removal both require remaining members to rotate file
 
 ## Focus Interval Start Upgrade
 
-Run both focus-interval migrations before deploying the updated application.
-`focus_interval_start` is an IDs-only acknowledgement table; `focus_interval_clock`
-holds server timestamps separately and has no client schema or named query. Only
+Run all focus-interval migrations before deploying the updated application.
+`focus_interval_start` is an IDs-only acknowledgement table;
+`server_private.focus_interval_clock`
+holds server timestamps outside Zero publications and has no client schema or named query. Only
 the owner's acknowledgement IDs sync read-only. The second migration invalidates
 older, potentially overlapping starts; it does not rewrite recorded sessions.
 Reload clients after upgrading and start a fresh interval. Keep the usual
@@ -111,7 +112,9 @@ large backlogs drain over multiple ticks, so expiry is not an exact deletion tim
 The fixed-bound expiry function runs with the migration owner's privileges and
 can delete only expired evidence; runtime callers cannot choose owners or cutoffs.
 
-Restore both tables together. A browser's saved `serverStarted` flag does not
+Restore both tables together, including the private schema and its grants.
+Follow the [database role upgrade procedure](database-roles.md#private-server-clocks)
+to rebuild retained Zero caches that copied the formerly public timing table. A browser's saved `serverStarted` flag does not
 establish that the restored database still has the start. Clients reconcile it
 against synced IDs; the server rejects a pending server-proof completion if its
 clock row is missing, expired, or superseded before enough time elapsed. It never
@@ -120,7 +123,10 @@ records explicit monotonic proof from its observing page. Existing queued
 completions without that marker require server evidence; they may be rejected
 after an upgrade or restore. An unqualified observer leaves the shared interval
 unresolved for a fully observing tab or delayed sync, bounded by the acceptance
-window; a notice appears after ten seconds. Stop can discard that interval.
+window per observed interval; a notice appears after ten seconds. Expiry never
+authorizes an observer without proof to discard another tab's opportunity. Stop
+can discard that interval. Auto-cycle waits for completion replay to settle before
+starting its next phase, including server-clock early retries.
 
 Rollback to the preceding published release can retain these tables: that release
 ignores them. Rolling back to an intermediate focus implementation that expects

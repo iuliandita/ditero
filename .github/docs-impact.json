@@ -18,14 +18,20 @@
 			"note": "Prepare the first beta, 0.1.0-beta.1 with Android code 13, retain the existing signing certificate and documentation epoch, align release commands, and describe the remaining prerelease and native qualification limits. Generated publication notes now describe a prerelease rather than an alpha."
 		},
 		"configuration": {
-			"sourceDigest": "f5dcb8333e83ba0e549930eafc17a64209b627b97b5b603cfd8da83511f04abf",
-			"docs": ["deploy/helm/ditero/README.md", "deploy/kustomize/README.md"],
-			"note": "Align the default app and Zero image pair with beta.1 in the packaged guides. This release changes image versions, not operator settings or the retained credentials required for upgrades."
+			"sourceDigest": "1a485ad603e28dea039af1825e5ecbeb0a4c83e5c6181e89cab0a238f61382ce",
+			"docs": [
+				"deploy/helm/ditero/README.md",
+				"docs/runbooks/database-roles.md"
+			],
+			"note": "Keep the beta.1 app and Zero image pair. Document the private focus clock schema, migration ownership and runtime USAGE plus SELECT/INSERT/UPDATE grants. Exclude this schema from Zero publications; retain the existing shard grants for runtime and migrator."
 		},
 		"deployment": {
-			"sourceDigest": "eed8f93a8a2f450565cfaf511f278cd90bfc66bf6ac1788f125d6df379766a35",
-			"docs": ["deploy/helm/ditero/README.md", "deploy/kustomize/README.md"],
-			"note": "Align chart metadata, resource labels and packaged deployment image examples with 0.1.0-beta.1. Preserve app/Zero pairing, storage and recovery guidance, and cluster qualification limits; the optional one-image bundle remains separate from standard release assets."
+			"sourceDigest": "60f36577ba89ab20008f50a821add1f7cc7ca2e3f34e4f22f0098be46b0c53fc",
+			"docs": [
+				"deploy/helm/ditero/README.md",
+				"docs/runbooks/database-roles.md"
+			],
+			"note": "Preserve beta.1 packaging, app/Zero pairing and cluster qualification limits. Compose and CNPG initialize a migration-owned private schema with restricted runtime DML; the role runbook covers custom roles, upgrades and rebuilding retained Zero caches that copied the former public clock table."
 		},
 		"native": {
 			"sourceDigest": "1a9f39a14e3af1c56084dfde8ae3128ffbf181e5aef396f1e8764ab37fd6a27b",
@@ -38,13 +44,16 @@
 			"note": "OAuth registration denials preserve their stable policy code through Better Auth callback redirects. Native browser sign-in retains the grant ID and displays the localized policy message. Document periodic stream revalidation after session revocation; HTTP authorization remains checked against live session state. Invitations remain HTTPS browser links with fragment tokens and backward-compatible acceptance; native task scheme handling is unchanged. Document the current account name, identity update validation, synced display behavior, and managed-account normalization with JSON validation errors. Production startup validates secret length and retained JWKS decryption. The authentication guide links the stopped-replica secret rotation procedure instead of direct replacement. Browser sign-in checks the per-IP ceiling before creating IP-plus-email buckets. The handoff and trusted-proxy guides document that order, unchanged limits and batch-drained cleanup; docs/security.md records the body bound and unchanged TOTP lockout. The authentication guides already changed in this branch document neutral public email sign-up, explicit sign-in without SMTP, admission policy and unchanged native approval. This follow-up preserves that public and native protocol: only identity and password fields reach account creation, and persistence failures use the existing neutral result and timing floor. docs/security.md now describes discarded fields and operator-visible failure logs. No new setup, recovery, native trust, account admission, or credential storage procedure is introduced; managed-account creation retains explicit failures. Unexpected registration-policy failures are logged and return a generic unavailable error instead of a policy refusal carrying the raw message; documented refusals are unchanged."
 		},
 		"compatibility": {
-			"sourceDigest": "7f78188d94dce2c67d0cbb66e4c855d6ca254ccca224b62306074c336d74f04a",
-			"docs": ["docs/runbooks/backup-restore.md"],
-			"note": "Separate IDs-only focus acknowledgements from unsynced server clock rows. New starts close preceding spans per account; full duration plus pauses is required without a latency allowance. Pending completions distinguish server evidence from explicit monotonic proof; stale persisted acknowledgements never authorize missing-row fallback. A bounded scheduler sweep removes expired evidence for dormant accounts. The restore guide covers invalidated earlier starts and intermediate-client compatibility.",
-			"upgrade": "Apply both focus migrations before upgrading the app; reload clients and start fresh intervals because old potentially overlapping start evidence is invalidated. Reset the disposable Zero replica if its schema-change handling requests it, then verify fresh-client sync. Existing focus sessions need no conversion.",
-			"backup": "Keep coordinated database and attachment backups before migration and restore both focus tables together. Missing or expired server start evidence rejects server-proof completions; a persisted browser flag does not authorize fallback. Explicit offline monotonic proof is distinct. Attachment ciphertext and key envelopes are unchanged.",
-			"rollback": "The preceding published application ignores the added tables and can retain the migrated database. Intermediate focus builds expecting started_at in the acknowledgement table require a matching schema rollback from coordinated backup; do not restore an old database over newer focus sessions merely to downgrade.",
-			"clientVersions": "Reload updated web and native clients after upgrade. Legacy clients without interval IDs keep legacy logging; interval-ID clients need the proof marker for offline completions. Unmarked pending completions require server evidence. Unqualified observers defer to delayed sync or a fully observing tab during the 14-day server acceptance window; offline and legacy personal totals are not tamper-proof."
+			"sourceDigest": "5d06b3dceaba002e5abb9aa60560fcced1b17737bf574a38ebe30bab17f5ada5",
+			"docs": [
+				"docs/runbooks/backup-restore.md",
+				"docs/runbooks/database-roles.md"
+			],
+			"note": "Move the RLS-protected clock table to server_private, outside default and explicit public Zero publications, while preserving timing evidence and updating the bounded expiry function. Exclusive spans and full server-observed duration remain required. Auto-cycle starts only after prior completion replay settles; per-interval reconciliation expiry never permits an unqualified observer to discard another tab's proof opportunity.",
+			"upgrade": "Apply all focus migrations with Zero stopped, verify private runtime grants, reload clients and start fresh intervals. Earlier overlapping start evidence is invalidated. Rebuild retained disposable Zero caches that copied the former public clock table, then verify fresh-client sync. Existing focus sessions need no conversion.",
+			"backup": "Keep coordinated full-database and attachment backups before migration. Restore acknowledgement and private clock tables together with schema grants. Missing or expired evidence rejects server-proof completions; persisted browser flags do not authorize fallback. Attachment ciphertext and key envelopes are unchanged.",
+			"rollback": "The preceding published application ignores the added tables and can retain the migrated database. Intermediate focus builds querying public clocks or timestamps in acknowledgements need a matching schema rollback from coordinated backup; do not restore an old database over newer focus sessions merely to downgrade.",
+			"clientVersions": "Reload updated web and native clients after upgrade. Legacy clients without interval IDs keep legacy logging; interval-ID clients need the proof marker for offline completions. Unmarked pending completions require server evidence. Auto-cycle waits for replay settlement, and observers never discard an interval without proof. Offline and legacy personal totals remain client-reported."
 		},
 		"clients": {
 			"sourceDigest": "c07b7e0e2396b7810724d8c3f3a6fcda8106a124fc26874383e6c843e1a708ff",

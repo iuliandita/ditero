@@ -308,7 +308,7 @@ async function serverStartObserved(
 	try {
 		if (backdateSec > 0)
 			await pool.query(
-				"update focus_interval_clock set started_at = started_at - make_interval(secs => $2) where user_id=$1",
+				"update server_private.focus_interval_clock set started_at = started_at - make_interval(secs => $2) where user_id=$1",
 				[userId, backdateSec],
 			);
 		expect(

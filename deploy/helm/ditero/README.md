@@ -16,7 +16,8 @@ not a stable release. Breaking changes remain possible.
 - Three separate database logins: migration owner, restricted application runtime,
   and Zero with its required replication/schema privileges. Follow the
   [database role runbook](../../../docs/runbooks/database-roles.md), including the
-  `zero_0` schema grants and default privileges for both application roles.
+  `zero_0` schema grants and default privileges for both application roles, plus
+  the private server clock schema and restricted runtime grants.
 - An existing Secret in the release namespace, provisioned through your secret
   manager or another secure mechanism. This chart creates no Secrets.
 

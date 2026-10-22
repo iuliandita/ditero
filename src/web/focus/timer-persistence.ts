@@ -15,6 +15,7 @@ const sessionSchema = z
 		}),
 		plannedSec: z.number().int().min(1).max(10800),
 		running: z.boolean(),
+		waitingForCompletion: z.boolean().optional(),
 		startedAt: instant.nullable(),
 		endsAt: instant.nullable(),
 		remainingSec: z.number().int().nonnegative().max(10800),
@@ -72,6 +73,7 @@ export function intervalFields(config: FocusConfig) {
 		provenMs: 0,
 		pausedMs: 0,
 		serverStarted: false,
+		waitingForCompletion: false,
 	};
 }
 

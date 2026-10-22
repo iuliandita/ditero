@@ -1376,11 +1376,11 @@ export const mutators = defineMutators({
 				);
 				if (existing.length) return;
 				await tx.dbTransaction.query(
-					"update focus_interval_clock set closed_at=clock_timestamp() where user_id=$1 and closed_at is null",
+					"update server_private.focus_interval_clock set closed_at=clock_timestamp() where user_id=$1 and closed_at is null",
 					[ctx.id],
 				);
 				await tx.dbTransaction.query(
-					"insert into focus_interval_clock (user_id, interval_id, started_at) values ($1, $2, clock_timestamp())",
+					"insert into server_private.focus_interval_clock (user_id, interval_id, started_at) values ($1, $2, clock_timestamp())",
 					[ctx.id, args.intervalId],
 				);
 				await tx.dbTransaction.query(
@@ -1442,7 +1442,7 @@ export const mutators = defineMutators({
 					const started = Array.from(
 						await tx.dbTransaction.query(
 							`select (extract(epoch from least(clock_timestamp(), closed_at) - started_at) * 1000)::float8 as elapsed_ms,
-						 closed_at is not null as closed from focus_interval_clock
+						 closed_at is not null as closed from server_private.focus_interval_clock
 						 where user_id=$1 and interval_id=$2 and started_at >= now() - interval '14 days'`,
 							[ctx.id, args.intervalId],
 						),

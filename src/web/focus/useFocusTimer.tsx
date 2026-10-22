@@ -206,13 +206,23 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 		[startRows],
 	);
 
-	const mountedAtRef = useRef(performance.now());
+	const observedIntervalRef = useRef({ intervalId: "", at: performance.now() });
 	const storedIntervalId =
 		snapshot.key === storageKey ? snapshot.state.session?.intervalId : null;
+	if (observedIntervalRef.current.intervalId !== storedIntervalId)
+		observedIntervalRef.current = {
+			intervalId: storedIntervalId ?? "",
+			at: performance.now(),
+		};
 	const storedServerStarted =
 		snapshot.key === storageKey ? snapshot.state.session?.serverStarted : true;
 	useEffect(() => {
 		if (!storedIntervalId) return;
+		if (
+			performance.now() - observedIntervalRef.current.at >=
+			START_ACCEPTANCE_MS
+		)
+			return;
 		const present =
 			startedIds.has(storedIntervalId) ||
 			acknowledgedRef.current.has(storedIntervalId);
@@ -269,6 +279,8 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 				const wall = Date.now();
 				const monotonic = performance.now();
 				const next = update(current.session, wall);
+				if (next?.running && current.pendingCompletions.length > 0)
+					return current;
 				if (
 					next?.running &&
 					next.endsAt !== null &&
@@ -361,13 +373,28 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 							message: mutationFailureMessage(failure, m.focus_log_failed),
 						});
 					await updateFocus((current) => {
+						const at = Date.now();
 						const pendingCompletions = current.pendingCompletions.filter(
 							(item) => item.intervalId !== completion.intervalId,
 						);
 						return pendingCompletions.length ===
 							current.pendingCompletions.length
 							? current
-							: { ...current, pendingCompletions };
+							: {
+									...current,
+									pendingCompletions,
+									session:
+										pendingCompletions.length === 0 &&
+										current.session?.waitingForCompletion
+											? {
+													...current.session,
+													waitingForCompletion: false,
+													running: true,
+													startedAt: at,
+													endsAt: at + current.session.plannedSec * 1000,
+												}
+											: current.session,
+								};
 					});
 				} catch (error) {
 					console.error("focus.logSession failed", error);
@@ -473,12 +500,9 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 			return;
 		// A timeout is not evidence of absence. Keep the shared interval intact:
 		// another live observer may have proof, or the start may sync later.
-		if (
-			!countable(storedSession) &&
-			now - mountedAtRef.current < START_ACCEPTANCE_MS
-		) {
+		if (!countable(storedSession)) {
 			if (
-				now - mountedAtRef.current >= START_LOOKUP_GRACE_MS &&
+				now - observedIntervalRef.current.at >= START_LOOKUP_GRACE_MS &&
 				storedSession.cycle.phase === "work" &&
 				!unresolvedNoticesRef.current.has(
 					`${storageKey}:${storedSession.intervalId}`,
@@ -497,7 +521,6 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 		let counted = true;
 		void updateFocus((current) => {
 			const s = current.session;
-			const at = Date.now();
 			if (
 				!s?.running ||
 				s.intervalId !== intervalId ||
@@ -512,23 +535,10 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 			kind = s.cycle.phase;
 			const monotonicProof = provenTime(s) >= s.plannedSec * 1000;
 			const credit = countable(s);
-			if (
-				!credit &&
-				performance.now() - mountedAtRef.current < START_ACCEPTANCE_MS
-			)
-				return current;
+			if (!credit) return current;
 			counted = credit;
 			const fields = intervalFields(cfg);
-			if (cfg.autoCycle) {
-				clockRef.current = {
-					intervalId: fields.intervalId,
-					endsAt: at + sec * 1000,
-					remainingSec: sec,
-					wall: at,
-					monotonic: performance.now(),
-					provenMs: 0,
-				};
-			}
+
 			return {
 				...current,
 				session: {
@@ -536,9 +546,10 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 					...fields,
 					cycle,
 					plannedSec: sec,
-					running: cfg.autoCycle,
-					startedAt: cfg.autoCycle ? at : null,
-					endsAt: cfg.autoCycle ? at + sec * 1000 : null,
+					running: false,
+					waitingForCompletion: cfg.autoCycle,
+					startedAt: null,
+					endsAt: null,
 					remainingSec: sec,
 				},
 				pendingCompletions: credit
@@ -635,6 +646,8 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 
 	const pause = useCallback(() => {
 		setSession((previous) => {
+			if (previous?.waitingForCompletion)
+				return { ...previous, waitingForCompletion: false };
 			if (!previous?.running || previous.endsAt === null) return previous;
 			return {
 				...previous,
