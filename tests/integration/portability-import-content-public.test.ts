@@ -105,9 +105,15 @@ async function apply(plan: {
 	expect(response.status, await response.clone().text()).toBe(200);
 	return response.json();
 }
-async function count(table: string) {
+const baselineCounts = new Map<string, number>();
+async function rowCount(table: string) {
 	return (await admin.query(`select count(*)::int n from ${table}`)).rows[0]
 		.n as number;
+}
+async function count(table: string) {
+	const baseline = baselineCounts.get(table);
+	if (baseline === undefined) throw new Error(`Missing baseline for ${table}`);
+	return (await rowCount(table)) - baseline;
 }
 async function cleanupRows() {
 	if (!guarded) return;
@@ -208,6 +214,21 @@ beforeAll(async () => {
 });
 beforeEach(async () => {
 	await cleanupRows();
+	// Other integration files retain their own rows in the shared serial fixture.
+	for (const table of [
+		"task",
+		"label",
+		"task_label",
+		"import_source",
+		"notification_outbox",
+		"reminder_state",
+		"task_assignee",
+		"comment",
+		"attachment",
+		"task_completion_event",
+		"karma_event",
+	])
+		baselineCounts.set(table, await rowCount(table));
 	await admin.query(
 		`insert into "user"(id,name,email,email_verified) values('content-owner','Owner','content-owner@example.test',false),('content-outsider','Outside','content-outside@example.test',false),('content-viewer','Viewer','content-viewer@example.test',false)`,
 	);
@@ -294,7 +315,7 @@ test.each(
 	expect(
 		(
 			await admin.query(
-				"select reminder_time,repeat_every_min,max_repeats,fallback_user_id,urgent from task",
+				"select reminder_time,repeat_every_min,max_repeats,fallback_user_id,urgent from task where list_id in (select id from list where workspace_id='content-target')",
 			)
 		).rows.every(
 			(row) =>
@@ -520,7 +541,11 @@ test("import activation suppresses recent past-due notifications before the over
 		scanned: 0,
 		enqueued: 0,
 	});
-	const list = (await admin.query("select id from list limit 1")).rows[0].id;
+	const list = (
+		await admin.query(
+			"select id from list where workspace_id='content-target' limit 1",
+		)
+	).rows[0].id;
 	await admin.query(
 		"insert into task(id,list_id,title,sort_key,due_at) values('content-positive-control',$1,'Ordinary overdue','a9',$2)",
 		[list, due],

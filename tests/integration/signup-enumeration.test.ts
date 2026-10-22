@@ -251,23 +251,48 @@ test.each([
 	expect(existing.cookies).toEqual([]);
 });
 
+async function injectSignupCreateFailure(
+	model: "user" | "account",
+	failure: Error,
+) {
+	const context = await auth.$context;
+	const transaction = context.adapter.transaction.bind(context.adapter);
+	const injected = vi.fn(() => {
+		throw failure;
+	});
+	const adapter = vi
+		.spyOn(context.adapter, "transaction")
+		.mockImplementation((callback) =>
+			transaction(async (scoped) => {
+				const create = scoped.create.bind(scoped);
+				const scopedCreate = vi
+					.spyOn(scoped, "create")
+					.mockImplementation(async (input) => {
+						if (input.model === model) return injected();
+						return create(input);
+					});
+				try {
+					return await callback(scoped);
+				} finally {
+					scopedCreate.mockRestore();
+				}
+			}),
+		);
+	return { adapter, injected };
+}
+
 test.each([
 	"user",
 	"account",
 ] as const)("%s persistence failure stays neutral and is logged", async (model) => {
 	const context = await auth.$context;
-	const create = context.adapter.create.bind(context.adapter);
 	const failure = new Error(`injected ${model} storage failure`);
-	const adapter = vi
-		.spyOn(context.adapter, "create")
-		.mockImplementation(async (input) => {
-			if (input.model === model) throw failure;
-			return create(input);
-		});
+	const { adapter, injected } = await injectSignupCreateFailure(model, failure);
 	const log = vi.spyOn(console, "error").mockImplementation(() => {});
 	const authLog = vi.spyOn(context.logger, "error");
 	try {
 		const failed = await adversarialSignup({});
+		expect(injected).toHaveBeenCalledTimes(1);
 		expect(failed.status).toBe(200);
 		expect(JSON.parse(failed.body)).toEqual({ token: null, user: null });
 		expect(failed.cookies).toEqual([]);
@@ -296,16 +321,13 @@ test("an API creation refusal after admission stays neutral", async () => {
 		message: "injected storage refusal",
 	});
 	const log = vi.spyOn(console, "error").mockImplementation(() => {});
-	const context = await auth.$context;
-	const create = context.adapter.create.bind(context.adapter);
-	const adapter = vi
-		.spyOn(context.adapter, "create")
-		.mockImplementation(async (input) => {
-			if (input.model === "user") throw failure;
-			return create(input);
-		});
+	const { adapter, injected } = await injectSignupCreateFailure(
+		"user",
+		failure,
+	);
 	try {
 		const failed = await adversarialSignup({});
+		expect(injected).toHaveBeenCalledTimes(1);
 		expect(failed.status).toBe(200);
 		expect(failed.cookies).toEqual([]);
 		expect(log).toHaveBeenCalledWith(
