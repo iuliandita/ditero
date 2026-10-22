@@ -23,6 +23,7 @@ import {
 	useKeyring,
 	type WorkspaceKeyMaterial,
 } from "../../lib/e2e/KeyringProvider.tsx";
+import { startKeyPoll } from "../../lib/e2e/key-poll.ts";
 import {
 	AttachmentUploadCapabilityError,
 	AttachmentUploadError,
@@ -71,6 +72,11 @@ export type AttachmentGateController = {
 	pendingFileName: string | null;
 };
 
+// A selection waiting on a grant keeps its files and retries until the key
+// arrives, for at most ten minutes; picking again starts a fresh wait.
+const KEY_WAIT_MS = 10_000;
+const KEY_WAIT_RUNS = 60;
+
 function displayNames(names: string[]): string {
 	if (names.length <= 3) return formatList(names);
 	return `${formatList(names.slice(0, 3), "unit")} ${m.e2e_grant_who_overflow({ count: names.length - 3 })}`;
@@ -98,6 +104,16 @@ export function useAttachmentGate(
 	const [pendingFileName, setPendingFileName] = useState<string | null>(null);
 	const pending = useRef<PendingAction | null>(null);
 	const maxFileBytes = useRef<number | null>(null);
+	// Zero is idle; every failed selection gets a new generation.
+	const [keyWait, setKeyWait] = useState(0);
+	const keyWaits = useRef(0);
+	const alive = useRef(true);
+	useEffect(() => {
+		alive.current = true;
+		return () => {
+			alive.current = false;
+		};
+	}, []);
 	const blocked =
 		Boolean(workspace?.rotationRequired || serverBlocked) && !rotationCleared;
 
@@ -126,26 +142,54 @@ export function useAttachmentGate(
 	}, [blocked, runtimeFetcher, workspaceId]);
 
 	const continueWithKey = useCallback(
-		async (current: PendingAction): Promise<boolean> => {
+		async (current: PendingAction, waiting = false): Promise<boolean> => {
+			// workspaceKey reconciles first, so one call is a full retry.
 			let key = await keyring.workspaceKey(workspaceId, current.keyVersion);
-			if (!key) {
+			if (!key && !waiting) {
 				await keyring.refreshWorkspaceKeys();
 				key = await keyring.workspaceKey(workspaceId, current.keyVersion);
 			}
+			// A newer selection or an unmount superseded this one meanwhile.
+			if (!alive.current || pending.current !== current) return false;
 			if (!key) {
 				setError(m.attachment_key_pending());
+				if (!waiting) {
+					keyWaits.current += 1;
+					setKeyWait(keyWaits.current);
+				}
 				return false;
 			}
 			pending.current = null;
+			setKeyWait(0);
+			if (waiting) setError(null);
 			await current.action(key, current.files);
 			return true;
 		},
 		[keyring, workspaceId],
 	);
+	const continueRef = useRef(continueWithKey);
+	continueRef.current = continueWithKey;
+
+	useEffect(() => {
+		if (keyWait === 0 || keyring.state !== "ready") return;
+		const poll = startKeyPoll({
+			intervalMs: KEY_WAIT_MS,
+			maxRuns: KEY_WAIT_RUNS,
+			run: async () => {
+				const current = pending.current;
+				if (!current) return true;
+				return await continueRef.current(current, true);
+			},
+			onError: (caught) =>
+				console.error("attachments: waiting for file access failed", caught),
+		});
+		return () => poll.stop();
+	}, [keyWait, keyring.state]);
 
 	const begin = useCallback(
 		async (current: PendingAction): Promise<boolean> => {
 			setError(null);
+			setKeyWait(0);
 			pending.current = current;
 			setPendingFileName(current.files[0]?.name ?? null);
 			// Historical reads retain their key version; only new files need rotation.
@@ -260,6 +304,7 @@ export function useAttachmentGate(
 	}, []);
 	const cancelEnrollment = useCallback(() => {
 		pending.current = null;
+		setKeyWait(0);
 		setPendingFileName(null);
 		setError(m.e2e_enroll_discard_notice());
 	}, []);

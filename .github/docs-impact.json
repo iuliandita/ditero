@@ -2,9 +2,9 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "ddfe3e5e9ea909242861fc998b842107ed1dcd7d45f93cf8c696d3dfedcd1679",
-			"docs": ["docs/security.md", "docs/runbooks/sign-in-providers.md"],
-			"note": "Preserve the six-locale provider linking, registration refusals and forgot/reset-password flows; reset success explains revoked credentials and retained two-factor settings. Retain Zero loading/offline warnings and retirement checks, import retry/preview boundaries, focus reconciliation and consent-gated voice behavior. Add a standalone two-factor page that completes TOTP or recovery-code sign-in before navigating to a validated same-origin callback. Preserve native grant parameters without mounting sync while challenged. All six locales explain that provider sign-in still requires the enrolled local factor. Existing locale, theme, device approval and sign-up behavior remains."
+			"sourceDigest": "eaa4fea83b77050a1fec5ea9b75be3b5be5580b5c108d1c014cd4ac3c5d58d3b",
+			"docs": ["docs/security.md"],
+			"note": "An open, unlocked key holder fulfills pending workspace file-grant requests on the 15-second state cadence with backoff on failure, never alongside a reconcile, and stops on lock, sign-out and unmount. A member selection waiting for its grant retries for up to ten minutes and uploads once the key arrives, without a reload. Grant checks, sealing and server authorization are unchanged; no catalog, locale or theme change."
 		},
 		"release": {
 			"sourceDigest": "da9d2a9a8dd15d82056e1e549dadf911af318e068add68ba2123191d65326cbd",

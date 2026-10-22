@@ -398,15 +398,36 @@ export async function reconcileWorkspaceKeys(
 		});
 	}
 
+	await fulfilPendingGrants(keyring, fetcher);
+	return rows;
+}
+
+/**
+ * Seals the caller's WDK to every pending request it can serve. The server
+ * lists only requests for versions the caller holds a wrap for; `missing`
+ * lists those whose WDK this keyring has not loaded yet.
+ */
+export async function fulfilPendingGrants(
+	keyring: Pick<ReconcileKeyring, "wdkFor">,
+	fetcher: E2eFetcher = defaultFetcher,
+): Promise<{ granted: number; missing: WorkspaceKeyFailure[] }> {
 	const grants = await jsonRequest(
 		fetcher,
 		"/api/e2e/grants/pending",
 		pendingGrantsSchema,
 	);
+	let granted = 0;
+	const missing: WorkspaceKeyFailure[] = [];
 	for (const request of grants.requests) {
 		if (!request.recipientPublicKey) continue;
 		const wdk = keyring.wdkFor(request.workspaceId, request.keyVersion);
-		if (!wdk) continue;
+		if (!wdk) {
+			missing.push({
+				workspaceId: request.workspaceId,
+				keyVersion: request.keyVersion,
+			});
+			continue;
+		}
 		const sealed = await sealedFor(
 			wdk,
 			request.recipientPublicKey,
@@ -427,6 +448,7 @@ export async function reconcileWorkspaceKeys(
 				...sealed,
 			}),
 		);
+		granted += 1;
 	}
-	return rows;
+	return { granted, missing };
 }
