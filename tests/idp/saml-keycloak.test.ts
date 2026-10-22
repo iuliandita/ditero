@@ -271,14 +271,17 @@ async function browse(
 		const inputs = [...html.matchAll(/<input\b[^>]*>/gi)].map((match) =>
 			attributes(match[0]),
 		);
-		const saml = inputs.find((input) => input.name === "samlresponse");
+		const saml = inputs.find(
+			(input) => input.name?.toLowerCase() === "samlresponse",
+		);
 		if (saml) {
 			const form = /<form\b[^>]*>/i.exec(html)?.[0] ?? "";
 			return {
 				samlResponse: decode(saml.value),
 				relayState:
 					decode(
-						inputs.find((input) => input.name === "relaystate")?.value ?? "",
+						inputs.find((input) => input.name?.toLowerCase() === "relaystate")
+							?.value ?? "",
 					) || null,
 				action: decode(attributes(form).action ?? ""),
 			};
