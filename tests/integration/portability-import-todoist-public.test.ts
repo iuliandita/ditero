@@ -102,25 +102,32 @@ async function apply(plan: {
 	expect(response.status, await response.clone().text()).toBe(200);
 	return response.json();
 }
-const countedTables = [
-	"task",
-	"folder",
-	"import_source",
-	"import_job",
-	"task_completion_event",
-	"imported_completion_event",
-	"karma_event",
-	"notification_outbox",
-	"reminder_state",
-	"task_assignee",
-	"comment",
-	"attachment",
-	"label",
-] as const;
+const ownerIds = "'todoist-owner','todoist-outsider'";
+const targetLists = "select id from list where workspace_id='todoist-target'";
+const targetTasks = `select id from task where list_id in (${targetLists})`;
+const countScopes = new Map<string, string>([
+	["task", `list_id in (${targetLists})`],
+	["folder", "workspace_id='todoist-target'"],
+	["import_source", `owner_user_id in (${ownerIds})`],
+	["import_job", `owner_user_id in (${ownerIds})`],
+	["task_completion_event", `task_id in (${targetTasks})`],
+	["imported_completion_event", `task_id in (${targetTasks})`],
+	["karma_event", `user_id in (${ownerIds})`],
+	["notification_outbox", `recipient_user_id in (${ownerIds})`],
+	["reminder_state", `task_id in (${targetTasks})`],
+	["task_assignee", `task_id in (${targetTasks})`],
+	["comment", `task_id in (${targetTasks})`],
+	["attachment", "workspace_id='todoist-target'"],
+	["label", "workspace_id='todoist-target'"],
+]);
+const countedTables = [...countScopes.keys()];
 const baselineCounts = new Map<string, number>();
 async function rowCount(table: string) {
-	return (await admin.query(`select count(*)::int n from ${table}`)).rows[0]
-		.n as number;
+	const scope = countScopes.get(table);
+	if (!scope) throw new Error(`Missing count scope for ${table}`);
+	return (
+		await admin.query(`select count(*)::int n from ${table} where ${scope}`)
+	).rows[0].n as number;
 }
 async function addedRows(table: string) {
 	const baseline = baselineCounts.get(table);

@@ -45,6 +45,7 @@ beforeEach(async () => {
 	await db.delete(tables.managedAccount);
 	await db.delete(tables.task);
 	await db.delete(tables.list);
+	await db.delete(tables.folder);
 	await db.delete(tables.membership);
 	await db.delete(tables.workspace);
 	await db.delete(tables.passkey);

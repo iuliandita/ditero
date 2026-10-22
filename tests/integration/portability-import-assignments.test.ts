@@ -145,6 +145,55 @@ beforeEach(async () => {
 	};
 });
 afterAll(async () => {
+	const workspaces = ["source", "target", "other"];
+	const users = ["alice", "bob", "charlie"];
+	const lists = "select id from list where workspace_id = any($1)";
+	const client = await pool.connect();
+	try {
+		await client.query("begin");
+		// Privileged teardown of rows this file created, scoped to its ids.
+		await client.query(
+			"delete from import_source where owner_user_id = any($1)",
+			[users],
+		);
+		await client.query(`delete from task where list_id in (${lists})`, [
+			workspaces,
+		]);
+		await client.query("delete from list where workspace_id = any($1)", [
+			workspaces,
+		]);
+		await client.query("delete from folder where workspace_id = any($1)", [
+			workspaces,
+		]);
+		await client.query("delete from label where workspace_id = any($1)", [
+			workspaces,
+		]);
+		await client.query("delete from membership where workspace_id = any($1)", [
+			workspaces,
+		]);
+		await client.query("delete from workspace where id = any($1)", [
+			workspaces,
+		]);
+		await client.query('delete from "user" where id = any($1)', [users]);
+		const leftover = await client.query<{ count: number }>(
+			`select ((select count(*) from workspace where id = any($1))
+			 + (select count(*) from list where workspace_id = any($1))
+			 + (select count(*) from task where list_id in (${lists}))
+			 + (select count(*) from folder where workspace_id = any($1))
+			 + (select count(*) from label where workspace_id = any($1))
+			 + (select count(*) from import_source where owner_user_id = any($2))
+			 + (select count(*) from import_job where owner_user_id = any($2))
+			 + (select count(*) from "user" where id = any($2)))::int as count`,
+			[workspaces, users],
+		);
+		expect(leftover.rows[0]?.count).toBe(0);
+		await client.query("commit");
+	} catch (error) {
+		await client.query("rollback");
+		throw error;
+	} finally {
+		client.release();
+	}
 	await runtime.end();
 	await pool.end();
 });
