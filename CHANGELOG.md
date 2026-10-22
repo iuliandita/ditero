@@ -7,6 +7,14 @@ Back up your database and attachments before upgrading, and retain the original
 encryption keys and service secrets. Breaking changes remain possible throughout
 the `0.x` prereleases.
 
+## 0.1.0-beta.2 - 2026-10-22
+
+- Android and desktop apps sync again. Beta 1 kept the sync address of the
+  previous sync engine and refused the binary updates the new one sends, so native
+  apps stayed signed in but never connected. Web clients were not affected.
+  Update the apps in place rather than reinstalling: edits made in a beta 1
+  native app exist only on that device.
+
 ## 0.1.0-beta.1 - 2026-10-21
 
 The first beta is a `0.x` prerelease, not a stable release. Native device/platform

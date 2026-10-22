@@ -2,7 +2,7 @@
 
 This chart packages the server for Kubernetes. It runs
 the web/API image and its matching Zero sync image, with an external PostgreSQL
-database. The chart version is `0.1.0-beta.1`; it is a beta prerelease,
+database. The chart version is `0.1.0-beta.2`; it is a beta prerelease,
 not a stable release. Breaking changes remain possible.
 
 ## Prerequisites
@@ -92,8 +92,8 @@ kubectl --namespace ditero port-forward service/household-ditero-app 3000:3000
 kubectl --namespace ditero port-forward service/household-ditero-zero 4848:4848
 ```
 
-Images default to `ghcr.io/iuliandita/ditero:0.1.0-beta.1` and
-`ghcr.io/iuliandita/ditero:0.1.0-beta.1-zero`. Change either repository to
+Images default to `ghcr.io/iuliandita/ditero:0.1.0-beta.2` and
+`ghcr.io/iuliandita/ditero:0.1.0-beta.2-zero`. Change either repository to
 `docker.io/iuliandita/ditero` to use Docker Hub. Set `app.image.digest` and
 `zero.image.digest` to verified `sha256:...` values to pin immutable images;
 digests take precedence over tags. Always upgrade the application and Zero pair
