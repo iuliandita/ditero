@@ -1,0 +1,196 @@
+name: Desktop runtime journeys
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ci/346-desktop-runtime-journeys]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-journeys-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  journey:
+    if: github.ref == 'refs/heads/ci/346-desktop-runtime-journeys'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            bundles: deb
+          - runner: windows-2025
+            target: x86_64-pc-windows-msvc
+            bundles: nsis
+          - runner: macos-15
+            target: aarch64-apple-darwin
+            bundles: app,dmg
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+            bundles: app,dmg
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 100
+    defaults:
+      run:
+        shell: bash
+    env:
+      CARGO_BUILD_JOBS: 2
+      CARGO_INCREMENTAL: 0
+      DESKTOP_TARGET: ${{ matrix.target }}
+      DESKTOP_BUNDLES: ${{ matrix.bundles }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.2
+      - name: Check runner Node support
+        run: |
+          set -euo pipefail
+          node --version
+          node -e 'if(Number(process.versions.node.split(".")[0]) < 22) process.exit(1)'
+      - name: Linux runtime prerequisites
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            libwebkit2gtk-4.1-dev webkit2gtk-driver build-essential curl file \
+            libxdo-dev libssl-dev libdbus-1-dev libayatana-appindicator3-dev librsvg2-dev \
+            patchelf xvfb x11-utils dbus-x11 gnome-keyring libsecret-tools libnss3-tools \
+            postgresql postgresql-client dunst xdotool openbox wmctrl scrot
+      - name: macOS PostgreSQL
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          brew install postgresql@18
+          swiftc apps/desktop/tests/journeys/macos-browser.swift -o "$RUNNER_TEMP/journey-browser"
+          swiftc apps/desktop/tests/journeys/macos-notifications.swift -o "$RUNNER_TEMP/journey-notifications"
+      - name: Select Rust and native driver
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.98.1 --profile minimal --component rustfmt
+          rustup default 1.98.1
+          rustup target add "$DESKTOP_TARGET"
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: apps/desktop/src-tauri
+          key: journeys-${{ matrix.target }}-1.98.1
+          cache-on-failure: true
+      - name: Install tauri-driver
+        if: runner.os != 'macOS'
+        run: cargo install tauri-driver --version 2.1.0 --locked
+      - name: Select Windows native driver
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $driver = Join-Path $env:EDGEWEBDRIVER 'msedgedriver.exe'
+          if (-not (Test-Path $driver)) { throw 'Runner Edge driver missing' }
+          & $driver --version
+          "JOURNEY_EDGE_DRIVER=$driver" >> $env:GITHUB_ENV
+          Get-ChildItem 'C:\Program Files (x86)\Microsoft\EdgeWebView\Application' -Directory | Select-Object -ExpandProperty Name
+          $wrapper = Join-Path $env:RUNNER_TEMP 'journey-driver.exe'
+          rustc apps/desktop/tests/journeys/windows-driver.rs -o $wrapper
+          if ($LASTEXITCODE -ne 0) { throw 'Driver logging wrapper build failed' }
+          "JOURNEY_NATIVE_DRIVER=$wrapper" >> $env:GITHUB_ENV
+      - name: Install frozen dependencies and compile
+        run: |
+          set -euo pipefail
+          bun install --frozen-lockfile
+          (cd apps/desktop && bun install --frozen-lockfile)
+          bun run i18n:compile
+          bunx vite build
+          (cd apps/desktop && bun run build)
+      - name: Harness typecheck
+        if: runner.os == 'Linux'
+        run: bunx tsc --ignoreConfig --noEmit --target es2023 --module nodenext --moduleResolution nodenext --allowImportingTsExtensions --strict --skipLibCheck --types node apps/desktop/tests/journeys/*.ts
+      - name: Native formatting and lifecycle
+        working-directory: apps/desktop/src-tauri
+        run: |
+          set -euo pipefail
+          cargo fmt --check
+          cargo test --locked --target "$DESKTOP_TARGET"
+      - name: Prove pending-handshake close regression
+        if: runner.os == 'Linux'
+        run: python3 apps/desktop/tests/journeys/verify-close.py
+      - name: Build development installer
+        working-directory: apps/desktop
+        run: |
+          set -euo pipefail
+          bun run tauri build --debug --no-binary-patching --target "$DESKTOP_TARGET" \
+            --bundles "$DESKTOP_BUNDLES" -- --locked
+      - name: Create ephemeral trusted HTTPS fixture
+        timeout-minutes: 3
+        run: bash apps/desktop/tests/journeys/setup.sh
+      - name: Install Windows development package
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./apps/desktop/tests/journeys/install.ps1
+      - name: Install Linux or macOS development package
+        if: runner.os != 'Windows'
+        run: bash apps/desktop/tests/journeys/install.sh
+      - name: Run Windows core journeys with recorded runner elevation
+        if: runner.os == 'Windows'
+        timeout-minutes: 15
+        shell: pwsh
+        run: ./apps/desktop/tests/journeys/windows-session.ps1
+      - name: Run macOS journeys
+        if: runner.os == 'macOS'
+        timeout-minutes: 15
+        run: node --experimental-strip-types apps/desktop/tests/journeys/run.ts
+      - name: Run Linux journeys with a real session keyring
+        if: runner.os == 'Linux'
+        timeout-minutes: 15
+        run: |
+          set -euo pipefail
+          dbus-run-session -- xvfb-run -a bash apps/desktop/tests/journeys/linux.sh
+      - name: Upload journey evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: desktop-journeys-${{ matrix.runner }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/desktop-journeys/evidence/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Prove macOS automation excluded from release binary
+        if: ${{ always() && !cancelled() && runner.os == 'macOS' }}
+        working-directory: apps/desktop
+        run: |
+          set -euo pipefail
+          bun run tauri build --no-bundle --target "$DESKTOP_TARGET" -- --locked
+          python3 - <<'PYTHON'
+          import hashlib, json, os, pathlib, subprocess
+          target = pathlib.Path('src-tauri/target', os.environ['DESKTOP_TARGET'])
+          marker = b'DITERO_JOURNEY_TOKEN'
+          debug = (target / 'debug/ditero-desktop').read_bytes()
+          release = (target / 'release/ditero-desktop').read_bytes()
+          assert marker in debug, 'Missing positive debug control'
+          assert marker not in release, 'Automation leaked into release'
+          assert b'--journey-keystore' in debug, 'Missing keystore probe positive control'
+          assert b'--journey-keystore' not in release, 'Keystore probe leaked into release'
+          assert b'--journey-notifications' in debug, 'Missing notification probe positive control'
+          assert b'--journey-notifications' not in release, 'Notification probe leaked into release'
+          linkage = subprocess.check_output(['otool', '-l', str(target / 'release/ditero-desktop')], text=True)
+          notifications = [command for command in linkage.split('Load command ') if 'name /System/Library/Frameworks/UserNotifications.framework/' in command]
+          assert len(notifications) == 1 and 'cmd LC_LOAD_WEAK_DYLIB' in notifications[0], 'UserNotifications must be weak-linked for macOS 10.13'
+          pathlib.Path(os.environ['RUNNER_TEMP'], 'desktop-journeys/evidence/release-exclusion.json').write_text(json.dumps({
+            'debugContainsHook': True, 'releaseContainsHook': False,
+            'debugContainsKeystoreProbe': True, 'releaseContainsKeystoreProbe': False,
+            'debugContainsNotificationProbe': True, 'releaseContainsNotificationProbe': False,
+            'userNotificationsWeakLinked': True,
+            'debugSha256': hashlib.sha256(debug).hexdigest(), 'releaseSha256': hashlib.sha256(release).hexdigest()
+          }))
+          PYTHON
+      - name: Upload release exclusion evidence
+        if: ${{ always() && !cancelled() && runner.os == 'macOS' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: desktop-journeys-release-${{ matrix.runner }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/desktop-journeys/evidence/release-exclusion.json
+          if-no-files-found: error
+          retention-days: 7

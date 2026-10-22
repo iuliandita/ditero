@@ -26,6 +26,9 @@ concurrent instances from overwriting each other's state. A bounded protected
 journal tracks interrupted writes so retries reclaim uncommitted chunks. Local UI
 and sync persistence retain server/account scopes. Closing waits for durable local sync retirement before
 native sockets are drained and the window is destroyed; a failure keeps it open.
+Pending reconnect handshakes finish within their existing deadline before normal
+close cancels them. Network failures preserve verified offline access; failed
+certificate trust and unknown interrupted requests continue to refuse it.
 
 When device storage fails, sign-out and account/server changes wait for the
 actual pending sync queue to be acknowledged by the server. A localized warning
@@ -90,8 +93,9 @@ the last verified expiry bounds this access, matching Android's policy.
 Unit tests cover the host decision matrix, protected evidence persistence, failed
 refusal cleanup, concurrent request fences, bounded multi-account keyring records,
 legacy migration, real TLS refusal classification, and the shared client startup
-path. Cold offline activation still needs packaged runtime qualification on each
-platform. To check it manually:
+path. Installed Linux, Windows x64, and macOS Apple Silicon/Intel development-package
+journeys also cover cold offline activation and reconnect.
+To check it manually:
 
 1. Sign in to an existing account online and wait for lists to synchronize.
 2. Disconnect the network, edit a task, and close Ditero normally.
@@ -131,9 +135,39 @@ task-link behavior and qualification limits are documented in the
 ## System notifications
 
 Linux system notifications require a notification service with action support.
-Enable them in Settings after signing in. They arrive while Ditero is open or
-minimized; closing the application stops reception. Windows and macOS currently
-report this delivery mode as unavailable.
+Windows uses installed-app toasts with click routing while the banner is visible;
+dismissed banners are removed from history. Hosted Windows preparation turns off
+Do not disturb through the OS UI; the app does not override it. No banner or click
+was observed even with that setting off. Windows display, click routing, and popup
+retirement remain unqualified in #346. CI reports and asserts an explicit
+"unqualified on hosted runner" result for this case, separate from 11 required
+core journey passes. Those core checks inherit the hosted runner's token and
+record its actual elevation. They exercise HTTPS trust, browser consent, sync,
+offline persistence, server isolation, and Credential Manager cleanup; their
+assertions do not depend on notification-shell delivery or establish unelevated
+runtime qualification. The restricted medium-integrity worker could not start
+Node (AccessDenied), so it is not used for these checks. Elevation as the cause
+of the missing banner remains unproven.
+macOS 10.14+ uses
+UNUserNotificationCenter and asks for notification permission when you enable delivery. Denied permission is shown
+with a localized reason; allow Ditero in system notification settings and retry.
+Permission-check failures remain unavailable; they never imply permission granted.
+If macOS shows no prompt, check Ditero in System Settings and refresh status.
+macOS 10.13 retains the legacy NSUserNotification backend; runtime qualification
+of that older OS remains open. UserNotifications is weak-linked so adding modern
+delivery does not raise the bundle minimum.
+The installed Linux journey also verifies popup withdrawal on server switch and
+sign-out, with a displayed notification as a positive control before each action.
+Enable delivery in Settings after signing in. Notifications arrive while Ditero
+is open or minimized; closing the application stops reception. These backends
+remain experimental. Linux notification qualification requires real display and
+click routing. The Windows hosted exception above does not credit either behavior.
+On hosted macOS 15, the installed ad-hoc build
+changes from NotDetermined to Denied without showing an Allow dialog, even with
+Ditero frontmost. The journey verifies the fresh OS denial, localized reason, no
+notification registration, and empty OS state. Display, click routing and popup
+retirement on macOS still require an installation with granted system permission;
+those checks are not credited by the hosted refusal check.
 
 System popups contain generic text, never task titles or other task content.
 Opening a popup resolves its destination through the current server and account.
@@ -145,14 +179,19 @@ A bounded Linux host check confirmed that the system notification service accept
 a scheduled reminder. Its actual Open action resolved the canonical task and
 focused the native Wayland window. The delivery receipt was stored durably, and
 the task remained unfinished. Focused tests cover pending, revoked, and expired
-notification cleanup. This does not qualify Windows or macOS notification behavior.
+notification cleanup. The Windows/macOS backends retain the same captured
+server/account/session ownership and resolve clicks through the authenticated
+server rather than embedding task data in OS payloads.
 
 Account retirement cancels notification callbacks and attempts to remove owned
 popups. Shutdown gives removal one three-second budget. A stalled system service
 can still display a delayed generic popup after exit; removal is best effort.
-Popups request a five-minute expiry and transient handling, which the system
-service may override. In-app reminders and other configured delivery channels
-retain their own behavior.
+Linux popups request a five-minute expiry and transient handling, which the
+system service may override. Windows removes both owned banners and history
+entries; macOS removes owned pending and delivered requests, including late
+completion after a timed-out add request. Startup removes
+leftover app notifications whose old process can no longer handle clicks. In-app
+reminders and other configured delivery channels retain their own behavior.
 
 ## Encrypted files
 
@@ -346,22 +385,55 @@ webview against a trusted HTTPS server:
   read/write permissions on the saved file.
 
 These checks cover the Linux core journey and webview key-storage primitives.
-They do not qualify full encryption enrollment/recovery or prove durable close
-with queued offline edits. Focused tests separately cover protocol, credential
-cleanup, vault retry, and bounded socket writes.
+They do not qualify full encryption enrollment/recovery. The hosted Linux
+development-package journey additionally passes offline task edit/create, normal
+close, cold offline restore from verified OS-keystore evidence, reconnect with
+server-confirmed persistence, two-server isolation, and selected/final credential
+removal from Secret Service. Its real notification popup is shown and clicked to
+open the task without completing it. Focused tests separately cover protocol,
+credential cleanup, vault retry, and bounded socket writes.
 
 Theme radio controls and reading-preference controls have been corrected. An actual
 WebKitGTK CSS check covered dark, light, system, Large text, and high contrast
 settings; it does not qualify a new installer or a complete platform journey.
 
-Windows and macOS have successful development builds only; actual sign-in,
-credential-store access, offline behavior, and notification clicks remain unqualified.
-Offline recovery, account/server changes, revoke/restore failures, reload behavior,
-worker execution, OPFS/locks, and installer execution still require platform checks.
+Installed Windows x64 and macOS Apple Silicon/Intel development packages pass first launch, untrusted HTTPS
+refusal, trusted system-browser consent, task sync in both directions, offline
+edit/create and cold start, reconnect, two-server isolation, and both sign-outs.
+Fresh Credential Manager and Keychain reads confirm verified evidence and final
+credential removal, with the protected cleanup journal finished before sign-out
+is credited on every runner.
+The branch-scoped Desktop runtime journeys workflow installs development packages
+on hosted Windows, Apple Silicon macOS, Intel macOS, and Linux runners. Its
+per-journey artifacts distinguish completed checks from unavailable features
+and retain screenshots, process logs, port allocations, certificate fingerprints,
+and OS-keystore counts. Windows evidence also records installed shortcut identity,
+per-user notification-shell registration, OS focus state and debug toast lifecycle
+outcomes without task content.
+It uses ephemeral servers and an OS-trusted local CA, without certificate bypasses.
+macOS automation is included only in debug builds, requires explicit process-local
+test configuration, and is checked for absence from the optimized release binary.
+Its counts-only keystore probe opens fresh OS entries under the installed app
+identity, preserving Keychain access controls and returning no credentials. A
+second debug-only probe reads authorization status and pending/delivered notification counts from the OS
+under that identity; the optimized release must exclude both probes. Notification
+retirement assertions require a positive pending-notification control before
+server switching or sign-out, then zero pending/delivered notifications.
+Sign-out now starts retired notification cleanup after durable local revocation.
+A native regression and mutation control verify that normal close waits for
+pending sync-handshake classification before retiring the socket.
+These disposable runner accounts do not qualify download trust, trusted signing,
+notarization, upgrades, or physical devices. Windows/macOS notification backends
+are implemented and covered by the journey workflow, including explicit macOS
+permission-refusal evidence; installer success alone
+does not qualify notification display or click routing.
+Existing client data, backups, and rollback procedures are unchanged by this test harness.
+macOS worker execution and OPFS/locks still require runtime checks. Revocation/recovery failure
+journeys and upgrades remain unqualified on every platform.
 The desktop uses each platform's native TLS trust; server certificates must also
 be trusted by the user's system browser. No certificate bypass is supported.
 
-Broader encrypted-file qualification, Windows/macOS notification integration,
+Broader encrypted-file qualification, Windows/macOS notification runtime qualification,
 deep links, updater delivery, release signing, and complete installer qualification
 remain unfinished. Shared browser-only settings and integrations retain the Android
 core's limitations. A successful installer build alone does not prove complete
