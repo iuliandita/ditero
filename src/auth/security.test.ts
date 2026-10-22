@@ -29,6 +29,14 @@ describe("authRateLimitOptions", () => {
 		});
 		for (const path of ["/get-session", "/token"])
 			expect(options.customRules[path]).toEqual({ window: 60, max: 600 });
+		expect(options.customRules["/sign-in/sso"]).toEqual({
+			window: 60,
+			max: 20,
+		});
+		expect(options.customRules["/sso/saml2/sp/acs/*"]).toEqual({
+			window: 60,
+			max: 30,
+		});
 		expect(options.max).toBe(100);
 		for (const path of ["/reset-password", "/change-password"])
 			expect(options.customRules[path]).toEqual({ window: 300, max: 5 });

@@ -46,6 +46,10 @@ the neutral localized `PROVIDER_SIGN_IN_REFUSED` message and retains the grant I
 New provider accounts require a provider-verified email in every registration mode.
 A provider email is never linked to an existing account automatically; link providers from browser
 settings. See [sign-in providers](sign-in-providers.md).
+SAML single sign-on, when configured, appears on the same page and returns to it
+with the grant ID intact; it uses the browser flow described in
+[SAML single sign-on](sign-in-providers.md#saml-single-sign-on) and adds no native
+credential path. A refused or unlinked identity returns here with a readable error.
 Preview exposes only the device label, expiry, and pending or approved status.
 An approved grant is visible only to its approving account while the original
 approving session remains live. Cancel leaves the request unapproved.

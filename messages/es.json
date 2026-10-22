@@ -348,6 +348,15 @@
 	"security_error_sign_out": "No se pudo completar el cierre de sesión. Inténtalo de nuevo.",
 	"security_passkeys_heading": "Claves de acceso",
 	"security_passkeys_empty": "Inicia sesión con tu huella, tu cara o el PIN del dispositivo en lugar de una contraseña.",
+	"security_sso_heading": "Inicio de sesión único",
+	"security_sso_description": "Vincula el proveedor de identidad de tu organización con esta cuenta. Iniciar sesión con SSO nunca concede por sí solo acceso a un espacio.",
+	"security_sso_linked": "vinculado",
+	"security_sso_not_linked": "sin vincular",
+	"security_sso_link": "Vincular",
+	"security_sso_unlink": "Desvincular",
+	"security_sso_error_load": "No se pudieron cargar tus inicios de sesión vinculados.",
+	"security_sso_error_link": "No se pudo iniciar la vinculación del inicio de sesión único.",
+	"security_sso_error_unlink": "No se pudo desvincular el inicio de sesión único.",
 	"security_add_passkey": "Añadir clave de acceso",
 	"security_passkey_unnamed": "Clave de acceso",
 	"security_passkey_remove": "Quitar",
@@ -387,13 +396,10 @@
 	"due_tomorrow": "Mañana",
 	"list_completed_count": [
 		{
-			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
-			"match": {
 				"countPlural=one": "{countNum} elemento completado",
 				"countPlural=many": "{countNum} elementos completados",
 				"countPlural=other": "{countNum} elementos completados"
@@ -402,16 +408,10 @@
 	],
 	"list_in_cart_count": [
 		{
-			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "{countNum} artículo en el carrito",
-				"countPlural=many": "{countNum} artículos en el carrito",
-				"countPlural=other": "{countNum} artículos en el carrito"
 			}
 		}
 	],
@@ -549,15 +549,12 @@
 	"task_open_details": "Abrir detalles",
 	"task_subtask_progress_aria": [
 		{
-			"declarations": [
 				"input done",
 				"input total",
 				"local doneNum = done: number",
 				"local totalNum = total: number",
 				"local totalPlural = total: plural"
 			],
-			"selectors": ["totalPlural"],
-			"match": {
 				"totalPlural=one": "{doneNum} de {totalNum} subtarea hecha",
 				"totalPlural=many": "{doneNum} de {totalNum} subtareas hechas",
 				"totalPlural=other": "{doneNum} de {totalNum} subtareas hechas"
@@ -566,14 +563,11 @@
 	],
 	"task_subtask_progress": [
 		{
-			"declarations": [
 				"input done",
 				"input total",
 				"local doneNum = done: number",
 				"local totalNum = total: number"
 			],
-			"selectors": [],
-			"match": {
 				"*": "{doneNum}/{totalNum}"
 			}
 		}
@@ -634,108 +628,60 @@
 	"recurrence_invalid": "Repetición no válida.",
 	"recurrence_unit_daily": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "día",
-				"countPlural=many": "días",
-				"countPlural=other": "días"
 			}
 		}
 	],
 	"recurrence_unit_weekly": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "semana",
-				"countPlural=many": "semanas",
-				"countPlural=other": "semanas"
 			}
 		}
 	],
 	"recurrence_unit_monthly": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "mes",
-				"countPlural=many": "meses",
-				"countPlural=other": "meses"
 			}
 		}
 	],
 	"recurrence_unit_yearly": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "año",
-				"countPlural=many": "años",
-				"countPlural=other": "años"
 			}
 		}
 	],
 	"recurrence_summary_daily": [
 		{
-			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "Cada día",
-				"countPlural=many": "Cada {countNum} días",
-				"countPlural=other": "Cada {countNum} días"
 			}
 		}
 	],
 	"recurrence_summary_weekly": [
 		{
-			"declarations": [
 				"input count",
 				"input days",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "Cada semana los {days}",
-				"countPlural=many": "Cada {countNum} semanas los {days}",
-				"countPlural=other": "Cada {countNum} semanas los {days}"
 			}
 		}
 	],
 	"recurrence_summary_monthly": [
 		{
-			"declarations": [
 				"input count",
 				"input monthday",
 				"local countNum = count: number",
 				"local countPlural = count: plural",
 				"local monthdayNum = monthday: number"
 			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "Cada mes el día {monthdayNum}",
-				"countPlural=many": "Cada {countNum} meses el día {monthdayNum}",
-				"countPlural=other": "Cada {countNum} meses el día {monthdayNum}"
 			}
 		}
 	],
 	"recurrence_summary_yearly": [
 		{
-			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "Cada año",
-				"countPlural=many": "Cada {countNum} años",
-				"countPlural=other": "Cada {countNum} años"
 			}
 		}
 	],
@@ -746,14 +692,10 @@
 	"reminder_until_quiet_hours_end": "el fin del horario de silencio",
 	"reminder_escalating": [
 		{
-			"declarations": [
 				"input count",
 				"input max",
 				"local countNum = count: number"
 			],
-			"selectors": [],
-			"match": {
-				"*": "Escalando ({countNum} de {max})"
 			}
 		}
 	],
@@ -869,31 +811,19 @@
 	"calendar_day_today": "{date}, hoy",
 	"filter_multi_selected": [
 		{
-			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "{countNum} seleccionado",
-				"countPlural=many": "{countNum} seleccionados",
-				"countPlural=other": "{countNum} seleccionados"
 			}
 		}
 	],
 	"board_column_count": [
 		{
-			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "{countNum} elemento",
-				"countPlural=many": "{countNum} elementos",
-				"countPlural=other": "{countNum} elementos"
 			}
 		}
 	],
@@ -916,16 +846,10 @@
 	"panel_replace_view": "Cambiar la vista",
 	"panel_label_habits": [
 		{
-			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "{countNum} hábito",
-				"countPlural=many": "{countNum} hábitos",
-				"countPlural=other": "{countNum} hábitos"
 			}
 		}
 	],
@@ -962,15 +886,11 @@
 	"panel_no_views": "Todavía no hay vistas guardadas.",
 	"panel_habits_legend": [
 		{
-			"declarations": [
 				"input max",
 				"input min",
 				"local maxNum = max: number",
 				"local minNum = min: number"
 			],
-			"selectors": [],
-			"match": {
-				"*": "Hábitos (elige entre {minNum} y {maxNum})"
 			}
 		}
 	],
@@ -987,15 +907,11 @@
 	"panel_field_size": "Tamaño",
 	"panel_field_limit": [
 		{
-			"declarations": [
 				"input max",
 				"input min",
 				"local maxNum = max: number",
 				"local minNum = min: number"
 			],
-			"selectors": [],
-			"match": {
-				"*": "Límite ({minNum}-{maxNum})"
 			}
 		}
 	],
@@ -1006,45 +922,30 @@
 	"panel_all_done": "No queda nada pendiente",
 	"panel_show_all": [
 		{
-			"declarations": ["input count", "local countNum = count: number"],
-			"selectors": [],
-			"match": {
-				"*": "Ver todas ({countNum})"
 			}
 		}
 	],
 	"panel_expand_title": [
 		{
-			"declarations": [
 				"input count",
 				"input label",
 				"local countNum = count: number"
 			],
-			"selectors": [],
-			"match": {
-				"*": "{label} ({countNum})"
 			}
 		}
 	],
 	"panel_counter_aria": [
 		{
-			"declarations": [
 				"input count",
 				"input label",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "{label}: {countNum} tarea coincide. Verla",
-				"countPlural=many": "{label}: {countNum} tareas coinciden. Verlas",
-				"countPlural=other": "{label}: {countNum} tareas coinciden. Verlas"
 			}
 		}
 	],
 	"panel_streak_row_aria": [
 		{
-			"declarations": [
 				"input title",
 				"input count",
 				"input pct",
@@ -1052,27 +953,16 @@
 				"local countPlural = count: plural",
 				"local pctNum = pct: number"
 			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "{title}: racha de {countNum} día, {pctNum}% cumplido. Abrir la tarea",
-				"countPlural=many": "{title}: racha de {countNum} días, {pctNum}% cumplido. Abrir la tarea",
-				"countPlural=other": "{title}: racha de {countNum} días, {pctNum}% cumplido. Abrir la tarea"
 			}
 		}
 	],
 	"panel_streak_row_new_aria": [
 		{
-			"declarations": [
 				"input title",
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "{title}: racha de {countNum} día. Abrir la tarea",
-				"countPlural=many": "{title}: racha de {countNum} días. Abrir la tarea",
-				"countPlural=other": "{title}: racha de {countNum} días. Abrir la tarea"
 			}
 		}
 	],
@@ -1081,24 +971,15 @@
 	"panel_streak_missing": "Falta el hábito (se eliminó o no está compartido contigo)",
 	"panel_focus_sessions_unit": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "sesión de concentración",
-				"countPlural=many": "sesiones de concentración",
-				"countPlural=other": "sesiones de concentración"
 			}
 		}
 	],
 	"panel_focus_minutes": [
 		{
-			"declarations": [
 				"input minutes",
 				"local minutesNum = minutes: number",
 				"local minutesPlural = minutes: plural"
 			],
-			"selectors": ["minutesPlural"],
-			"match": {
 				"minutesPlural=one": "{minutesNum} min de concentración",
 				"minutesPlural=many": "{minutesNum} min de concentración",
 				"minutesPlural=other": "{minutesNum} min de concentración"
@@ -1112,25 +993,15 @@
 	"habit_done_action": "Hecho hoy",
 	"habit_streak_days": [
 		{
-			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "{countNum} día",
-				"countPlural=many": "{countNum} días",
-				"countPlural=other": "{countNum} días"
 			}
 		}
 	],
 	"habit_adherence": [
 		{
-			"declarations": ["input pct", "local pctNum = pct: number"],
-			"selectors": [],
-			"match": {
-				"*": "{pctNum}% cumplido"
 			}
 		}
 	],
@@ -1144,15 +1015,11 @@
 	"focus_phase_long_break": "Descanso largo",
 	"focus_round_of": [
 		{
-			"declarations": [
 				"input round",
 				"input total",
 				"local roundNum = round: number",
 				"local totalNum = total: number"
 			],
-			"selectors": [],
-			"match": {
-				"*": "Ronda {roundNum} de {totalNum}"
 			}
 		}
 	],
@@ -1167,13 +1034,10 @@
 	"focus_log_failed": "No se ha podido guardar este intervalo. No se volverá a intentar.",
 	"focus_duration_seconds": [
 		{
-			"declarations": [
 				"input seconds",
 				"local secondsNum = seconds: number",
 				"local secondsPlural = seconds: plural"
 			],
-			"selectors": ["secondsPlural"],
-			"match": {
 				"secondsPlural=one": "{secondsNum} s de concentración",
 				"secondsPlural=many": "{secondsNum} s de concentración",
 				"secondsPlural=other": "{secondsNum} s de concentración"
@@ -1182,29 +1046,20 @@
 	],
 	"focus_duration_minutes": [
 		{
-			"declarations": [
 				"input minutes",
 				"local minutesNum = minutes: number",
 				"local minutesPlural = minutes: plural"
 			],
-			"selectors": ["minutesPlural"],
-			"match": {
-				"minutesPlural=one": "{minutesNum} min de concentración",
-				"minutesPlural=many": "{minutesNum} min de concentración",
-				"minutesPlural=other": "{minutesNum} min de concentración"
 			}
 		}
 	],
 	"focus_duration_hours_minutes": [
 		{
-			"declarations": [
 				"input hours",
 				"input minutes",
 				"local hoursNum = hours: number",
 				"local hoursPlural = hours: plural"
 			],
-			"selectors": ["hoursPlural"],
-			"match": {
 				"hoursPlural=one": "{hoursNum} h {minutes} min de concentración",
 				"hoursPlural=many": "{hoursNum} h {minutes} min de concentración",
 				"hoursPlural=other": "{hoursNum} h {minutes} min de concentración"
@@ -1217,15 +1072,12 @@
 	"karma_vacation_panel_note_until": "El modo vacaciones pausa la pérdida de rachas y las penalizaciones por objetivos hasta el {date}. Es una pausa, no una trampa: los puntos se siguen ganando solo completando cosas de verdad.",
 	"karma_level_maxed_aria": [
 		{
-			"declarations": [
 				"input level",
 				"input points",
 				"local levelNum = level: number",
 				"local pointsNum = points: number",
 				"local pointsPlural = points: plural"
 			],
-			"selectors": ["pointsPlural"],
-			"match": {
 				"pointsPlural=one": "Nivel {levelNum}, has llegado al nivel máximo, {pointsNum} punto",
 				"pointsPlural=many": "Nivel {levelNum}, has llegado al nivel máximo, {pointsNum} puntos",
 				"pointsPlural=other": "Nivel {levelNum}, has llegado al nivel máximo, {pointsNum} puntos"
@@ -1234,7 +1086,6 @@
 	],
 	"karma_level_progress_aria": [
 		{
-			"declarations": [
 				"input into",
 				"input level",
 				"input next",
@@ -1245,8 +1096,6 @@
 				"local spanNum = span: number",
 				"local spanPlural = span: plural"
 			],
-			"selectors": ["spanPlural"],
-			"match": {
 				"spanPlural=one": "Nivel {levelNum}, {intoNum} de {spanNum} punto hacia el nivel {nextNum}",
 				"spanPlural=many": "Nivel {levelNum}, {intoNum} de {spanNum} puntos hacia el nivel {nextNum}",
 				"spanPlural=other": "Nivel {levelNum}, {intoNum} de {spanNum} puntos hacia el nivel {nextNum}"
@@ -1255,26 +1104,16 @@
 	],
 	"karma_points_short": [
 		{
-			"declarations": [
 				"input points",
 				"local pointsNum = points: number",
 				"local pointsPlural = points: plural"
 			],
-			"selectors": ["pointsPlural"],
-			"match": {
-				"pointsPlural=one": "{pointsNum} pts",
-				"pointsPlural=many": "{pointsNum} pts",
-				"pointsPlural=other": "{pointsNum} pts"
 			}
 		}
 	],
 	"karma_level_max": "Nivel máximo",
 	"karma_level_next": [
 		{
-			"declarations": ["input points", "local pointsNum = points: number"],
-			"selectors": [],
-			"match": {
-				"*": "Siguiente: {pointsNum}"
 			}
 		}
 	],
@@ -1284,57 +1123,41 @@
 	"karma_goal_weekly_unset_aria": "Objetivo semanal sin definir",
 	"karma_goal_daily_aria": [
 		{
-			"declarations": [
 				"input done",
 				"input goal",
 				"local doneNum = done: number",
 				"local goalNum = goal: number"
 			],
-			"selectors": [],
-			"match": {
-				"*": "Objetivo diario, {doneNum} de {goalNum}"
 			}
 		}
 	],
 	"karma_goal_weekly_aria": [
 		{
-			"declarations": [
 				"input done",
 				"input goal",
 				"local doneNum = done: number",
 				"local goalNum = goal: number"
 			],
-			"selectors": [],
-			"match": {
-				"*": "Objetivo semanal, {doneNum} de {goalNum}"
 			}
 		}
 	],
 	"karma_goal_daily_met_aria": [
 		{
-			"declarations": [
 				"input done",
 				"input goal",
 				"local doneNum = done: number",
 				"local goalNum = goal: number"
 			],
-			"selectors": [],
-			"match": {
-				"*": "Objetivo diario, {doneNum} de {goalNum}, cumplido"
 			}
 		}
 	],
 	"karma_goal_weekly_met_aria": [
 		{
-			"declarations": [
 				"input done",
 				"input goal",
 				"local doneNum = done: number",
 				"local goalNum = goal: number"
 			],
-			"selectors": [],
-			"match": {
-				"*": "Objetivo semanal, {doneNum} de {goalNum}, cumplido"
 			}
 		}
 	],
@@ -1417,16 +1240,10 @@
 	"assignee_open": "Asignar",
 	"assignee_open_count": [
 		{
-			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "Responsables ({countNum})",
-				"countPlural=many": "Responsables ({countNum})",
-				"countPlural=other": "Responsables ({countNum})"
 			}
 		}
 	],
@@ -1463,12 +1280,6 @@
 	"mention_invite_done": "Listo",
 	"mention_invite_created": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "Invitación creada. Comparte el enlace; cada persona se une al aceptar.",
-				"countPlural=many": "Invitaciones creadas. Comparte los enlaces; cada persona se une al aceptar.",
-				"countPlural=other": "Invitaciones creadas. Comparte los enlaces; cada persona se une al aceptar."
 			}
 		}
 	],
@@ -1491,6 +1302,7 @@
 	"login_signin_passkey": "Iniciar sesión con clave de acceso",
 	"login_continue_google": "Continuar con Google",
 	"login_continue_with": "Continuar con {provider}",
+	"login_continue_sso": "Continuar con {name}",
 	"login_or": "o",
 	"login_two_factor_title": "Verificación en dos pasos",
 	"login_backup_code_placeholder": "Código de respaldo",
@@ -1538,7 +1350,7 @@
 	"auth_error_account_already_linked": "Esa cuenta del proveedor ya está vinculada a otra cuenta de Ditero.",
 	"auth_error_registration_unavailable": "El registro no está disponible por el momento. Inténtalo de nuevo en un momento.",
 	"auth_error_invalid_origin": "El servidor no confía en esta dirección. Pide al operador que la añada a los orígenes de confianza de la instancia.",
-	"auth_error_account_already_linked": "Esta cuenta de inicio de sesión se acaba de vincular en otra ventana. Vuelve a iniciar sesión.",
+	"auth_error_account_ownership_conflict": "Esta identidad de inicio de sesión único ya está vinculada a otra cuenta.",
 	"mutation_failed": "Algo ha salido mal.",
 	"mutation_offline_not_saved": "Estás sin conexión, este cambio no se guardó. Vuelve a conectarte e inténtalo de nuevo.",
 	"sync_synced_title": "Sincronizado",
@@ -1561,10 +1373,6 @@
 	"sync_earlier_edits_incomplete_detail": "No se pudieron comprobar algunos datos anteriores sin conexión. Conserva los datos de Ditero y no lo desinstales. Si puedes tener cambios sin sincronizar de una versión anterior, cierra Ditero y pregunta a quien administra tu servidor cómo recuperarlos.",
 	"sync_retirement_blocked": [
 		{
-			"declarations": ["input count", "local countNum = count: number"],
-			"selectors": [],
-			"match": {
-				"*": "Cambios sin sincronizar: {countNum}. Este dispositivo no puede guardarlos. Mantén la app abierta hasta que el servidor los confirme y vuelve a intentarlo."
 			}
 		}
 	],
@@ -1577,16 +1385,10 @@
 	"sync_reauth_action": "Iniciar sesión de nuevo",
 	"sync_pending_count": [
 		{
-			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "{countNum} cambio reciente sin sincronizar",
-				"countPlural=many": "{countNum} cambios recientes sin sincronizar",
-				"countPlural=other": "{countNum} cambios recientes sin sincronizar"
 			}
 		}
 	],
@@ -1601,182 +1403,110 @@
 	"snackbar_task_move_failed": "No se pudo mover: {title}",
 	"selection_count": [
 		{
-			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "{countNum} tarea seleccionada",
-				"countPlural=many": "{countNum} tareas seleccionadas",
-				"countPlural=other": "{countNum} tareas seleccionadas"
 			}
 		}
 	],
 	"snackbar_bulk_checked": [
 		{
-			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "{countNum} artículo marcado.",
-				"countPlural=many": "{countNum} artículos marcados.",
-				"countPlural=other": "{countNum} artículos marcados."
 			}
 		}
 	],
 	"snackbar_bulk_completed": [
 		{
-			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "{countNum} tarea completada.",
-				"countPlural=many": "{countNum} tareas completadas.",
-				"countPlural=other": "{countNum} tareas completadas."
 			}
 		}
 	],
 	"snackbar_bulk_undo_skips_recurring": [
 		{
-			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "Deshacer omite {countNum} tarea recurrente.",
-				"countPlural=many": "Deshacer omite {countNum} tareas recurrentes.",
-				"countPlural=other": "Deshacer omite {countNum} tareas recurrentes."
 			}
 		}
 	],
 	"snackbar_bulk_recurring_advanced": [
 		{
-			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "{countNum} tarea recurrente pasó a su próxima fecha.",
-				"countPlural=many": "{countNum} tareas recurrentes pasaron a su próxima fecha.",
-				"countPlural=other": "{countNum} tareas recurrentes pasaron a su próxima fecha."
 			}
 		}
 	],
 	"snackbar_bulk_complete_failed": [
 		{
-			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "No se pudo completar {countNum} tarea",
-				"countPlural=many": "No se pudieron completar {countNum} tareas",
-				"countPlural=other": "No se pudieron completar {countNum} tareas"
 			}
 		}
 	],
 	"snackbar_bulk_moved": [
 		{
-			"declarations": [
 				"input count",
 				"input list",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "{countNum} tarea movida a {list}",
-				"countPlural=many": "{countNum} tareas movidas a {list}",
-				"countPlural=other": "{countNum} tareas movidas a {list}"
 			}
 		}
 	],
 	"snackbar_bulk_move_failed": [
 		{
-			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "No se pudo mover {countNum} tarea",
-				"countPlural=many": "No se pudieron mover {countNum} tareas",
-				"countPlural=other": "No se pudieron mover {countNum} tareas"
 			}
 		}
 	],
 	"snackbar_bulk_update_failed": [
 		{
-			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "No se pudo actualizar {countNum} tarea",
-				"countPlural=many": "No se pudieron actualizar {countNum} tareas",
-				"countPlural=other": "No se pudieron actualizar {countNum} tareas"
 			}
 		}
 	],
 	"snackbar_bulk_delete_failed": [
 		{
-			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "No se pudo eliminar {countNum} tarea",
-				"countPlural=many": "No se pudieron eliminar {countNum} tareas",
-				"countPlural=other": "No se pudieron eliminar {countNum} tareas"
 			}
 		}
 	],
 	"bulk_delete_title": [
 		{
-			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "¿Eliminar {countNum} tarea?",
-				"countPlural=many": "¿Eliminar {countNum} tareas?",
-				"countPlural=other": "¿Eliminar {countNum} tareas?"
 			}
 		}
 	],
 	"bulk_delete_confirm": [
 		{
-			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "Se eliminará {countNum} tarea con sus subtareas. Esto no se puede deshacer.",
-				"countPlural=many": "Se eliminarán {countNum} tareas con sus subtareas. Esto no se puede deshacer.",
-				"countPlural=other": "Se eliminarán {countNum} tareas con sus subtareas. Esto no se puede deshacer."
 			}
 		}
 	],
@@ -1834,17 +1564,11 @@
 	"list_delete_title": "¿Eliminar la lista?",
 	"list_delete_confirm": [
 		{
-			"declarations": [
 				"input count",
 				"input title",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "¿Eliminar «{title}» y {countNum} elemento? Esto no se puede deshacer.",
-				"countPlural=many": "¿Eliminar «{title}» y {countNum} elementos? Esto no se puede deshacer.",
-				"countPlural=other": "¿Eliminar «{title}» y {countNum} elementos? Esto no se puede deshacer."
 			}
 		}
 	],
@@ -1862,17 +1586,11 @@
 	"task_delete_confirm": "¿Eliminar «{title}»? Esto no se puede deshacer.",
 	"task_delete_confirm_subtasks": [
 		{
-			"declarations": [
 				"input count",
 				"input title",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "¿Eliminar «{title}»? También se eliminará {countNum} subtarea. Esto no se puede deshacer.",
-				"countPlural=many": "¿Eliminar «{title}»? También se eliminarán {countNum} subtareas. Esto no se puede deshacer.",
-				"countPlural=other": "¿Eliminar «{title}»? También se eliminarán {countNum} subtareas. Esto no se puede deshacer."
 			}
 		}
 	],
@@ -1982,16 +1700,10 @@
 	"e2e_rewrap_failed": "No se pudo guardar. Inténtalo de nuevo.",
 	"e2e_grant_who_overflow": [
 		{
-			"declarations": [
 				"input count",
 				"local countPlural = count: plural",
 				"local countNum = count: number"
 			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "y {countNum} persona más",
-				"countPlural=many": "y {countNum} personas más",
-				"countPlural=other": "y {countNum} personas más"
 			}
 		}
 	],
@@ -2012,16 +1724,10 @@
 	"attachment_add_to_comment": "Adjuntar un archivo",
 	"attachment_count_label": [
 		{
-			"declarations": [
 				"input count",
 				"local countPlural = count: plural",
 				"local countNum = count: number"
 			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "{countNum} archivo",
-				"countPlural=many": "{countNum} archivos",
-				"countPlural=other": "{countNum} archivos"
 			}
 		}
 	],
@@ -2496,16 +2202,10 @@
 	"tui_order_key": "Clave de orden: {key}",
 	"tui_order_children_stay": [
 		{
-			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "{countNum} subtarea sigue vinculada",
-				"countPlural=many": "{countNum} de subtareas siguen vinculadas",
-				"countPlural=other": "{countNum} subtareas siguen vinculadas"
 			}
 		}
 	],
@@ -2645,16 +2345,10 @@
 	"archive_export_download_requested": "{file}: Descarga solicitada.",
 	"archive_export_selected_count": [
 		{
-			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "{countNum} archivo seleccionado",
-				"countPlural=many": "{countNum} de archivos seleccionados",
-				"countPlural=other": "{countNum} archivos seleccionados"
 			}
 		}
 	],
@@ -2770,16 +2464,10 @@
 	"setup_managed": "Una cuenta gestionada no puede añadir contenido inicial. Pide a tu tutor o tutora que organice tus listas compartidas.",
 	"setup_task_count": [
 		{
-			"declarations": [
 				"input count",
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "{countNum} tarea",
-				"countPlural=many": "{countNum} de tareas",
-				"countPlural=other": "{countNum} tareas"
 			}
 		}
 	],

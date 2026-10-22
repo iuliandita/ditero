@@ -227,6 +227,7 @@ All configuration is environment-driven. The common variables:
 | `DITERO_REGISTRATION_MODE` | `bootstrap` | `open`, `bootstrap` (first account plus eligible invitations), or `closed` (eligible invitations only). |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | empty | Optional Google sign-in from your own OAuth client; both are required. See [sign-in providers](docs/runbooks/sign-in-providers.md). |
 | `DITERO_OIDC_PROVIDERS`, `MICROSOFT_*`, `GITHUB_*`, `DISCORD_*`, `FACEBOOK_*`, `APPLE_*` | empty | Optional generic OpenID Connect providers (`DITERO_OIDC_<ID>_*`) and Microsoft, GitHub, Discord, Apple and Facebook sign-in; every secret also accepts `_FILE`. See [sign-in providers](docs/runbooks/sign-in-providers.md). |
+| `DITERO_SAML_IDP_METADATA_URL`, `DITERO_SAML_IDP_METADATA`, `DITERO_SAML_IDP_METADATA_FILE` | empty | Optional SAML single sign-on; set exactly one. See [SAML single sign-on](docs/runbooks/sign-in-providers.md#saml-single-sign-on). |
 
 > **Note:** the web client fetches `PUBLIC_ZERO_URL` from `/api/config` at
 > startup, so one built image serves any hostname. Set it to the address

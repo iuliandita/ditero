@@ -72,6 +72,10 @@ export function authRateLimitOptions() {
 		"/reset-password": { window: 300, max: 5 },
 		"/change-password": { window: 300, max: 5 },
 		"/two-factor/*": { window: 60, max: 30 },
+		// Each start writes AuthnRequest and RelayState rows, and each callback
+		// parses and verifies signed XML, so both stay well below the default.
+		"/sign-in/sso": { window: 60, max: 20 },
+		"/sso/saml2/sp/acs/*": { window: 60, max: 30 },
 		// Listed BEFORE "/passkey/*": Better Auth resolves customRules with
 		// Object.keys(...).find(...), so the first matching key in insertion order
 		// wins and a wildcard placed first would swallow this exact path.

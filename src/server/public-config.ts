@@ -13,17 +13,24 @@ export function zeroPublicURL(env: PublicEnvironment): string {
 	return env.PUBLIC_ZERO_URL || DEFAULT_ZERO_URL;
 }
 
+export type PublicSsoProvider = { id: string; name: string; protocol: "saml" };
+
 export type PublicConfig = {
 	zeroURL: string;
 	// Optional for older servers and native sync adapters that only need Zero.
 	socialProviders?: string[];
 	// Display data for the providers above that are not built into the client.
+	ssoProviders?: PublicSsoProvider[];
 	oidcProviders?: { id: string; name: string; icon: string }[];
 };
 
-export function publicConfig(env: PublicEnvironment): PublicConfig {
+export function publicConfig(
+	env: PublicEnvironment,
+	ssoProviders: PublicSsoProvider[] = [],
+): PublicConfig {
 	const providers = publicProvidersFromEnv(env);
 	return {
+		ssoProviders,
 		zeroURL: zeroPublicURL(env),
 		socialProviders: providers.map((provider) => provider.id),
 		oidcProviders: providers.flatMap((provider) =>

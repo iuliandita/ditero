@@ -65,6 +65,8 @@ const AUTH_ERROR_MESSAGES: Record<string, () => string> = {
 	account_not_linked: m.auth_error_account_not_linked,
 	unable_to_link_account: m.auth_error_account_not_linked,
 	account_already_linked_to_different_user: m.auth_error_account_already_linked,
+	// Lowercase codes arrive in the error parameter of a provider callback.
+	account_ownership_conflict: m.auth_error_account_ownership_conflict,
 };
 
 // Precedence is deliberate. An unmapped code still yields the server's English

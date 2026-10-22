@@ -27,6 +27,7 @@ describe("publicConfig", () => {
 			publicConfig({ PUBLIC_ZERO_URL: "https://sync.example.test" }),
 		).toEqual({
 			zeroURL: "https://sync.example.test",
+			ssoProviders: [],
 			socialProviders: [],
 			oidcProviders: [],
 		});
@@ -49,8 +50,19 @@ describe("publicConfig", () => {
 			zeroURL: DEFAULT_ZERO_URL,
 			socialProviders: ["google", "github", "family"],
 			oidcProviders: [{ id: "family", name: "Family SSO", icon: "shield" }],
+			ssoProviders: [],
 		});
 		expect(JSON.stringify(config)).not.toMatch(/secret/);
+	});
+
+	it("lists configured single sign-on providers by display data only", () => {
+		const sso = [{ id: "saml-0123", name: "Corp", protocol: "saml" as const }];
+		expect(publicConfig({ BETTER_AUTH_SECRET: "private" }, sso)).toEqual({
+			zeroURL: DEFAULT_ZERO_URL,
+			socialProviders: [],
+			ssoProviders: sso,
+			oidcProviders: [],
+		});
 	});
 
 	it.each([
@@ -64,6 +76,7 @@ describe("publicConfig", () => {
 			zeroURL: DEFAULT_ZERO_URL,
 			socialProviders,
 			oidcProviders: [],
+			ssoProviders: [],
 		});
 	});
 });

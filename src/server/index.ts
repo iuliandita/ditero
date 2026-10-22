@@ -9,7 +9,7 @@ import { zeroNodePg } from "@rocicorp/zero/server/adapters/pg";
 import { APIError } from "better-auth";
 import type { Cron } from "croner";
 import { Elysia } from "elysia";
-import { auth, handleAuthRequest } from "../auth/auth.ts";
+import { auth, handleAuthRequest, ssoProviders } from "../auth/auth.ts";
 import { ensurePersonalWorkspace } from "../auth/bootstrap.ts";
 import {
 	acceptInvite,
@@ -328,7 +328,7 @@ const routes = new Elysia()
 	// Runtime config for the web bundle. Unauthenticated because it carries only
 	// the zero-cache origin, which the CSP header already publishes to anyone
 	// who fetches the page.
-	.get("/api/config", () => publicConfig(process.env))
+	.get("/api/config", () => publicConfig(process.env, ssoProviders()))
 	// Better Auth catch-all: serves JWKS (GET) and all auth POSTs.
 	.all("/api/auth/*", ({ request, server }) =>
 		handleAuthRequest(request, server?.requestIP(request)?.address),

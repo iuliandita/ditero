@@ -2,12 +2,12 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "731c87b2f48710c29e704bda1b1ac7b0dda6ea3a63f2f485422c7f01949b4e6a",
+			"sourceDigest": "4fc393c030dc05874faec58bb7e643bf75403c8ed35c028e025cb7edecdb75f7",
 			"docs": [
-				"docs/runbooks/sign-in-providers.md",
-				"docs/runbooks/native-authentication.md"
+				"docs/runbooks/database-roles.md",
+				"docs/runbooks/sign-in-providers.md"
 			],
-			"note": "Show only configured sign-in providers and retain explicit link/unlink actions in Settings. Unlink submits the local account-row id. Provider registration and account-existence refusals share one neutral message in all six locales. TOTP enrollment explicitly requests totp and accepts setup keys in the method-less response of a rolled-back 1.6 server. Locale, theme and explicit native approval remain unchanged."
+			"note": "Upgrade Better Auth and passkey together to 1.7.12. TOTP enrollment explicitly requests totp and checks the response method before reading setup keys or backup codes. Document the response boundary and unchanged explicit native approval. Session startup, transport retry, locale and theme behavior are preserved. Zero 1.11 cached query results retain the prior unknown-result loading and import-activation policies; initializing remains a pending sync state. Document the client database boundary and durable retirement behavior. Add the SAML sign-in button and the Settings > Security link control, both driven by the server list in /api/config; the sign-in guide documents linking and errors."
 		},
 		"release": {
 			"sourceDigest": "a675a1dc3668f040faf1c5a69a6adb43d3852b9e3a461a9a6b5aebc3fb0eaf76",
@@ -15,17 +15,20 @@
 			"note": "Prepare the first beta, 0.1.0-beta.1 with Android code 13, retain the existing signing certificate and documentation epoch, align release commands, and describe the remaining prerelease and native qualification limits. Generated publication notes now describe a prerelease rather than an alpha."
 		},
 		"configuration": {
-			"sourceDigest": "0a85390f9360fd396635e00104cce99dc64c2ffe6aedf8706cf1be25936d4814",
+			"sourceDigest": "9593ba2bcf82c18897ed1d31b0af52ff9944e657f2a26c14cca75bde4ef6094d",
 			"docs": [
-				"docs/runbooks/sign-in-providers.md",
-				"deploy/docker/aio/README.md"
+				"docs/runbooks/database-roles.md",
+				"docs/runbooks/sign-in-providers.md"
 			],
-			"note": "Add optional sign-in provider settings (GOOGLE_, MICROSOFT_, GITHUB_, DISCORD_, FACEBOOK_, APPLE_ and DITERO_OIDC_) with _FILE secrets, documented in the provider runbook and deployment guides. No existing setting changes and all are off by default."
+			"note": "Align Zero client and cache at 1.11.1 with both upstream Litestream configurations and forks. Preserve app IDs, publications, replication slots and restricted application roles. Document V5 backup defaults, connection budgets and upgrade sequencing. Document the DITERO_SAML_* settings with their _FILE forms, defaults and failure behavior."
 		},
 		"deployment": {
-			"sourceDigest": "21ee4db12db0e75723b17e6e130d0e7aac6100539d278d9b57290d657a938a4f",
-			"docs": ["deploy/docker/aio/README.md", "deploy/helm/ditero/README.md"],
-			"note": "Compose and the one-image bundle pass the optional provider variables through and Helm uses extraEnv. All are off by default, so existing volumes, upgrade and rollback steps are unchanged."
+			"sourceDigest": "14e7e192837829c83ac098f96adf784ee1ebcd2530020fba2245a7f21275337a",
+			"docs": [
+				"docs/runbooks/database-roles.md",
+				"deploy/docker/aio/README.md"
+			],
+			"note": "Rebuild the aligned Zero runtime and optional all-in-one runtime from the same reviewed package and PostgreSQL patch. Retain pinned Node and hardened backup dependencies, add the V5 configuration, and document existing-replica migration, backup and rollback procedures. Pass the DITERO_SAML_* settings through Compose and the all-in-one bundle (file forms only there); mount key, certificate and metadata files read-only."
 		},
 		"native": {
 			"sourceDigest": "1a9f39a14e3af1c56084dfde8ae3128ffbf181e5aef396f1e8764ab37fd6a27b",
@@ -33,18 +36,18 @@
 			"note": "Document desktop cold offline activation from complete unexpired evidence in the OS credential store, exact session binding, fail-closed verification and revocation markers, and native token refresh on socket retry. Existing records need one complete online start; downgrades require signing out stored accounts before installing an older build. Retain queued edits, refuse fallback for trust, HTTP, validation or storage failures, and keep platform runtime qualification explicit. Android cached activation policy is unchanged. Every authenticated native request now persists a refusal fence before I/O, including attachment, notification, cleanup and sync-handshake requests. Binary keyring chunks stay within the Windows blob limit, share credential references, and use a bounded recovery journal. Both earlier protected-record formats require fresh online evidence after upgrade; downgrades require OS credential-manager cleanup. The desktop TLS refusal test fixture now carries a fixed non-secret password because macOS refuses empty-password PKCS#12 imports; test-only, no runtime or documented behavior change."
 		},
 		"authentication": {
-			"sourceDigest": "91bff9651d7ab49d5ac2a2b6d280b2325ce603ac3644925144e6b742367eb6da",
+			"sourceDigest": "735f51dcd86a2e9d78c45a760d1ce2550ec863442d41ee167d7bf83397a9d6df",
 			"docs": ["docs/runbooks/native-authentication.md"],
-			"note": "Upgrade Better Auth and passkey together to 1.7.12 and add configured social/OIDC providers. New provider users require a verified email in every registration mode; Microsoft and Facebook are always unverified and need explicit owner linking. Same-email implicit linking stays disabled. Microsoft and Apple tokens require a single-use nonce; non-Google client-submitted tokens stay refused. Apple origin trust is limited to its callback POST. Account-existence and registration-policy callback refusals share a neutral code without descriptions and preserve native grant parameters; registration outages retain REGISTRATION_UNAVAILABLE. Concurrent provider links use the unique account key, and password reset revokes all sessions. Apply the additive JWT and account-key migrations before upgrade. Rollback may disable new providers without deleting their rows; the native approval step and client credential formats are unchanged."
+			"note": "Upgrade Better Auth and passkey together to 1.7.12. Google keeps its callback URI, PKCE and pending native consent return URL. OAuth callbacks now preserve APIError codes, so remove the message-as-code workaround and retain readable error descriptions. Document the required additive JWT key migration; account schema, credential formats, registration policies and trusted origins are unchanged. Add optional SAML single sign-on: operator-configured, signed assertions required, IdP-initiated off, identity keyed on IdP entity ID plus NameID, registration gate unchanged, explicit linking; the drizzle adapter now declares native transactions. Native sign-in returns through the same page."
 		},
 		"compatibility": {
-			"sourceDigest": "dc6b737ee2572b75c46058bf29aa3c622bfb14394335dc83050724a549de106c",
+			"sourceDigest": "edb8f322a978f64346d1beafefc7750164cc6c94cfc07b9c5bedd45a0a79e6bf",
 			"docs": ["docs/runbooks/database-roles.md"],
-			"note": "Better Auth 1.7 requires nullable jwks.alg and jwks.crv columns. The additive migration retains encrypted Ed25519 keys and the existing restricted runtime-role grants. A second additive migration adds a unique index on account (provider_id, account_id) after checking for duplicate provider accounts; it fails without changing rows when duplicates exist. Account and client credential formats are unchanged. Document upgrade, backup, rollback and client guidance.",
-			"upgrade": "Run the duplicate provider account query from the guide first. Stop app replicas and Zero, back up the matching recovery set, and run the additive better_auth_jwks and account_provider_unique migrations as the migration owner before starting the new app and Zero. A duplicate makes the second migration fail without changing rows; repair the rows and rerun. Preserve NOSUPERUSER NOBYPASSRLS runtime credentials.",
-			"backup": "Keep coordinated database and attachment backups with the original authentication secret and encryption keys. Existing encrypted keys are preserved without conversion.",
-			"rollback": "The previous app with Better Auth 1.6.23 tolerates and ignores the added nullable columns and the unique index. Leave them in place during application rollback; restore older database snapshots only with matching secrets and attachments, accounting for newer data loss.",
-			"clientVersions": "Existing browser, Android and desktop sessions and native consent protocols remain compatible. Reload web clients after upgrade or rollback so the TOTP caller matches the server response format. Retain browser storage until queued edits sync and verify sign-in after rollback."
+			"note": "Better Auth 1.7 requires nullable jwks.alg and jwks.crv columns. The additive migration retains encrypted Ed25519 keys and the existing restricted runtime-role grants; account and client credential formats are unchanged. Document upgrade, backup, rollback and client guidance. Align Zero at 1.11.1 and re-port durable close and outage retry. Healthy server replicas migrate incrementally; 1.9 clients start a new local database and lose unsent mutations unless drained first. Preference saves and export journals accept the new success data field while retaining both-result acknowledgement and unknown-result guards.",
+			"upgrade": "Stop app replicas and Zero, back up the matching recovery set, and run the additive better_auth_jwks migration as the migration owner before starting the new app and Zero. Preserve NOSUPERUSER NOBYPASSRLS runtime credentials. Drain all browser and native queues before replacing 1.9 clients. Start the updated Zero server before 1.11 clients; retain publications and slots and verify migrated replica catch-up.",
+			"backup": "Keep coordinated database and attachment backups with the original authentication secret and encryption keys. Existing encrypted keys are preserved without conversion. Retain the Zero replica snapshot and both legacy and V5 backup formats through the rollback window; test V5 restores.",
+			"rollback": "The previous app with Better Auth 1.6.23 tolerates and ignores the added nullable columns. Leave them in place during application rollback; restore older database snapshots only with matching secrets and attachments, accounting for newer data loss. Drain 1.11 client queues and downgrade clients before the server. Prefer a fresh disposable old cache over reusing migrated SQLite files. A 1.9 server cannot read V5 backup paths and resyncs; preserve current authoritative PostgreSQL.",
+			"clientVersions": "Better Auth sessions and native consent remain compatible; reload TOTP callers as described in the guide. Zero 1.11 clients require a 1.11 server. The 1.9-to-1.11 client upgrade discards its old local database, so every client must sync pending edits before updating. Keep offline clients on the old bundle until drained; never clear their storage or uninstall them."
 		},
 		"clients": {
 			"sourceDigest": "c07b7e0e2396b7810724d8c3f3a6fcda8106a124fc26874383e6c843e1a708ff",
