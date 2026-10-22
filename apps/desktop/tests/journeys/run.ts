@@ -36,6 +36,10 @@ const expectedJourneys = [
 	"sign-out clears selected OS-keystore credential",
 	"sign-out clears final OS-keystore credential",
 ];
+const hostedWindows =
+	process.platform === "win32" &&
+	process.env.GITHUB_ACTIONS === "true" &&
+	process.env.RUNNER_ENVIRONMENT === "github-hosted";
 const results: Result[] = [];
 const ids = (id: string) => `[data-testid="${id}"]`;
 let app: Awaited<ReturnType<typeof desktop>> | undefined;
@@ -63,7 +67,9 @@ function record(result: Result) {
 async function journey(
 	name: string,
 	action: () => Promise<
-		void | string | { status: "unqualified on hosted runner"; detail: string }
+		| undefined
+		| string
+		| { status: "unqualified on hosted runner"; detail: string }
 	>,
 ) {
 	try {
@@ -424,7 +430,7 @@ try {
 	);
 	let pendingNotification = false;
 	await journey("OS notification permission and interaction", async () => {
-		if (process.platform === "win32") {
+		if (hostedWindows) {
 			assert.equal(process.env.GITHUB_ACTIONS, "true");
 			assert.equal(process.env.RUNNER_ENVIRONMENT, "github-hosted");
 			const session = JSON.parse(
@@ -797,14 +803,12 @@ try {
 	);
 	assert.deepEqual(
 		unqualified.map((result) => result.journey),
-		process.platform === "win32"
-			? ["OS notification permission and interaction"]
-			: [],
+		hostedWindows ? ["OS notification permission and interaction"] : [],
 	);
 	assert.equal(results.length, expectedJourneys.length);
 	assert.equal(
 		results.filter((result) => result.status === "passed").length,
-		process.platform === "win32" ? 11 : 12,
+		hostedWindows ? 11 : 12,
 	);
 } catch (error) {
 	console.error(error);
