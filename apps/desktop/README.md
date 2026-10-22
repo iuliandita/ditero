@@ -129,6 +129,8 @@ Linux system notifications require a notification service with action support.
 Windows uses installed-app toasts with click routing while the banner is visible;
 dismissed banners are removed from history. Hosted Windows checks turn off
 Do not disturb through the OS UI before testing; the app does not override it.
+The Windows journey runs in the logged-in user's limited interactive session and
+asserts that it is unelevated before launching Ditero.
 macOS 10.14+ uses
 UNUserNotificationCenter and asks for notification permission when you enable delivery. Denied permission is shown
 with a localized reason; allow Ditero in system notification settings and retry.

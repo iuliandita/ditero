@@ -134,8 +134,13 @@ jobs:
       - name: Install Linux or macOS development package
         if: runner.os != 'Windows'
         run: bash apps/desktop/tests/journeys/install.sh
-      - name: Run Windows and macOS journeys
-        if: runner.os != 'Linux'
+      - name: Run Windows journeys in a normal interactive session
+        if: runner.os == 'Windows'
+        timeout-minutes: 15
+        shell: pwsh
+        run: ./apps/desktop/tests/journeys/windows-session.ps1
+      - name: Run macOS journeys
+        if: runner.os == 'macOS'
         timeout-minutes: 15
         run: node --experimental-strip-types apps/desktop/tests/journeys/run.ts
       - name: Run Linux journeys with a real session keyring
