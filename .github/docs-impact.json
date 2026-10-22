@@ -13,18 +13,12 @@
 		},
 		"configuration": {
 			"sourceDigest": "36f47b11097c4a5437297d76e4db36ae4d88c89670b7d90673e98d700cc99a94",
-			"docs": [
-				"deploy/helm/ditero/README.md",
-				"deploy/kustomize/README.md"
-			],
+			"docs": ["deploy/helm/ditero/README.md", "deploy/kustomize/README.md"],
 			"note": "Helm chart/appVersion, default app/Zero tags and Kustomize labels/images/overrides move to 0.1.0-beta.2 with no value or format changes. Align Zero client/cache at 1.11.1, upstream Litestream configurations/forks and V5 backup defaults; retain app IDs, publications, slots and restricted roles, and document connection budgets and upgrade order. Add optional GOOGLE_, MICROSOFT_, GITHUB_, DISCORD_, FACEBOOK_, APPLE_, DITERO_OIDC_ and DITERO_SAML_* settings with _FILE forms, defaults and failure behavior; providers are off by default. Retain the explicit Compose Zero tag override and release suffix default. Kustomize gates Zero on the app build through commit comparison against app health, replacing the manual zero-replica hold. Missing/empty commits fail closed; local images need the same build commit. Overrides require exactly two tag-matched image names/replacement tags without extra fields. Document Kubernetes logical restore with original credentials, ciphertext and fresh Zero cache. Existing Helm values and stored formats remain unchanged; revert manifests for rollback. Focus clocks live in migration-owned server_private with runtime USAGE and SELECT/INSERT/UPDATE only, outside default and explicit public Zero publications. Retain runtime/migrator shard grants."
 		},
 		"deployment": {
 			"sourceDigest": "bb461640e097eccf262e0b486de8620b68f9cadb61db62819a5d18798a53de07",
-			"docs": [
-				"deploy/helm/ditero/README.md",
-				"deploy/kustomize/README.md"
-			],
+			"docs": ["deploy/helm/ditero/README.md", "deploy/kustomize/README.md"],
 			"note": "Published defaults move to 0.1.0-beta.2; upgrades from beta.1 need no migration or cache rebuild. Rebuild Zero and optional all-in-one runtime from the aligned reviewed package and PostgreSQL patch, preserving pinned Node and hardened backup dependencies while adding V5 configuration and replica migration/restore guidance. Compose/all-in-one pass optional social/OIDC settings; Helm uses extraEnv. SAML settings pass through Compose and the all-in-one bundle (file forms only there), with read-only key/certificate/metadata mounts. Defaults remain disabled. Preserve published Compose/Helm/Kustomize recovery guidance: database-first blob snapshots, original secrets, CNPG managed roles/logical restore and bounded diagnostics before cleanup. Kustomize automatically enforces app-before-Zero startup like Helm; alpha.12 upgrades remove manual hold patches. Retain the Compose Zero image override and existing release defaults; provider settings do not alter volumes or rollback procedures. Compose/CNPG initialize the private focus schema and restricted grants. Develop upgrades retain Zero caches; only earlier local branch caches containing public clocks need rebuilding."
 		},
 		"native": {
