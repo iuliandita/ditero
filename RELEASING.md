@@ -44,6 +44,11 @@ The development-installer and release workflows use the same five native targets
 Ubuntu 24.04 x64, Windows x64/ARM64, and macOS Apple Silicon/Intel. Linux ARM64
 installers are not built. Native lifecycle tests use the same explicit Rust target
 as packaging, retaining the test gate without compiling its dependencies twice.
+macOS packaging runs through `scripts/desktop-tauri-build.sh`, which retries up to
+three attempts in total, and only when the output shows `hdiutil` failing to eject
+the disk image as busy; it first detaches leftover `dmg.*` volumes and deletes stale
+`rw.*.dmg` files. Any other failure, and any failure on Linux or Windows, exits
+immediately.
 Linux packages include AppStream metadata, a desktop
 entry and the MIT license. They require a compatible system WebKitGTK 4.1/GTK 3;
 the Ubuntu 24.04 build baseline is not a promise of compatibility with older Linux.

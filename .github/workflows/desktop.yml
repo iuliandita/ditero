@@ -122,7 +122,8 @@ jobs:
             : > "$RUNNER_TEMP/desktop-packaging/packaging.log"
           )
           set +e
-          bun run tauri build --verbose --debug --no-binary-patching --target "$DESKTOP_TARGET" \
+          bash ../../scripts/desktop-tauri-build.sh -- \
+            bun run tauri build --verbose --debug --no-binary-patching --target "$DESKTOP_TARGET" \
             --bundles "$DESKTOP_BUNDLES" -- --locked 2>&1 |
             tee "$RUNNER_TEMP/desktop-packaging/packaging.log"
           statuses=("${PIPESTATUS[@]}")
