@@ -30,56 +30,56 @@ function Notification-Button {
             if ($element.Current.Name -like 'Notifications *') { return $element }
         }
     }
-    throw 'Notification center taskbar control unavailable'
+    return $null
 }
 if ($Mode -eq 'prepare') {
     $button = Notification-Button
-    $before = $button.Current.Name
-    $opened = $false
-    if ($before -like '*Do not disturb on*') {
-        Start-Process 'ms-settings:notifications'
-        $opened = $true
-        $deadline = [DateTime]::UtcNow.AddSeconds(20)
-        $toggled = $false
-        while ([DateTime]::UtcNow -lt $deadline -and -not $toggled) {
-            $snapshot = [System.Collections.Generic.List[string]]::new()
-            $root = [System.Windows.Automation.AutomationElement]::RootElement
-            $windows = $root.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)
-            foreach ($window in $windows) {
-                $process = Get-Process -Id $window.Current.ProcessId -ErrorAction SilentlyContinue
-                if ($null -eq $process -or $process.ProcessName -notin @('SystemSettings', 'ApplicationFrameHost')) { continue }
-                $elements = $window.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)
-                foreach ($element in $elements) {
-                    $name = $element.Current.Name
-                    $snapshot.Add("$($process.ProcessName) | $($element.Current.ClassName) | $name")
-                    if ($name -notmatch '^Do not disturb(,? (On|Off))?$' -or $element.Current.IsOffscreen) { continue }
-                    $toggle = $null
-                    if (-not $element.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern, [ref]$toggle)) { continue }
-                    if ($toggle.Current.ToggleState -eq [System.Windows.Automation.ToggleState]::On) { $toggle.Toggle() }
-                    elseif ($toggle.Current.ToggleState -ne [System.Windows.Automation.ToggleState]::Off) { throw 'Do not disturb toggle has indeterminate state' }
-                    $toggled = $true
-                    break
-                }
-                if ($toggled) { break }
-            }
-            Set-Content -Path (Join-Path $evidence 'notification-dnd-uia.txt') -Value ($snapshot -join "`n")
-            Start-Sleep -Milliseconds 300
-        }
-        if (-not $toggled) { throw 'Do not disturb is on but its OS control was not found' }
-        $settle = [DateTime]::UtcNow.AddSeconds(10)
-        while ((Notification-Button).Current.Name -like '*Do not disturb on*' -and [DateTime]::UtcNow -lt $settle) { Start-Sleep -Milliseconds 200 }
+    $trayBefore = if ($null -ne $button) { $button.Current.Name } else { 'not present' }
+    Start-Process 'ms-settings:notifications'
+    $deadline = [DateTime]::UtcNow.AddSeconds(20)
+    $control = $null
+    $before = $null
+    while ([DateTime]::UtcNow -lt $deadline -and $null -eq $control) {
+        $snapshot = [System.Collections.Generic.List[string]]::new()
         $root = [System.Windows.Automation.AutomationElement]::RootElement
-        foreach ($window in $root.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)) {
+        $windows = $root.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)
+        foreach ($window in $windows) {
             $process = Get-Process -Id $window.Current.ProcessId -ErrorAction SilentlyContinue
-            if ($null -ne $process -and $process.ProcessName -in @('SystemSettings', 'ApplicationFrameHost')) {
-                $pattern = $null
-                if ($window.TryGetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern, [ref]$pattern)) { $pattern.Close() }
+            if ($null -eq $process -or $process.ProcessName -notin @('SystemSettings', 'ApplicationFrameHost')) { continue }
+            $elements = $window.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)
+            foreach ($element in $elements) {
+                $name = $element.Current.Name
+                $snapshot.Add("$($process.ProcessName) | $($element.Current.ClassName) | $name")
+                if ($name -notmatch '^Do not disturb(,? (On|Off))?$' -or $element.Current.IsOffscreen) { continue }
+                $toggle = $null
+                if (-not $element.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern, [ref]$toggle)) { continue }
+                $before = $toggle.Current.ToggleState
+                if ($before -eq [System.Windows.Automation.ToggleState]::On) { $toggle.Toggle() }
+                elseif ($before -ne [System.Windows.Automation.ToggleState]::Off) { throw 'Do not disturb toggle has indeterminate state' }
+                $control = $toggle
+                break
             }
+            if ($null -ne $control) { break }
+        }
+        Set-Content -Path (Join-Path $evidence 'notification-dnd-uia.txt') -Value ($snapshot -join "`n")
+        Start-Sleep -Milliseconds 300
+    }
+    if ($null -eq $control) { throw 'OS Do not disturb control was not found' }
+    $settle = [DateTime]::UtcNow.AddSeconds(10)
+    while ($control.Current.ToggleState -ne [System.Windows.Automation.ToggleState]::Off -and [DateTime]::UtcNow -lt $settle) { Start-Sleep -Milliseconds 200 }
+    $after = $control.Current.ToggleState
+    @{before=[string]$before; after=[string]$after; taskbarBefore=$trayBefore; method='normal-os-settings-toggle'} | ConvertTo-Json | Set-Content (Join-Path $evidence 'notification-dnd.json')
+    if ($after -ne [System.Windows.Automation.ToggleState]::Off) { throw 'OS Do not disturb control remained on' }
+    $root = [System.Windows.Automation.AutomationElement]::RootElement
+    foreach ($window in $root.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)) {
+        $process = Get-Process -Id $window.Current.ProcessId -ErrorAction SilentlyContinue
+        if ($null -ne $process -and $process.ProcessName -in @('SystemSettings', 'ApplicationFrameHost')) {
+            $pattern = $null
+            if ($window.TryGetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern, [ref]$pattern)) { $pattern.Close() }
         }
     }
-    $after = (Notification-Button).Current.Name
-    @{before=$before; after=$after; changed=$opened; method='normal-os-ui'} | ConvertTo-Json | Set-Content (Join-Path $evidence 'notification-dnd.json')
-    if ($after -like '*Do not disturb on*') { throw 'Do not disturb remained on after OS UI action' }
+    $button = Notification-Button
+    if ($null -ne $button -and $button.Current.Name -like '*Do not disturb on*') { throw 'Taskbar contradicts OS Do not disturb setting' }
     Write-Output 'OS UI confirms Do not disturb is off; app notification permissions are unchanged'
     exit 0
 }
