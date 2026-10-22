@@ -10,8 +10,23 @@ if ($Worker) {
         $elevated = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
         @{elevated=$elevated; method='restricted-normal-user-token'} | ConvertTo-Json | Set-Content (Join-Path $State 'evidence/session-privileges.json')
         if ($elevated) { throw 'Journey must run as a normal, unelevated desktop application' }
-        & node --experimental-strip-types apps/desktop/tests/journeys/run.ts *> $logFile
-        $code = $LASTEXITCODE
+        $start = [Diagnostics.ProcessStartInfo]::new((Get-Command node).Source)
+        $start.UseShellExecute = $false
+        $start.RedirectStandardOutput = $true
+        $start.RedirectStandardError = $true
+        $start.WorkingDirectory = (Get-Location).Path
+        $start.ArgumentList.Add('--experimental-strip-types')
+        $start.ArgumentList.Add('apps/desktop/tests/journeys/run.ts')
+        $process = [Diagnostics.Process]::new()
+        $process.StartInfo = $start
+        try {
+            if (-not $process.Start()) { throw 'Journey process did not start' }
+            $stdout = $process.StandardOutput.ReadToEndAsync()
+            $stderr = $process.StandardError.ReadToEndAsync()
+            $process.WaitForExit()
+            ($stdout.GetAwaiter().GetResult() + $stderr.GetAwaiter().GetResult()) | Set-Content $logFile
+            $code = $process.ExitCode
+        } finally { $process.Dispose() }
     } catch { $_ | Out-String | Add-Content $logFile }
     exit $code
 }
