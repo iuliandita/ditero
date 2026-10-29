@@ -1,47 +1,26 @@
 {
-  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:recommended",
-    ":semanticCommits",
-    ":dependencyDashboard"
-  ],
-  "labels": [
-    "dependencies"
-  ],
-  "osvVulnerabilityAlerts": true,
-  "vulnerabilityAlerts": {
-    "labels": [
-      "security"
-    ]
-  },
-  "schedule": [
-    "* * * * *"
-  ],
-  "packageRules": [
-    {
-      "matchManagers": [
-        "dockerfile",
-        "docker-compose"
-      ],
-      "groupName": "Docker images"
-    },
-    {
-      "matchDatasources": [
-        "docker"
-      ],
-      "matchPackageNames": [
-        "node"
-      ],
-      "matchUpdateTypes": [
-        "major"
-      ],
-      "enabled": false
-    },
-    {
-      "matchManagers": [
-        "github-actions"
-      ],
-      "groupName": "GitHub Actions"
-    }
-  ]
+	"$schema": "https://docs.renovatebot.com/renovate-schema.json",
+	"extends": ["config:recommended", ":semanticCommits", ":dependencyDashboard"],
+	"labels": ["dependencies"],
+	"osvVulnerabilityAlerts": true,
+	"vulnerabilityAlerts": {
+		"labels": ["security"]
+	},
+	"schedule": ["* * * * *"],
+	"packageRules": [
+		{
+			"matchManagers": ["dockerfile", "docker-compose"],
+			"groupName": "Docker images"
+		},
+		{
+			"matchDatasources": ["docker"],
+			"matchPackageNames": ["node"],
+			"matchUpdateTypes": ["major"],
+			"enabled": false
+		},
+		{
+			"matchManagers": ["github-actions"],
+			"groupName": "GitHub Actions"
+		}
+	]
 }
