@@ -177,7 +177,7 @@ for (const path of packagePaths) {
 		undiciCopies += 1;
 		assert.equal(
 			JSON.parse(readFileSync(new URL(path, modules), "utf8")).version,
-			"7.29.1",
+			"7.30.1",
 		);
 	}
 	if (path === "uuid/package.json" || path.endsWith("/uuid/package.json")) {
@@ -202,5 +202,5 @@ const db = new Database(":memory:");
 assert.equal(db.prepare("select 1 as value").get().value, 1);
 db.close();
 console.log(
-	`Zero 1.11.1, Fastify 5.12.7, fast-uri 3.1.8/4.1.5 consumers, UUID 11.1.1, brace-expansion 2.1.7, Node ${process.version}, bundled Undici ${process.versions.undici}, npm Undici 7.29.1, SQLite ${process.platform}/${process.arch} verified`,
+	`Zero 1.11.1, Fastify 5.12.7, fast-uri 3.1.8/4.1.5 consumers, UUID 11.1.1, brace-expansion 2.1.7, Node ${process.version}, bundled Undici ${process.versions.undici}, npm Undici 7.30.1, SQLite ${process.platform}/${process.arch} verified`,
 );
