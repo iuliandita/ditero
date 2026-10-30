@@ -73,7 +73,7 @@ jobs:
       DESKTOP_BUNDLES: ${{ matrix.bundles }}
       DESKTOP_PLATFORM: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ inputs.ref }}
           persist-credentials: false
@@ -85,7 +85,7 @@ jobs:
           python3 -c 'import json, os, re; v = os.environ["DITERO_RELEASE_VERSION"]; assert re.fullmatch(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?", v), "invalid release version"; print(json.dumps({"version": v}))' > "$RUNNER_TEMP/desktop-release-config.json"
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.4
       - name: Install Linux build dependencies
         if: runner.os == 'Linux'
         run: |
@@ -106,7 +106,7 @@ jobs:
           rustup target add "$DESKTOP_TARGET"
           rustc --version
           cargo --version
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: apps/desktop/src-tauri
           key: native-${{ matrix.target }}-1.98.1
@@ -182,7 +182,7 @@ jobs:
       DITERO_RELEASE_VERSION: ${{ inputs.version }}
       DITERO_ANDROID_VERSION_CODE: ${{ inputs.android-version-code }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ inputs.ref }}
           persist-credentials: false
@@ -203,7 +203,7 @@ jobs:
           python3 -c 'import os, re; v = os.environ["DITERO_RELEASE_VERSION"]; c = os.environ["DITERO_ANDROID_VERSION_CODE"]; assert re.fullmatch(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?", v), "invalid release version"; assert re.fullmatch(r"[1-9][0-9]*", c) and int(c) <= 2100000000, "invalid Android version code"'
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.4
       - name: Select Java 21 and Android SDK
         run: |
           set -euo pipefail
