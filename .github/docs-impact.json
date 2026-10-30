@@ -12,12 +12,12 @@
 			"note": "Prepare second beta 0.1.0-beta.2/Android code 14 after published 0.1.0-beta.1; retain signing certificate, documentation epoch, remaining prerelease/native limits and prerelease publication wording. Add ditero-VERSION-clients.tar.gz with CLI/MCP/TUI JavaScript bundles, notices, per-file checksums, BUILDINFO and provenance attestation verified with a read-only attestations token. Packaging qualifies current and minimum Bun. Reject missing bundles/checksums/notices/attestation, bundled packages absent from notices, home/build paths, private-looking hosts/addresses, environment content, common secret shapes and build identity without building Bun. Standalone executables remain deferred; existing assets/signing/stable promotion rules remain. Packaging validates the Kustomize example as exactly two tag-matched image overrides. macOS desktop packaging retries at most three attempts total, only on the hdiutil eject-busy signature after detaching leftover dmg volumes and removing stale rw images; other failures and non-macOS failures exit immediately."
 		},
 		"configuration": {
-			"sourceDigest": "0964a60396cfc7d95ba1066fe8c1eddf702ee21ebbe4e85ae6d5b2f85ab86ba3",
-			"noImpact": "The Litestream Go dependencies are updated and their module checksums recorded. Configuration names, defaults and manifests remain unchanged, so the configuration guides stay accurate."
+			"sourceDigest": "32edff2c7fd9555793a7c6e85ca3b77be22a2cb0066c3a3838f3dbfa16dd39d8",
+			"noImpact": "The Litestream Go dependencies and fallback root certificate bundle are updated and their module checksums recorded. Configuration names, defaults and manifests remain unchanged, so the configuration guides stay accurate."
 		},
 		"deployment": {
-			"sourceDigest": "b592d3aca20b6590ddfffaeb9d23ded8aa6247842ce03974c3c06970084b4e84",
-			"noImpact": "The Litestream binaries are rebuilt with updated Go dependencies. Image names, entrypoints, backup formats, volumes and backup and restore procedures remain unchanged, so deployment guidance stays accurate."
+			"sourceDigest": "8acce81e7448d5fbc7de2c364eeee02230aaf0fa5686e61ddb8ed3062a5dea59",
+			"noImpact": "The Litestream binaries are rebuilt with updated Go dependencies and fallback root certificates. Image names, entrypoints, backup formats, volumes and backup and restore procedures remain unchanged, so deployment guidance stays accurate."
 		},
 		"native": {
 			"sourceDigest": "b455ef5963764bd40788e6427fa951e73c1ae830399a24e62cc398f55970fa15",
