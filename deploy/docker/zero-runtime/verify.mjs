@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { createRequire } from "node:module";
 
-assert.equal(process.version, "v22.23.4");
-assert.equal(process.versions.undici, "6.29.1");
+assert.equal(process.version, "v22.23.3");
+assert.equal(process.versions.undici, "6.28.1");
 
 const zeroManifest = new URL(
 	"./node_modules/@rocicorp/zero/package.json",

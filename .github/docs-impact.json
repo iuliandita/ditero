@@ -12,12 +12,12 @@
 			"note": "Prepare second beta 0.1.0-beta.2/Android code 14 after published 0.1.0-beta.1; retain signing certificate, documentation epoch, remaining prerelease/native limits and prerelease publication wording. Add ditero-VERSION-clients.tar.gz with CLI/MCP/TUI JavaScript bundles, notices, per-file checksums, BUILDINFO and provenance attestation verified with a read-only attestations token. Packaging qualifies current and minimum Bun. Reject missing bundles/checksums/notices/attestation, bundled packages absent from notices, home/build paths, private-looking hosts/addresses, environment content, common secret shapes and build identity without building Bun. Standalone executables remain deferred; existing assets/signing/stable promotion rules remain. Packaging validates the Kustomize example as exactly two tag-matched image overrides. macOS desktop packaging retries at most three attempts total, only on the hdiutil eject-busy signature after detaching leftover dmg volumes and removing stale rw images; other failures and non-macOS failures exit immediately."
 		},
 		"configuration": {
-			"sourceDigest": "a45f26f35f4774aec780fb3c8b739910b9db0dedfd8d19a3bbf28ddbcf0e541c",
-			"noImpact": "The Node and distroless base images are updated and runtime version checks aligned. Configuration names, defaults and deployment manifests remain unchanged, so the configuration guides stay accurate."
+			"sourceDigest": "1c456460b8051c11da4edd531186cad754174c886a9420e71e9c2acdaeeeadb8",
+			"noImpact": "The distroless Debian runtime base is updated; the Node base stays at the qualified version. Configuration names, defaults and deployment manifests remain unchanged, so the configuration guides stay accurate."
 		},
 		"deployment": {
-			"sourceDigest": "c20d162e059a2c183a04655a66e7ecfbc6ad5dd1fecb4aec9f713110500a7276",
-			"noImpact": "The Node and distroless bases are updated; the qualified Zero and Alpine versions remain pinned. Image names, entrypoints, volumes and backup and restore procedures remain unchanged, so deployment guidance stays accurate."
+			"sourceDigest": "90f96d91c60861f29caf76fe7141215170705c250b3374e0fa552e12510c1c74",
+			"noImpact": "The distroless Debian base is updated; the qualified Zero, Node and Alpine versions remain pinned. Image names, entrypoints, volumes and backup and restore procedures remain unchanged, so deployment guidance stays accurate."
 		},
 		"native": {
 			"sourceDigest": "b455ef5963764bd40788e6427fa951e73c1ae830399a24e62cc398f55970fa15",
