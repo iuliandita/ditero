@@ -77,7 +77,7 @@
   },
   "overrides": {
     "@grpc/grpc-js": "1.14.5",
-    "@hono/node-server": "^1.19.15",
+    "@hono/node-server": "^2.0.0",
     "@hpke/common": "1.10.1",
     "@opentelemetry/api-logs": "^0.223.0",
     "@opentelemetry/auto-instrumentations-node": "^0.81.2",
@@ -1613,11 +1613,7 @@
 
     "zod": ["zod@4.6.7", "", {}, "sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg=="],
 
-
     "@authenio/xml-encryption/@xmldom/xmldom": ["@xmldom/xmldom@0.8.15", "", {}, "sha512-/5NV/vDALVFDXgLmfsy9TRCBlKwO2LNBFzpzvb9iIj+jR+eSc6DLYYvVOdivT/jm7MtU6TebYuRmzEOI7w40UA=="],
-
-
-
 
     "@dotenvx/dotenvx/commander": ["commander@11.1.0", "", {}, "sha512-yPVavfyCcRhmorC7rWlkHn15b4wDVgVmBA7kV4QVBsF7kv/9TKJAbAXVTxvTnwP8HHKjRCJDClKbciiYS7p0DQ=="],
 

@@ -95,7 +95,7 @@
 	},
 	"overrides": {
 		"@grpc/grpc-js": "1.14.5",
-		"@hono/node-server": "^1.19.15",
+		"@hono/node-server": "^2.0.0",
 		"@opentelemetry/api-logs": "^0.223.0",
 		"@opentelemetry/auto-instrumentations-node": "^0.81.2",
 		"@opentelemetry/exporter-metrics-otlp-http": "^0.223.0",
