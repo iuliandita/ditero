@@ -21,6 +21,9 @@ FROM ${ZERO_RUNTIME_IMAGE} AS all-in-one-zero
 ARG ZERO_RUNTIME_IMAGE
 ARG TARGETARCH
 USER 0
+# The Zero runtime digest predates the current Alpine 3.24 security updates;
+# upgrade just the vulnerable packages so the 3.24.2 base assertion still holds.
+RUN apk upgrade --no-cache curl brotli-libs
 # Build-time ownership only; runtime roles never switch UID.
 RUN printf '%s' "$ZERO_RUNTIME_IMAGE" | grep -Eq '@sha256:[0-9a-f]{64}$' \
  && ! awk -F: '$3==1000||$3==1001||$3==1002{found=1}END{exit !found}' /etc/passwd \
