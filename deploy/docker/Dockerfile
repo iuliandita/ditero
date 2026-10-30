@@ -67,8 +67,10 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     -tags osusergo,netgo,sqlite_omit_load_extension -o /out/litestream-v5 ./cmd/litestream
 
 FROM alpine:3.24.2@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6 AS zero-runtime
-RUN apk upgrade --no-cache \
-	&& apk add --no-cache ca-certificates 'curl>=8.22.0-r0' \
+# Upgrade only the security-relevant packages; a full upgrade would move the
+# base off 3.24.2 and fail the all-in-one base assertion.
+RUN apk upgrade --no-cache curl brotli-libs libcrypto3 libssl3 \
+	&& apk add --no-cache ca-certificates 'curl>=8.23.0-r0' 'brotli-libs>=1.2.1-r0' \
 		'libcrypto3>=3.5.8-r0' 'libssl3>=3.5.8-r0' libstdc++ readline
 COPY --from=zero-node /usr/local/bin/node /usr/local/bin/node
 COPY --from=litestream-legacy /out/litestream /usr/local/bin/litestream
