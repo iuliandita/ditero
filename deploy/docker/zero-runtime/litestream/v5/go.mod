@@ -59,7 +59,7 @@ require (
 	github.com/mattn/go-isatty v0.0.20
 	github.com/pierrec/lz4/v4 v4.1.23
 	github.com/stretchr/testify v1.11.1
-	golang.org/x/crypto/x509roots/fallback v0.0.0-20260209214922-2f26647a795e
+	golang.org/x/crypto/x509roots/fallback v0.0.0-20261030153154-30a33513ff6d
 )
 
 require (
