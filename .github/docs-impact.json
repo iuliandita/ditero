@@ -12,12 +12,12 @@
 			"note": "Prepare second beta 0.1.0-beta.2/Android code 14 after published 0.1.0-beta.1; retain signing certificate, documentation epoch, remaining prerelease/native limits and prerelease publication wording. Add ditero-VERSION-clients.tar.gz with CLI/MCP/TUI JavaScript bundles, notices, per-file checksums, BUILDINFO and provenance attestation verified with a read-only attestations token. Packaging qualifies current and minimum Bun. Reject missing bundles/checksums/notices/attestation, bundled packages absent from notices, home/build paths, private-looking hosts/addresses, environment content, common secret shapes and build identity without building Bun. Standalone executables remain deferred; existing assets/signing/stable promotion rules remain. Packaging validates the Kustomize example as exactly two tag-matched image overrides. macOS desktop packaging retries at most three attempts total, only on the hdiutil eject-busy signature after detaching leftover dmg volumes and removing stale rw images; other failures and non-macOS failures exit immediately."
 		},
 		"configuration": {
-			"sourceDigest": "2547ee27bd95a3e2b0535828e724c23540e97acd6df94f4dfc9c9a0c2853651e",
-			"noImpact": "The Litestream Go dependencies and the Zero runtime gRPC patch version are updated and their checksums recorded. Configuration names, defaults and manifests remain unchanged, so the configuration guides stay accurate."
+			"sourceDigest": "501d82d7ef3a256f1ac8eb4cadb099dbd557c77cf11142b6afd75229e1ca38f2",
+			"noImpact": "The Litestream Go dependencies, fallback root certificate bundle and Zero runtime gRPC patch version are updated and their checksums recorded. Configuration names, defaults and manifests remain unchanged, so the configuration guides stay accurate."
 		},
 		"deployment": {
-			"sourceDigest": "90379883098414768f4b5d0a9c8663b820fc2450d31ccece2b58192c2c2a953b",
-			"noImpact": "The Litestream binaries are rebuilt with updated Go dependencies and the Zero runtime gRPC patch version is updated. Image names, entrypoints, backup formats, volumes and backup and restore procedures remain unchanged, so deployment guidance stays accurate."
+			"sourceDigest": "da6ab876d613c460c3021c81337ea7380f7e6a11c310d0aa6ae2660d959290f9",
+			"noImpact": "The Litestream binaries are rebuilt with updated Go dependencies and fallback root certificates, and the Zero runtime gRPC patch version is updated. Image names, entrypoints, backup formats, volumes and backup and restore procedures remain unchanged, so deployment guidance stays accurate."
 		},
 		"native": {
 			"sourceDigest": "b455ef5963764bd40788e6427fa951e73c1ae830399a24e62cc398f55970fa15",
