@@ -27,13 +27,13 @@ jobs:
     steps:
       - name: Check out verification tooling
         timeout-minutes: 2
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           path: tooling
           persist-credentials: false
       - name: Check out immutable candidate tests
         timeout-minutes: 2
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: 792ecf49ea1500f360a965a656bec5e43cb93303
           path: candidate
