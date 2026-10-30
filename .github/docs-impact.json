@@ -11,12 +11,12 @@
 			"noImpact": "The pinned Docker login, Rust cache and CodeQL actions receive compatible updates; release steps and published artifacts are unchanged."
 		},
 		"configuration": {
-			"sourceDigest": "32edff2c7fd9555793a7c6e85ca3b77be22a2cb0066c3a3838f3dbfa16dd39d8",
-			"noImpact": "The Litestream Go dependencies and fallback root certificate bundle are updated and their module checksums recorded. Configuration names, defaults and manifests remain unchanged, so the configuration guides stay accurate."
+			"sourceDigest": "a5e48f9d653679702b80962c0d7f063c5483bad1a9eaf2de47d4f8a557a60e6b",
+			"noImpact": "The Litestream Go dependencies, fallback root certificate bundle and distroless Debian runtime base are updated; the Node base stays at the qualified version. Configuration names, defaults and manifests remain unchanged, so the configuration guides stay accurate."
 		},
 		"deployment": {
-			"sourceDigest": "8acce81e7448d5fbc7de2c364eeee02230aaf0fa5686e61ddb8ed3062a5dea59",
-			"noImpact": "The Litestream binaries are rebuilt with updated Go dependencies and fallback root certificates. Image names, entrypoints, backup formats, volumes and backup and restore procedures remain unchanged, so deployment guidance stays accurate."
+			"sourceDigest": "d1fcf7752756e50593f2b6477dd0cb98d79babeab3ce1966713ef6aa999bf7f2",
+			"noImpact": "The Litestream binaries are rebuilt with updated Go dependencies and fallback root certificates and the distroless Debian base is updated; the qualified Zero, Node and Alpine versions remain pinned. Image names, entrypoints, backup formats, volumes and backup and restore procedures remain unchanged, so deployment guidance stays accurate."
 		},
 		"native": {
 			"sourceDigest": "b455ef5963764bd40788e6427fa951e73c1ae830399a24e62cc398f55970fa15",
