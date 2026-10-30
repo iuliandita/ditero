@@ -12,12 +12,12 @@
 			"note": "Prepare second beta 0.1.0-beta.2/Android code 14 after published 0.1.0-beta.1; retain signing certificate, documentation epoch, remaining prerelease/native limits and prerelease publication wording. Add ditero-VERSION-clients.tar.gz with CLI/MCP/TUI JavaScript bundles, notices, per-file checksums, BUILDINFO and provenance attestation verified with a read-only attestations token. Packaging qualifies current and minimum Bun. Reject missing bundles/checksums/notices/attestation, bundled packages absent from notices, home/build paths, private-looking hosts/addresses, environment content, common secret shapes and build identity without building Bun. Standalone executables remain deferred; existing assets/signing/stable promotion rules remain. Packaging validates the Kustomize example as exactly two tag-matched image overrides. macOS desktop packaging retries at most three attempts total, only on the hdiutil eject-busy signature after detaching leftover dmg volumes and removing stale rw images; other failures and non-macOS failures exit immediately."
 		},
 		"configuration": {
-			"sourceDigest": "6f3e059db878cab72716aebdbab8271b2b10e56bfb7a29ca6fcad9ad62257fb8",
-			"noImpact": "Dependency and base-image security bumps only: undici 7.30.1, systeminformation 5.33.18, go-jose 4.1.6, curl 8.23.0-r0 and brotli-libs 1.2.1-r0. No configuration names, defaults, values or manifests change, so the Helm and Kustomize configuration guides stay accurate."
+			"sourceDigest": "0ad7bdf825d6951f95bae53fc33680f5172459ce4d0409b228b21e2142cdbc0a",
+			"noImpact": "The Zero runtime fast-uri 3.x dependency is updated to 3.1.9 and its version checks are aligned. Configuration names, defaults and deployment manifests are unchanged, so the configuration guides stay accurate."
 		},
 		"deployment": {
-			"sourceDigest": "5ae02cc2103aa76b916641f3965a33c5acb3452eee945bf5a9e5b7231daaac22",
-			"noImpact": "The image rebuild only takes the current Alpine security fixes (curl 8.23.0-r0, brotli-libs 1.2.1-r0) and the dependency bumps above. Entrypoints, pinned base, image names, volumes, backup and restore steps are unchanged, so the deployment guides need no update."
+			"sourceDigest": "7e6cc18352f50c6bf63f786c6e6899eda712f73013219721e0d8f6ddc231953f",
+			"noImpact": "The Zero runtime rebuild updates fast-uri 3.x to 3.1.9 and checks the resolved version. Image names, entrypoints, base images, volumes and backup and restore procedures are unchanged, so deployment guidance stays accurate."
 		},
 		"native": {
 			"sourceDigest": "b455ef5963764bd40788e6427fa951e73c1ae830399a24e62cc398f55970fa15",
