@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { createRequire } from "node:module";
 
-assert.equal(process.version, "v22.23.3");
-assert.equal(process.versions.undici, "6.28.1");
+assert.equal(process.version, "v22.23.4");
+assert.equal(process.versions.undici, "6.29.1");
 
 const zeroManifest = new URL(
 	"./node_modules/@rocicorp/zero/package.json",
@@ -42,7 +42,7 @@ assert.throws(
 
 const ajvManifest = requireCloudEvents.resolve("ajv/package.json");
 const requireAjv = createRequire(realpathSync(ajvManifest));
-assert.equal(requireAjv("fast-uri/package.json").version, "3.1.8");
+assert.equal(requireAjv("fast-uri/package.json").version, "3.1.9");
 assert.equal(
 	requireAjv("fast-uri").resolve(
 		"https://example.test/schemas/root.json",
@@ -61,7 +61,7 @@ const requireStringifier = createRequire(
 	realpathSync(requireFastify.resolve("fast-json-stringify/package.json")),
 );
 for (const consumer of [requireCompiler, requireStringifier]) {
-	assert.equal(consumer("fast-uri/package.json").version, "4.1.5");
+	assert.equal(consumer("fast-uri/package.json").version, "4.2.3");
 	assert.equal(
 		consumer("fast-uri").resolve(
 			"https://example.test/schemas/root.json",
@@ -148,7 +148,7 @@ for (const path of packagePaths) {
 			readFileSync(new URL(path, modules), "utf8"),
 		).version;
 		assert.ok(
-			["3.1.8", "4.1.5"].includes(version),
+			["3.1.9", "4.2.3"].includes(version),
 			`Unexpected fast-uri ${version}`,
 		);
 		fastUriVersions.add(version);
@@ -177,7 +177,7 @@ for (const path of packagePaths) {
 		undiciCopies += 1;
 		assert.equal(
 			JSON.parse(readFileSync(new URL(path, modules), "utf8")).version,
-			"7.29.1",
+			"7.30.1",
 		);
 	}
 	if (path === "uuid/package.json" || path.endsWith("/uuid/package.json")) {
@@ -188,7 +188,7 @@ for (const path of packagePaths) {
 	}
 }
 
-assert.deepEqual([...fastUriVersions].sort(), ["3.1.8", "4.1.5"]);
+assert.deepEqual([...fastUriVersions].sort(), ["3.1.9", "4.2.3"]);
 assert.ok(fastifyCopies > 0, "No physical Fastify package found");
 assert.ok(zeroCopies > 0, "No physical Zero package found");
 assert.ok(undiciCopies > 0, "No physical undici package found");
@@ -202,5 +202,5 @@ const db = new Database(":memory:");
 assert.equal(db.prepare("select 1 as value").get().value, 1);
 db.close();
 console.log(
-	`Zero 1.11.1, Fastify 5.12.7, fast-uri 3.1.8/4.1.5 consumers, UUID 11.1.1, brace-expansion 2.1.7, Node ${process.version}, bundled Undici ${process.versions.undici}, npm Undici 7.29.1, SQLite ${process.platform}/${process.arch} verified`,
+	`Zero 1.11.1, Fastify 5.12.7, fast-uri 3.1.9/4.2.3 consumers, UUID 11.1.1, brace-expansion 2.1.7, Node ${process.version}, bundled Undici ${process.versions.undici}, npm Undici 7.30.1, SQLite ${process.platform}/${process.arch} verified`,
 );

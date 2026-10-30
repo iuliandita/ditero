@@ -28,7 +28,7 @@ COPY package.json bun.lock ./
 COPY patches ./patches
 RUN bun install --frozen-lockfile --production --omit=optional --omit=peer
 
-FROM rocicorp/zero:1.11.3@sha256:d1ad384ea14eee10e0a3180a281ef8b943924993c06d8e47a36017b9bdcc7c55 AS zero-base
+FROM rocicorp/zero:1.11.1@sha256:b27fe690d5873e97daf330bb883a2636688cbc65fe6d00a6c567c4cab28a26ba AS zero-base
 
 # Keep upstream's PostgreSQL patch, but rebuild its dependency tree
 # from the reviewed lock so the vulnerable packages are actually replaced.
@@ -66,9 +66,11 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     go build -mod=readonly -trimpath -ldflags "-s -w -X main.Version=v0.5.18-zero.16-ditero.1 -extldflags '-static'" \
     -tags osusergo,netgo,sqlite_omit_load_extension -o /out/litestream-v5 ./cmd/litestream
 
-FROM alpine:3.24.3@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a AS zero-runtime
-RUN apk upgrade --no-cache \
-	&& apk add --no-cache ca-certificates 'curl>=8.22.0-r0' \
+FROM alpine:3.24.2@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6 AS zero-runtime
+# Upgrade only the security-relevant packages; a full upgrade would move the
+# base off 3.24.2 and fail the all-in-one base assertion.
+RUN apk upgrade --no-cache curl brotli-libs libcrypto3 libssl3 \
+	&& apk add --no-cache ca-certificates 'curl>=8.23.0-r0' 'brotli-libs>=1.2.1-r0' \
 		'libcrypto3>=3.5.8-r0' 'libssl3>=3.5.8-r0' libstdc++ readline
 COPY --from=zero-node /usr/local/bin/node /usr/local/bin/node
 COPY --from=litestream-legacy /out/litestream /usr/local/bin/litestream
