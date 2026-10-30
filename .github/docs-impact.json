@@ -11,12 +11,12 @@
 			"noImpact": "The pinned Docker login, Rust cache and CodeQL actions receive compatible updates; release steps and published artifacts are unchanged."
 		},
 		"configuration": {
-			"sourceDigest": "32edff2c7fd9555793a7c6e85ca3b77be22a2cb0066c3a3838f3dbfa16dd39d8",
-			"noImpact": "The Litestream Go dependencies and fallback root certificate bundle are updated and their module checksums recorded. Configuration names, defaults and manifests remain unchanged, so the configuration guides stay accurate."
+			"sourceDigest": "3380f4c7dc65d849b45ee549a7694dccae1fdf135c4050426940a5b940426b8f",
+			"noImpact": "The Litestream Go dependencies, fallback root certificate bundle, distroless Debian runtime base and Zero runtime gRPC patch version are updated; the Node base stays at the qualified version. Configuration names, defaults and manifests remain unchanged, so the configuration guides stay accurate."
 		},
 		"deployment": {
-			"sourceDigest": "8acce81e7448d5fbc7de2c364eeee02230aaf0fa5686e61ddb8ed3062a5dea59",
-			"noImpact": "The Litestream binaries are rebuilt with updated Go dependencies and fallback root certificates. Image names, entrypoints, backup formats, volumes and backup and restore procedures remain unchanged, so deployment guidance stays accurate."
+			"sourceDigest": "685dc84a76a982675a7abf9b2e4d1b85cf97a6ba29704d29d593c7029e9d2d68",
+			"noImpact": "The Litestream binaries are rebuilt with updated Go dependencies and fallback root certificates, the distroless Debian base is updated and the Zero runtime gRPC patch version is updated; the qualified Zero, Node and Alpine versions remain pinned. Image names, entrypoints, backup formats, volumes and backup and restore procedures remain unchanged, so deployment guidance stays accurate."
 		},
 		"native": {
 			"sourceDigest": "b455ef5963764bd40788e6427fa951e73c1ae830399a24e62cc398f55970fa15",
