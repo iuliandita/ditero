@@ -12,12 +12,12 @@
 			"note": "Prepare second beta 0.1.0-beta.2/Android code 14 after published 0.1.0-beta.1; retain signing certificate, documentation epoch, remaining prerelease/native limits and prerelease publication wording. Add ditero-VERSION-clients.tar.gz with CLI/MCP/TUI JavaScript bundles, notices, per-file checksums, BUILDINFO and provenance attestation verified with a read-only attestations token. Packaging qualifies current and minimum Bun. Reject missing bundles/checksums/notices/attestation, bundled packages absent from notices, home/build paths, private-looking hosts/addresses, environment content, common secret shapes and build identity without building Bun. Standalone executables remain deferred; existing assets/signing/stable promotion rules remain. Packaging validates the Kustomize example as exactly two tag-matched image overrides. macOS desktop packaging retries at most three attempts total, only on the hdiutil eject-busy signature after detaching leftover dmg volumes and removing stale rw images; other failures and non-macOS failures exit immediately."
 		},
 		"configuration": {
-			"sourceDigest": "86c234c486331b637217bdb890d102d411c041ced8326029eaa2e47e5e9c9805",
-			"noImpact": "The Zero runtime fast-uri 4.x dependency is updated to 4.2.3 and its version checks are aligned. Configuration names, defaults and deployment manifests are unchanged, so the configuration guides stay accurate."
+			"sourceDigest": "f78fb172750ce5c78920f1dc21bde0d3d75c6e759f8eb524210d76182e8326f0",
+			"noImpact": "The Litestream fallback root certificate bundle is updated; configuration names and defaults are unchanged."
 		},
 		"deployment": {
-			"sourceDigest": "5c951e6d0b14e49ffa9eaf0e74ce37a44b9835043638d99bfdea05d378f6c6d6",
-			"noImpact": "The Zero runtime rebuild updates fast-uri 4.x to 4.2.3 and checks the resolved version. Image names, entrypoints, base images, volumes and backup and restore procedures are unchanged, so deployment guidance stays accurate."
+			"sourceDigest": "94364e0f06e710f47745a50f056cb3b181784baf5ccec38746dfc1abb0f5c2cf",
+			"noImpact": "The Litestream fallback root certificate bundle is updated; image operation and backup procedures are unchanged."
 		},
 		"native": {
 			"sourceDigest": "b455ef5963764bd40788e6427fa951e73c1ae830399a24e62cc398f55970fa15",
