@@ -57,7 +57,7 @@ require (
 require (
 	github.com/lmittmann/tint v1.1.3
 	github.com/mattn/go-isatty v0.0.24
-	github.com/pierrec/lz4/v4 v4.1.23
+	github.com/pierrec/lz4/v4 v4.1.33
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/crypto/x509roots/fallback v0.0.0-20261030153154-30a33513ff6d
 )
