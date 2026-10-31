@@ -11,11 +11,11 @@
 			"noImpact": "The pinned checkout action and the security scanner and cosign tool versions receive compatible updates; release steps and published artifacts are unchanged."
 		},
 		"configuration": {
-			"sourceDigest": "3380f4c7dc65d849b45ee549a7694dccae1fdf135c4050426940a5b940426b8f",
+			"sourceDigest": "c36b97a8c1d96ff55cde59baa034a5c9c5c1bc691e04e877085dbc99d1841495",
 			"noImpact": "The Litestream Go dependencies, fallback root certificate bundle, distroless Debian runtime base and Zero runtime gRPC patch version are updated; the Node base stays at the qualified version. Configuration names, defaults and manifests remain unchanged, so the configuration guides stay accurate."
 		},
 		"deployment": {
-			"sourceDigest": "685dc84a76a982675a7abf9b2e4d1b85cf97a6ba29704d29d593c7029e9d2d68",
+			"sourceDigest": "965456505fb009c779e688c6f582d15963f106963c118c8e4adbd9ce8e707dbc",
 			"noImpact": "The Litestream binaries are rebuilt with updated Go dependencies and fallback root certificates, the distroless Debian base is updated and the Zero runtime gRPC patch version is updated; the qualified Zero, Node and Alpine versions remain pinned. Image names, entrypoints, backup formats, volumes and backup and restore procedures remain unchanged, so deployment guidance stays accurate."
 		},
 		"native": {
