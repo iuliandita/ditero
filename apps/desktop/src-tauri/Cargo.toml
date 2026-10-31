@@ -17,7 +17,7 @@ tokio = { version = "1", features = ["sync", "time", "macros", "fs", "io-util", 
 tokio-tungstenite = { version = "=0.30.0", default-features = false, features = ["connect", "native-tls"] }
 futures-util = { version = "0.3", features = ["sink"] }
 tokio-util = { version = "0.7", features = ["io"] }
-keyring-core = "=1.0.0"
+keyring-core = "=1.0.1"
 base64 = "0.22"
 sha2 = "0.10"
 rand = "0.8"
