@@ -7,8 +7,8 @@
 			"note": "An open, visible, unlocked key holder fulfills pending workspace file-grant requests on the 15-second state cadence with backoff on failure and a bounded pass, never alongside a reconcile, skips requests another holder already won, pauses while hidden and stops on lock, sign-out and unmount. A member selection waiting for its grant checks its own request for up to ten minutes and uploads once the key arrives, only to the workspace and task or comment where it was picked, with the comment text captured at Send; a resume the user triggers, such as after key rotation, posts the draft as it stands, and a task change clears the composer's picked files. Moving elsewhere or the time limit stops the wait with a visible message in all six locales. Grant checks, sealing and server authorization are unchanged; no theme change."
 		},
 		"release": {
-			"sourceDigest": "5e41eab693402a79886f709120cec5101245c248cda24883f7882f36a5e993f6",
-			"noImpact": "The pinned Docker login, Rust cache and CodeQL actions receive compatible updates; release steps and published artifacts are unchanged."
+			"sourceDigest": "98d834f1f7c042ae33a1984d6ae39401f5df31377c4f9faab00a1513827ba24e",
+			"noImpact": "The pinned checkout action and the security scanner and cosign tool versions receive compatible updates; release steps and published artifacts are unchanged."
 		},
 		"configuration": {
 			"sourceDigest": "3380f4c7dc65d849b45ee549a7694dccae1fdf135c4050426940a5b940426b8f",
