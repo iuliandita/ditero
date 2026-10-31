@@ -21,7 +21,7 @@ require (
 	github.com/mattn/go-shellwords v1.0.12
 	github.com/mattn/go-sqlite3 v1.14.19
 	github.com/nats-io/nats.go v1.44.0
-	github.com/pkg/sftp v1.13.6
+	github.com/pkg/sftp v1.13.12
 	github.com/prometheus/client_golang v1.17.0
 	github.com/psanford/sqlite3vfs v0.0.0-20260519004904-f9180fa2acc9 // direct
 	github.com/studio-b12/gowebdav v0.11.0
