@@ -9,29 +9,16 @@ import {
 	type AccountSetupWizardLabels,
 } from "./AccountSetupWizard.tsx";
 
-export function AccountSetupPanel({
+// Shared by the Settings panel and the first-run dialog.
+export function AccountSetupWizardHost({
 	setup,
-	expanded,
-	onOpen,
+	hideHeader,
 	onLeave,
 }: {
 	setup: ReturnType<typeof useAccountSetup>;
-	expanded: boolean;
-	onOpen: () => void;
+	hideHeader?: boolean;
 	onLeave: () => void;
 }) {
-	const container = useRef<HTMLFieldSetElement>(null);
-	useEffect(() => {
-		if (expanded) container.current?.focus();
-	}, [expanded]);
-	if (setup.managed)
-		return <p className="text-sm text-muted-foreground">{m.setup_managed()}</p>;
-	if (!expanded)
-		return (
-			<Button variant="outline" onClick={onOpen} className="min-h-11">
-				{m.setup_open()}
-			</Button>
-		);
 	const labels: AccountSetupWizardLabels = {
 		title: m.setup_title(),
 		description: m.setup_description(),
@@ -44,6 +31,8 @@ export function AccountSetupPanel({
 		custom: m.setup_custom(),
 		customDescription: m.setup_custom_description(),
 		preview: m.setup_preview(),
+		showTasks: m.setup_show_tasks(),
+		hideTasks: m.setup_hide_tasks(),
 		dashboard: m.setup_dashboard(),
 		emptyPreview: m.setup_empty_preview(),
 		chooseContent: m.setup_choose_content(),
@@ -76,34 +65,63 @@ export function AccountSetupPanel({
 					? m.setup_conflict()
 					: m.setup_failed();
 	return (
+		<AccountSetupWizard
+			key={`${setup.requestId}:${setup.locale}`}
+			catalog={createSetupPackCatalog(
+				setup.locale,
+				ACCOUNT_SETUP_CATALOG_VERSION,
+			)}
+			requestId={setup.requestId}
+			expectedRevision={setup.expectedRevision}
+			labels={labels}
+			state={setup.state}
+			error={error}
+			allowEmptyChoice={setup.allowEmptyChoice}
+			hideHeader={hideHeader}
+			emptyChoiceReason={
+				setup.outcome === "skipped"
+					? m.setup_skipped_already()
+					: m.setup_empty_already()
+			}
+			onSubmit={setup.submit}
+			onRetry={setup.retry}
+			onResume={setup.resume}
+			onLeave={onLeave}
+		/>
+	);
+}
+
+export function AccountSetupPanel({
+	setup,
+	expanded,
+	onOpen,
+	onLeave,
+}: {
+	setup: ReturnType<typeof useAccountSetup>;
+	expanded: boolean;
+	onOpen: () => void;
+	onLeave: () => void;
+}) {
+	const container = useRef<HTMLFieldSetElement>(null);
+	useEffect(() => {
+		if (expanded) container.current?.focus();
+	}, [expanded]);
+	if (setup.managed)
+		return <p className="text-sm text-muted-foreground">{m.setup_managed()}</p>;
+	if (!expanded)
+		return (
+			<Button variant="outline" onClick={onOpen} className="min-h-11">
+				{m.setup_open()}
+			</Button>
+		);
+	return (
 		<fieldset
 			ref={container}
 			tabIndex={-1}
 			aria-label={m.setup_title()}
 			className="scroll-mt-20 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
 		>
-			<AccountSetupWizard
-				key={`${setup.requestId}:${setup.locale}`}
-				catalog={createSetupPackCatalog(
-					setup.locale,
-					ACCOUNT_SETUP_CATALOG_VERSION,
-				)}
-				requestId={setup.requestId}
-				expectedRevision={setup.expectedRevision}
-				labels={labels}
-				state={setup.state}
-				error={error}
-				allowEmptyChoice={setup.allowEmptyChoice}
-				emptyChoiceReason={
-					setup.outcome === "skipped"
-						? m.setup_skipped_already()
-						: m.setup_empty_already()
-				}
-				onSubmit={setup.submit}
-				onRetry={setup.retry}
-				onResume={setup.resume}
-				onLeave={onLeave}
-			/>
+			<AccountSetupWizardHost setup={setup} onLeave={onLeave} />
 			<div className="space-y-3 px-4 pb-4 text-sm text-muted-foreground sm:px-6 sm:pb-6">
 				<p>{m.setup_personal_hint()}</p>
 				{(setup.state === "completed" || setup.state === "conflict") &&
