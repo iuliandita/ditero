@@ -380,9 +380,9 @@ test("touch: long-press Select starts selection mode and taps then select", asyn
 	const { ctx, page } = await phone(browser);
 	await addTasks(page, ["Tap one", "Tap two", "Tap three"]);
 
-	// No select control takes space on a touch row until selection starts.
+	// No select control exists on a row until selection starts.
 	const control = row(page, "Tap two").getByTestId("task-select");
-	expect((await control.boundingBox())?.width ?? 0).toBeLessThanOrEqual(1);
+	await expect(control).toHaveCount(0);
 
 	await longPress(page, openButton(page, "Tap one"));
 	await page.getByTestId("row-action-select").click();

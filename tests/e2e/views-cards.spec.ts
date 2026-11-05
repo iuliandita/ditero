@@ -191,25 +191,28 @@ test("board: default grouping is by priority, cards are one surface with row cue
 	const columns = page.getByTestId("board-column");
 	await expect(columns).toHaveCount(4, { timeout: 15000 });
 	await expect(columns).toHaveText([
-		/^P1 High/,
-		/^P2 Medium/,
-		/^P3 Low/,
+		/^High priority/,
+		/^Medium priority/,
+		/^Low priority/,
 		/^No priority/,
 	]);
 	await expect(
 		page.getByRole("region", { name: "Tasks", exact: true }),
 	).toHaveCount(0);
-	const high = page.getByRole("region", { name: "P1 High" });
+	const high = page.getByRole("region", { name: "High priority" });
 	await expect(
-		page.getByRole("region", { name: "P2 Medium" }).getByText("Book dentist"),
+		page
+			.getByRole("region", { name: "Medium priority" })
+			.getByText("Book dentist"),
 	).toBeVisible();
 	await expect(
-		page.getByRole("region", { name: "P3 Low" }).getByText("Oat milk"),
+		page.getByRole("region", { name: "Low priority" }).getByText("Oat milk"),
 	).toBeVisible();
 
 	// One card surface: a single border, no inner fill of another colour.
 	const card = high.getByTestId("board-card").filter({ hasText: LONG_TITLE });
 	await expect(card).toBeVisible();
+	// The seed adds a shared workspace, so the view spans two and names the source.
 	const source = card.getByTestId("task-source-context");
 	await expect(source).toHaveAttribute("title", `${workspaceName} · Personal`);
 	await expect(source.locator(':scope > span[aria-hidden="true"]')).toHaveText(
@@ -223,7 +226,7 @@ test("board: default grouping is by priority, cards are one surface with row cue
 	expect(await surfaceReport(card)).toEqual({ bordered: 1, innerFills: 0 });
 
 	// Two-line title, clamped, with the whole title still in the accessible name.
-	const title = card.locator("[data-kbd-nav] > span").first();
+	const title = card.locator("[data-kbd-nav] [data-reading-title]").first();
 	const lines = await title.evaluate((el) => {
 		const lh = parseFloat(getComputedStyle(el).lineHeight);
 		return {

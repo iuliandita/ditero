@@ -33,6 +33,7 @@ import { useTaskImportActivationMap } from "../../hooks/useTaskImportActivation.
 import { useTaskToggle } from "../../hooks/useTaskToggle.ts";
 import { useUserPref } from "../../hooks/useUserPref.ts";
 import { formatList } from "../../lib/intl-format.ts";
+import { getBuiltin } from "../../views/builtins.ts";
 import type { GroupCtx, GroupTask } from "../../views/group.ts";
 import {
 	effectiveGroupBy,
@@ -232,7 +233,7 @@ export function ViewRenderer(props: {
 			const parent = task.parentId ? taskById.get(task.parentId) : undefined;
 			const parentContext =
 				parent && parent.listId === task.listId
-					? m.activation_review_parent({ title: parent.title })
+					? m.task_part_of({ title: parent.title })
 					: undefined;
 			const filterTask: FilterTask = {
 				id: task.id,
@@ -517,6 +518,21 @@ export function ViewRenderer(props: {
 	// A status board's Done column is the completed group, so it never folds.
 	const collapseCompleted = !filterMentionsDone(filter) && groupBy !== "status";
 	const spansLists = new Set(sorted.map((e) => e.task.listId)).size > 1;
+	// A workspace on every row only helps when the view reaches into more than one.
+	const showWorkspace = useMemo(
+		() =>
+			resolveWorkspaceScope(display.workspaceScope, {
+				userId: currentUserId,
+				now: new Date(),
+				membershipWorkspaceIds,
+			}).size > 1,
+		[display.workspaceScope, currentUserId, membershipWorkspaceIds],
+	);
+	const omitToday = useMemo(
+		() =>
+			JSON.stringify(filter) === JSON.stringify(getBuiltin("today")?.filter),
+		[filter],
+	);
 
 	// Calendar owns its own mobile collapse (month grid -> agenda), so it is not
 	// folded into the generic "viewing as list" path.
@@ -620,6 +636,9 @@ export function ViewRenderer(props: {
 								? entryGroups.filter((g) => g.entries.length > 0)
 								: entryGroups
 						}
+						groupedByList={groupBy === "list"}
+						showWorkspace={showWorkspace}
+						omitToday={omitToday}
 						reorderable={listReorderable}
 						handlers={handlers}
 						onReorder={onReorder}
@@ -634,6 +653,7 @@ export function ViewRenderer(props: {
 					priorityColumns={groupBy === "priority"}
 					collapseCompleted={collapseCompleted}
 					spansLists={spansLists}
+					showWorkspace={showWorkspace}
 					reorderable={boardReorderable}
 					regroupable={boardRegroupable}
 					onReorder={onReorder}
@@ -680,6 +700,9 @@ function renderListFor(layout: ViewDisplay["layout"], isDesktop: boolean) {
 
 function ListLayout({
 	groups,
+	groupedByList,
+	showWorkspace,
+	omitToday,
 	reorderable,
 	handlers,
 	onReorder,
@@ -687,20 +710,38 @@ function ListLayout({
 	selectionFor,
 }: {
 	groups: ViewEntryGroup[];
+	// Under a list's own heading a row does not repeat the list or its workspace.
+	groupedByList: boolean;
+	showWorkspace: boolean;
+	omitToday: boolean;
 	reorderable: boolean;
 	handlers: RowHandlers;
 	onReorder: (id: string, sortKey: string) => void;
 	canDrag: (id: string) => boolean;
 	selectionFor: (task: Task) => RowSelection | undefined;
 }) {
+	const withWorkspace = showWorkspace && !groupedByList;
+	// Two lists with one name (in different workspaces) need the workspace to
+	// tell their headings apart.
+	const ambiguous = new Set<string>();
+	if (groupedByList) {
+		const seen = new Set<string>();
+		for (const g of groups) {
+			if (seen.has(g.label)) ambiguous.add(g.label);
+			seen.add(g.label);
+		}
+	}
 	const renderRow = (entry: ViewEntry) => (
 		<TaskRow
 			task={entry.task}
 			occurrence={entry.occurrence}
-			sourceContext={entry.sourceContext}
-			sourceWorkspace={entry.sourceWorkspace}
+			sourceContext={withWorkspace ? entry.sourceContext : undefined}
+			sourceWorkspace={withWorkspace ? entry.sourceWorkspace : undefined}
 			parentContext={entry.parentContext}
-			list={{ title: entry.listTitle, icon: entry.listIcon }}
+			omitToday={omitToday}
+			list={
+				groupedByList ? null : { title: entry.listTitle, icon: entry.listIcon }
+			}
 			kind={entry.kind}
 			subtasks={[]}
 			labels={entry.labels}
@@ -712,13 +753,23 @@ function ListLayout({
 	return (
 		// Reading measure: only the vertical row path. Board scrolls columns and
 		// calendar is a 7-column grid, so both keep the full content width.
-		<div className="flex max-w-3xl flex-col gap-4">
+		<div className="flex max-w-3xl flex-col gap-6">
 			{groups.map((g) => (
 				<section key={g.key || "all"} aria-label={g.label || undefined}>
 					{g.label && (
-						<h3 className="mb-1 flex items-center gap-2 px-1 text-xs font-medium text-muted-foreground">
+						<h3 className="mb-1 flex items-baseline gap-2 px-1 text-sm font-medium">
 							{g.label}
-							<span aria-hidden="true">{g.entries.length}</span>
+							{groupedByList && ambiguous.has(g.label) && (
+								<span className="text-xs font-normal text-muted-foreground">
+									{g.entries[0]?.sourceWorkspace?.name}
+								</span>
+							)}
+							<span
+								aria-hidden="true"
+								className="text-xs font-normal text-muted-foreground tabular-nums"
+							>
+								{g.entries.length}
+							</span>
 						</h3>
 					)}
 					{reorderable ? (

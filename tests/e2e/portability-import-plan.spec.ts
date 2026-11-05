@@ -408,7 +408,10 @@ test("imports assignments, recovers a lost response, and supports ordinary unass
 	const task = page
 		.getByTestId("list")
 		.locator("button", { hasText: "Imported assigned task" });
-	await expect(task.getByTestId("assignee-chips")).toBeVisible();
+	// A personal task assigned only to its owner shows no names on the row; the
+	// imported assignment is proven by the open picker and the export below.
+	await expect(task).toBeVisible();
+	await expect(task.getByTestId("assignee-chips")).toHaveCount(0);
 	await task.click();
 	await revealDetails(page);
 	await page.getByTestId("assignee-open").click();
@@ -431,5 +434,11 @@ test("imports assignments, recovers a lost response, and supports ordinary unass
 	await sidebarLists(page)
 		.getByRole("button", { name: "Imported assigned list", exact: true })
 		.click();
-	await expect(task.getByTestId("assignee-chips")).toHaveCount(0);
+	await task.click();
+	// Unassigned now, so the assignee field is behind "Add details" again.
+	await revealDetails(page);
+	await page.getByTestId("assignee-open").click();
+	await expect(
+		page.getByTestId("assignee-picker").getByTestId("assignee-option").first(),
+	).toHaveAttribute("aria-pressed", "false");
 });

@@ -2,8 +2,8 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "f3c15e5a3494723986e432b2fb1e08f0c591ef541c1f5d4987ac0619f565e449",
-			"noImpact": "The in-list add field for tasks, projects and checklists now reads quick-add syntax into removable chips, shopping reads a leading amount as a quantity, and the permanent literal-saving hint is gone; quick add keeps its own sheet and shortcut, and no documented behavior changes."
+			"sourceDigest": "2a1b39f932c7128282c457b9356856f4d7d2ce278d4ee331ddaa857d41110e1d",
+			"noImpact": "Task and shopping rows align the check with the title line, put the priority flag right after the title with its label in the accessible name, keep the menu in a fixed trailing rail and show the select toggle only in selection mode, show assignee first names and one context line, show shopping quantity as text after the item name, and use one focus ring and stronger hover, press and palette cursor fills. Priority group headings read High, Medium and Low priority. Behavior, permissions, data and keyboard shortcuts are unchanged and no guide describes these row details."
 		},
 		"release": {
 			"sourceDigest": "98d834f1f7c042ae33a1984d6ae39401f5df31377c4f9faab00a1513827ba24e",

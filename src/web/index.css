@@ -139,6 +139,10 @@
 	--priority-1: oklch(0.56 0.1 250);
 	--priority-2: oklch(0.6 0.125 60);
 	--priority-3: oklch(0.56 0.165 27);
+	/* Row hover/press and the palette cursor: neutral steps above --muted. */
+	--row-hover: oklch(0.945 0.007 210);
+	--row-active: oklch(0.915 0.008 210);
+	--cursor-fill: oklch(0.925 0.01 210);
 	--radius: 0.625rem;
 	/* Motion is theme-invariant, so it is declared once here and never in the
 	   dark palettes. Plain custom properties, not @theme entries: Tailwind has no
@@ -198,6 +202,9 @@
 	--priority-1: oklch(0.72 0.1 250);
 	--priority-2: oklch(0.78 0.12 65);
 	--priority-3: oklch(0.71 0.15 25);
+	--row-hover: oklch(0.275 0.01 215);
+	--row-active: oklch(0.31 0.011 215);
+	--cursor-fill: oklch(0.34 0.012 215);
 	--elevation-overlay:
 		0 4px 12px -2px oklch(0.08 0.01 215 / 0.5),
 		0 2px 4px -2px oklch(0.08 0.01 215 / 0.4);
@@ -247,6 +254,9 @@
 		--priority-1: oklch(0.72 0.1 250);
 		--priority-2: oklch(0.78 0.12 65);
 		--priority-3: oklch(0.71 0.15 25);
+		--row-hover: oklch(0.275 0.01 215);
+		--row-active: oklch(0.31 0.011 215);
+		--cursor-fill: oklch(0.34 0.012 215);
 		--elevation-overlay:
 			0 4px 12px -2px oklch(0.08 0.01 215 / 0.5),
 			0 2px 4px -2px oklch(0.08 0.01 215 / 0.4);
@@ -281,6 +291,13 @@
 	[contenteditable] {
 		caret-color: var(--primary);
 	}
+}
+
+/* Sidebar rows take the same 2px accent ring as every other control. It is
+   inset because the nav scroller clips an outer ring. */
+:is([data-nav-kind], [data-list-id]):focus-visible {
+	outline: none;
+	box-shadow: inset 0 0 0 2px var(--ring);
 }
 
 /* Completion feedback: the check scales in on transform/opacity only, and only
@@ -411,10 +428,10 @@
 		);
 	}
 	& :is([data-reading-row="task"], [data-reading-row="shopping"]) {
+		--row-slot: var(--reading-target);
+	}
+	& [data-reading-row="task"] [data-reading-metadata] {
 		flex-wrap: wrap;
-		& [data-kbd-nav] {
-			flex-basis: calc(100% - var(--reading-target) - 0.5rem);
-		}
 	}
 	& [data-reading-list-header] {
 		flex-wrap: wrap;
@@ -426,15 +443,11 @@
 			overflow-wrap: anywhere;
 		}
 	}
-	& [data-reading-row="task"] [data-testid="task-priority"] {
-		margin-inline-start: calc(var(--reading-target) + 0.5rem);
-	}
 	& [data-reading-row="shopping"] {
 		flex-wrap: wrap;
 		padding-block: 0.25rem;
 		& [data-reading-title] {
 			flex-basis: 8rem;
-			flex-grow: 1;
 		}
 		&
 			:is(
@@ -443,7 +456,6 @@
 				[data-testid="shopping-qty-add"]
 			) {
 			max-inline-size: 100%;
-			margin-inline-start: auto;
 			flex-wrap: wrap;
 			white-space: normal;
 			overflow-wrap: anywhere;
@@ -605,5 +617,10 @@
 	:root[data-reading-size] :focus-visible {
 		outline: 2px solid Highlight;
 		outline-offset: 2px;
+	}
+	/* The row ring is a box-shadow, which forced colors drops. */
+	:root [data-kbd-row]:has([data-kbd-nav]:focus-visible) {
+		outline: 2px solid Highlight;
+		outline-offset: -2px;
 	}
 }

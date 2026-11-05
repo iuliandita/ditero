@@ -328,11 +328,10 @@ test("a row announces its title once, with labeled subtask progress and priority
 	expect(
 		await flag.locator("svg").evaluate((el) => getComputedStyle(el).fill),
 	).not.toBe("none");
+	// The word lives in the accessible name; no visible label on the row.
 	const text = row.getByTestId("task-priority-text");
-	await page.mouse.move(0, 0);
-	await expect(text).toBeHidden();
 	await row.hover();
-	await expect(text).toHaveText("P1 High");
+	await expect(text).toBeHidden();
 
 	await expectNoSeriousA11y(page, "list rows");
 });

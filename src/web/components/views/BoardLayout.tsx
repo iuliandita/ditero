@@ -27,19 +27,24 @@ const COL_PREFIX = "col:";
 const CARD_SURFACE =
 	"rounded-lg border bg-card p-1 transition-colors duration-(--motion-fast) ease-(--motion-ease) hover:border-control-border/60 motion-reduce:transition-none";
 
-type CardOptions = { handlers: RowHandlers; spansLists: boolean };
+type CardOptions = {
+	handlers: RowHandlers;
+	spansLists: boolean;
+	showWorkspace: boolean;
+};
 
 function CardBody({
 	entry,
 	handlers,
 	spansLists,
+	showWorkspace,
 }: CardOptions & { entry: ViewEntry }) {
 	return (
 		<TaskRow
 			task={entry.task}
 			occurrence={entry.occurrence}
-			sourceContext={entry.sourceContext}
-			sourceWorkspace={entry.sourceWorkspace}
+			sourceContext={showWorkspace ? entry.sourceContext : undefined}
+			sourceWorkspace={showWorkspace ? entry.sourceWorkspace : undefined}
 			parentContext={entry.parentContext}
 			kind={entry.kind}
 			subtasks={[]}
@@ -216,6 +221,7 @@ export function BoardLayout({
 	priorityColumns,
 	collapseCompleted,
 	spansLists,
+	showWorkspace,
 	onReorder,
 	onRegroup,
 }: {
@@ -226,6 +232,7 @@ export function BoardLayout({
 	priorityColumns: boolean;
 	collapseCompleted: boolean;
 	spansLists: boolean;
+	showWorkspace: boolean;
 	onReorder: (id: string, sortKey: string) => void;
 	onRegroup: (id: string, columnKey: string) => void;
 }) {
@@ -236,7 +243,7 @@ export function BoardLayout({
 	// scalar-sorted priority/status board still drags (to regroup) without
 	// writing a stray sortKey.
 	const dndEnabled = reorderable || regroupable;
-	const options = { handlers, spansLists };
+	const options = { handlers, spansLists, showWorkspace };
 
 	// Card id -> its column key, so a drop resolves the source/target columns.
 	const colByCard = useMemo(() => {

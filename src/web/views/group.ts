@@ -7,7 +7,7 @@ import type {
 } from "../../domain/view-filter.ts";
 import { isGroup } from "../../domain/view-filter.ts";
 import { m } from "../../paraglide/messages.js";
-import { priorityLabel } from "../lib/task-display.ts";
+import { priorityGroupLabel } from "../lib/task-display.ts";
 
 // Pure grouping for the view renderer. Views feed an already filtered + sorted
 // task set here; grouping only buckets + orders the buckets, never re-sorts the
@@ -126,7 +126,7 @@ export function groupTasks(
 			}
 			return PRIORITY_ORDER.filter((p) => buckets.has(String(p))).map((p) => ({
 				key: String(p),
-				label: priorityLabel(p),
+				label: priorityGroupLabel(p),
 				tasks: buckets.get(String(p)) ?? [],
 			}));
 		}
@@ -203,7 +203,7 @@ export function effectiveGroupBy(
 
 // groupTasks skips empty priority buckets (right for list/table), but a
 // regroupable priority board needs every column as a drop target: the fixed
-// four in P1 -> No priority order, populated columns reused as-is.
+// four in High -> No priority order, populated columns reused as-is.
 export function groupForView(
 	tasks: GroupTask[],
 	layout: ViewLayout,
@@ -218,7 +218,7 @@ export function groupForView(
 		(p) =>
 			byKey.get(String(p)) ?? {
 				key: String(p),
-				label: priorityLabel(p),
+				label: priorityGroupLabel(p),
 				tasks: [],
 			},
 	);
