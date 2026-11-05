@@ -145,7 +145,9 @@ export function MembersPanel({
 				>
 					<SheetHeader>
 						<SheetTitle>{m.members_heading()}</SheetTitle>
-						<SheetDescription>{workspaceName}</SheetDescription>
+						<SheetDescription>
+							{m.members_audience({ workspace: workspaceName })}
+						</SheetDescription>
 					</SheetHeader>
 
 					<div className="flex flex-col gap-5 overflow-y-auto px-4">
