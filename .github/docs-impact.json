@@ -9,7 +9,7 @@
 		"release": {
 			"sourceDigest": "c8b47e2394f6be9f9db7ebe715b8292d9e3fb5f9d57fbc39004bf60b8988bd3a",
 			"docs": ["RELEASING.md", "README.md"],
-			"note": "Prepare fourth beta 0.1.0-beta.4/Android code 16 after the v0.1.0-beta.3 tag failed the Debian image gate and never published (its run built code 15). Hold the Debian app variant out of the release matrix and expected assets while Debian 13 zlib CVE-2026-76844 fails the image gate (#1267); RELEASING.md, README.md and the release notes say why the -debian image is missing. Retain signing certificate, documentation epoch, remaining prerelease/native limits and prerelease publication wording. The Dockerfile Debian stage, smoke test and stable promotion are unchanged."
+			"note": "Prepare fourth beta 0.1.0-beta.4/Android code 16 after the v0.1.0-beta.3 tag failed the Debian image gate and never published (its run built code 15). Releases stay Alpine and Zero only (#1267); the changelog says why the -debian image is missing. Retain signing certificate, documentation epoch, remaining prerelease/native limits and prerelease publication wording; release steps are unchanged."
 		},
 		"configuration": {
 			"sourceDigest": "aff942ac8873c5ce6bd962be7363eb553beaae10a211e20c7219cd8a978b15da",
