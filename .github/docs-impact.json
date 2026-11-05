@@ -2,7 +2,7 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "7f701917fafe634df71ac05c35c3bbdaddeae9259bef3df51215e0d491b0c830",
+			"sourceDigest": "fdd212487214acdf17864689f861ace86e80a9191f042fa830f7b637df0260fc",
 			"noImpact": "Task detail now leads with the title and completion, a line saying who can see it (from the workspace's actual members; it opens the Members sheet when others can), one wrapping summary of the properties a task has, then notes and subtasks. A timed due keeps its time in the summary. Empty properties appear under Add details, and time entry and clearing sit inside the date editor. No setting, storage, permission, sync or API behavior changes; three strings are added in all six locales."
 		},
 		"release": {
