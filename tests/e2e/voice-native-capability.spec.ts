@@ -56,6 +56,19 @@ async function forceEnglish(page: Page) {
 
 // Renderer crashes and uncaught page errors are observed from Node: a crashed
 // page can no longer answer evaluate() or run in-page assertions.
+// Quick add opens from `c`, or from + on a phone, which hides + on a list and
+// so goes through Today.
+async function openQuickAddFromKeyboard(page: Page) {
+	const today = page.getByTestId("nav-tab-today");
+	if (await today.isVisible()) {
+		await today.click();
+		await page.getByRole("button", { name: "Quick add", exact: true }).click();
+		return;
+	}
+	await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+	await page.keyboard.press("c");
+}
+
 function watchPage(page: Page) {
 	const failures: string[] = [];
 	page.on("crash", () => failures.push("renderer crashed"));
@@ -124,7 +137,7 @@ test("quick add's automatic probe reaches a real native availability result", as
 			return original.apply(this, args);
 		};
 	});
-	await page.getByTestId("syntax-hint-open-quickadd").click();
+	await openQuickAddFromKeyboard(page);
 	await expect(input).toBeVisible();
 	const draft = `Native probe ${[...randomUUID().replaceAll("-", "")]
 		.map((c) => String.fromCharCode(97 + Number.parseInt(c, 16)))

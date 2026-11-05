@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { parseQuickAdd } from "./quick-add.ts";
+import { parseLeadingAmount, parseQuickAdd } from "./quick-add.ts";
 
 const NOW = new Date(2024, 0, 15, 9, 0, 0); // Mon Jan 15 2024, 09:00 local
 
@@ -203,4 +203,58 @@ test.each([
 	const result = parseQuickAdd(input, NOW, "ro", names);
 	expect(result.title).toBe(title);
 	expect(result.listName).toBe(name);
+});
+
+describe("tokens turned back into words", () => {
+	test.each([
+		["Pay rent p1", "p1", "priority"],
+		["Buy milk #Home", "#home", "label"],
+		["Call mum tomorrow", "tomorrow", "date"],
+		["Stamps ~Post", "~post", "list"],
+	])("%s keeps %s as title text", (input, literal, type) => {
+		const kept = parseQuickAdd(input, NOW, "en", undefined, [literal]);
+		expect(kept.tokens).toEqual([]);
+		expect(kept.title).toBe(input);
+		expect(parseQuickAdd(input, NOW, "en").tokens.map((t) => t.type)).toEqual([
+			type,
+		]);
+	});
+
+	test("only the named token stays prose", () => {
+		const r = parseQuickAdd("Pay rent p1 #home", NOW, "en", undefined, ["p1"]);
+		expect(r.title).toBe("Pay rent p1");
+		expect(r.priority).toBe(0);
+		expect(r.labels).toEqual(["home"]);
+	});
+});
+
+describe("parseLeadingAmount", () => {
+	test.each([
+		["2 milk", "2", "", "milk", "2"],
+		["2x eggs", "2", "", "eggs", "2x"],
+		["500 g flour", "500", "g", "flour", "500 g"],
+		["500g flour", "500", "g", "flour", "500g"],
+		["1,5 L oat milk", "1,5", "L", "oat milk", "1,5 L"],
+		["  3   bananas", "3", "", "bananas", "3"],
+		["2 lemons", "2", "", "lemons", "2"],
+	])("%j reads as an amount", (input, quantity, unit, title, chip) => {
+		const r = parseLeadingAmount(input);
+		expect(r).toMatchObject({ quantity, unit, title });
+		expect(r && input.slice(r.token.start, r.token.end)).toBe(chip);
+		expect(r?.token).toMatchObject({ type: "quantity", text: chip });
+	});
+
+	test.each([
+		"milk",
+		"7up",
+		"2% milk",
+		"2",
+		"2 ",
+		"0 apples",
+		"1234567 apples",
+		"milk 2",
+		"",
+	])("%j stays a plain name", (input) => {
+		expect(parseLeadingAmount(input)).toBeNull();
+	});
 });

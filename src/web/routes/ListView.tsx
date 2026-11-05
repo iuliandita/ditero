@@ -42,11 +42,10 @@ import {
 } from "../components/attachments/AttachmentList.tsx";
 import { BulkSelection } from "../components/list/BulkSelection.tsx";
 import { IconPicker } from "../components/list/IconPicker.tsx";
+import { ListComposer } from "../components/list/ListComposer.tsx";
 import { ScheduleSheet } from "../components/list/ScheduleSheet.tsx";
 import { TaskDetail } from "../components/list/TaskDetail.tsx";
 import { TaskList } from "../components/list/TaskList.tsx";
-import { TitleSuggestInput } from "../components/list/TitleSuggestInput.tsx";
-import { InlineSyntaxHint } from "../components/quickadd/InlineSyntaxHint.tsx";
 import { TaskListSkeleton } from "../components/shell/AppSkeleton.tsx";
 import { ListProgress } from "../components/shell/ListProgress.tsx";
 import { SyncIndicator } from "../components/shell/SyncIndicator.tsx";
@@ -102,7 +101,6 @@ export function ListView({
 	const [assignees] = useQuery(queries.assignees.mine());
 	const [memberships] = useQuery(queries.memberships.mine());
 	const [templates] = useQuery(queries.templates.mine());
-	const [title, setTitle] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [iconOpen, setIconOpen] = useState(false);
 	const [groupByAssignee, setGroupByAssignee] = useState(false);
@@ -278,22 +276,6 @@ export function ListView({
 			),
 	});
 
-	async function createTask() {
-		const t = title.trim();
-		if (!t || !canAttach) return;
-		setTitle("");
-		await run(
-			zero.mutate(
-				mutators.task.create({
-					id: randomId(),
-					listId,
-					title: t,
-					sortKey: keyBetween(lastKey(parents), null),
-				}),
-			),
-		);
-	}
-
 	const backControl = onBack ? (
 		<BackButton aria-label={m.list_back_to_lists()} onClick={onBack} />
 	) : null;
@@ -426,47 +408,20 @@ export function ListView({
 	}
 
 	// One field, placed per shell: above the rows on desktop, after them on a
-	// phone, where the thumb already is and the floating add button sits.
+	// phone, where the thumb already is.
 	const addForm = (
-		<div
-			className={
-				isDesktop ? "mb-5 flex flex-col gap-1" : "mt-2 flex flex-col gap-1"
-			}
-		>
-			<div data-reading-inline-add className="flex gap-2">
-				<TitleSuggestInput
-					inputRef={titleInput}
-					data-testid="new-task"
-					disabled={!canAttach}
-					aria-describedby={!canAttach ? "list-read-only" : undefined}
-					placeholder={addCopy.placeholder()}
-					value={title}
-					onChange={setTitle}
-					onSubmit={() => void createTask()}
-					candidates={titleCandidates}
-					listId={listId}
-				/>
-				<Button
-					data-testid="new-task-submit"
-					disabled={!canAttach}
-					aria-describedby={!canAttach ? "list-read-only" : undefined}
-					type="button"
-					className="min-h-11 md:min-h-0"
-					onClick={() => void createTask()}
-				>
-					{addCopy.action()}
-				</Button>
-			</div>
-			{!canAttach && (
-				<p id="list-read-only" className="text-xs text-muted-foreground">
-					{m.workspace_read_only()}
-				</p>
-			)}
-			<InlineSyntaxHint
-				example={arrival?.blank === true}
-				onQuickAdd={onQuickAdd}
-			/>
-		</div>
+		<ListComposer
+			list={openList}
+			kind={kind}
+			lists={lists}
+			tasks={tasks}
+			labels={labels}
+			canAttach={canAttach}
+			isDesktop={isDesktop}
+			inputRef={titleInput}
+			candidates={titleCandidates}
+			run={run}
+		/>
 	);
 	const mobileAdd = isDesktop ? undefined : addForm;
 	const mobileSync = isDesktop ? null : <SyncIndicator placement="header" />;

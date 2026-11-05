@@ -1,4 +1,5 @@
 import * as chrono from "chrono-node";
+import { isValidQuantity, isValidUnit } from "./quantity.ts";
 
 // chrono ships parsers for some locales and not others. Where one exists the
 // user writes dates in their own language; where none does, natural-language
@@ -26,7 +27,7 @@ export function dateParserFor(locale: string): DateParser | null {
 }
 
 export type QuickAddToken = {
-	type: "date" | "priority" | "label" | "list";
+	type: "date" | "priority" | "label" | "list" | "quantity";
 	text: string;
 	start: number;
 	end: number;
@@ -75,15 +76,22 @@ export function normalizeListName(value: string): string {
 	return value.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 }
 
+/**
+ * `literal` lists token texts (any case) the caller wants left in the title,
+ * for a chip the user turned back into plain words.
+ */
 export function parseQuickAdd(
 	input: string,
 	now: Date = new Date(),
 	locale = "en",
 	listNames?: readonly string[],
+	literal: readonly string[] = [],
 ): QuickAddParse {
 	// Task 10 feeds an onChange value; guard the never-throws contract.
 	if (typeof input !== "string") return emptyParse();
 	const chars = input.split("");
+	const literalSet = new Set(literal.map((text) => text.toLowerCase()));
+	const isLiteral = (text: string) => literalSet.has(text.toLowerCase());
 	const mask = (start: number, end: number) => {
 		for (let i = start; i < end; i++) chars[i] = " ";
 	};
@@ -95,6 +103,7 @@ export function parseQuickAdd(
 	let prioritySeen = false;
 
 	for (const m of chars.join("").matchAll(LABEL_RE)) {
+		if (isLiteral(m[0])) continue;
 		const start = m.index;
 		const end = start + m[0].length;
 		labels.push(m[1]);
@@ -120,12 +129,14 @@ export function parseQuickAdd(
 		}
 		if (!length) length = /^[\p{L}\p{M}\p{N}_-]+/u.exec(rest)?.[0].length ?? 0;
 		const end = start + 1 + length;
+		if (isLiteral(input.slice(start, end))) continue;
 		if (listName === null) listName = input.slice(start + 1, end);
 		tokens.push({ type: "list", text: input.slice(start, end), start, end });
 		mask(start, end);
 	}
 
 	for (const m of chars.join("").matchAll(PRIORITY_RE)) {
+		if (isLiteral(m[0])) continue;
 		const start = m.index;
 		const end = start + m[0].length;
 		// First priority wins; later dupes still consumed+tokenized so they don't leak into title.
@@ -138,9 +149,9 @@ export function parseQuickAdd(
 	}
 
 	const parser = dateParserFor(locale);
-	const dateResults = parser
-		? parser.parse(chars.join(""), now, { forwardDate: true })
-		: [];
+	const dateResults = (
+		parser ? parser.parse(chars.join(""), now, { forwardDate: true }) : []
+	).filter((result) => !isLiteral(result.text));
 	let dueAt: Date | null = null;
 	let dueAllDay = true;
 	if (dateResults.length > 0) {
@@ -159,4 +170,37 @@ export function parseQuickAdd(
 	tokens.sort((a, b) => a.start - b.start);
 
 	return { title, dueAt, dueAllDay, priority, labels, listName, tokens };
+}
+
+export type LeadingAmount = {
+	quantity: string;
+	unit: string;
+	title: string;
+	token: QuickAddToken;
+};
+
+// Units short enough to be unmistakable after a number. Anything else after the
+// number is part of the item's name: "2 oat milk" is two "oat milk".
+const AMOUNT_RE =
+	/^(\s*)(\d{1,6}(?:[.,]\d{1,3})?)(?:\s*(kg|mg|g|ml|cl|dl|l|oz|lbs|lb|pcs|pc)\b|\s*x\b)?\s+(?=\S)/iu;
+
+/**
+ * A leading amount on a shopping item ("2 milk", "500 g flour", "2x eggs").
+ * The number must be followed by whitespace, so "7up" and "2%" stay names.
+ */
+export function parseLeadingAmount(input: string): LeadingAmount | null {
+	if (typeof input !== "string") return null;
+	const match = AMOUNT_RE.exec(input);
+	if (!match) return null;
+	const quantity = match[2];
+	const unit = match[3] ?? "";
+	if (!isValidQuantity(quantity) || !isValidUnit(unit)) return null;
+	const start = match[1].length;
+	const end = match[0].trimEnd().length;
+	return {
+		quantity,
+		unit,
+		title: input.slice(match[0].length).split(/\s+/).filter(Boolean).join(" "),
+		token: { type: "quantity", text: input.slice(start, end), start, end },
+	};
 }

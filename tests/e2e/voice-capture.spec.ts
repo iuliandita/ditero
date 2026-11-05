@@ -109,6 +109,19 @@ async function installFake(page: Page) {
 	});
 }
 
+// Quick add opens from `c`, or from + on a phone, which hides + on a list and
+// so goes through Today.
+async function openQuickAddFromKeyboard(page: Page) {
+	const today = page.getByTestId("nav-tab-today");
+	if (await today.isVisible()) {
+		await today.click();
+		await page.getByRole("button", { name: "Quick add", exact: true }).click();
+		return;
+	}
+	await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+	await page.keyboard.press("c");
+}
+
 async function setLocale(context: BrowserContext, locale: string) {
 	await context.addCookies([
 		{ name: "PARAGLIDE_LOCALE", value: locale, url: webOrigin() },
@@ -159,7 +172,7 @@ async function openQuickAdd(
 	});
 	const input = page.getByTestId("quickadd-input");
 	if (!(await input.isVisible().catch(() => false))) {
-		await page.getByTestId("syntax-hint-open-quickadd").click();
+		await openQuickAddFromKeyboard(page);
 	}
 	await expect(input).toBeVisible();
 	return input;
@@ -460,7 +473,7 @@ test("a probe still pending when the sheet closes never starts listening", async
 
 	// Positive control: a fresh open probes, enables the mic, and still waits
 	// for the click before listening.
-	await page.getByTestId("syntax-hint-open-quickadd").click();
+	await openQuickAddFromKeyboard(page);
 	await expect(start(page)).toBeEnabled();
 	expect(await page.evaluate(() => window.__voiceFake.started)).toBe(0);
 	await start(page).click();
@@ -507,7 +520,7 @@ for (const via of ["Enter", "Add"] as const) {
 
 		// Positive control: a fresh open passes the probe, still waits for the
 		// click, and the current session delivers.
-		await page.getByTestId("syntax-hint-open-quickadd").click();
+		await openQuickAddFromKeyboard(page);
 		await expect(start(page)).toBeEnabled();
 		expect(await startedCount(page)).toBe(0);
 		await start(page).click();

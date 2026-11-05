@@ -34,7 +34,6 @@ import type {
 	Task,
 	Workspace,
 } from "../../../zero/schema.gen.ts";
-import { useHints } from "../../hooks/useHints.ts";
 import { useWorkspaceWriteAccess } from "../../hooks/useTaskImportActivation.ts";
 import { addCopyFor } from "../../lib/kind-copy.ts";
 import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
@@ -74,7 +73,6 @@ export function QuickAddSheet({
 	const pickerSearchRef = useRef<HTMLInputElement>(null);
 	const voiceRef = useRef<HTMLDivElement>(null);
 	const [listNotice, setListNotice] = useState(0);
-	const { recordUse } = useHints();
 	const [allLists] = useQuery(queries.lists.mine());
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [pickerOpen, setPickerOpen] = useState(false);
@@ -328,7 +326,6 @@ export function QuickAddSheet({
 				await zero.mutate(mutators.taskLabel.set({ taskId: id, labelIds }))
 					.client;
 			}
-			recordUse(chips.length);
 			setAdded({ list: targetName, id: randomId() });
 			setSelectedId(null);
 			setDue(null);
@@ -720,11 +717,7 @@ export function QuickAddSheet({
 						{m.quickadd_voice_start()}
 					</Button>
 				))}
-			<SyntaxHint
-				quickAdd
-				collapsible
-				onDismiss={() => inputRef.current?.focus()}
-			/>
+			<SyntaxHint />
 		</div>
 	);
 
