@@ -2,8 +2,9 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "28035e131744c2c12e1f3eb8c5a2bffeae56b05fd14155e44e96dc5a8c357363",
-			"noImpact": "The starter offer on the home screen now appears once, only in the user's own empty personal workspace, and opens a sheet or dialog instead of Settings, with each pack's task list collapsed behind a Show/Hide tasks toggle. The setup request, outcomes and server contract, the /setup link used by the CLI and TUI, and the Settings entry are unchanged, and no guide describes the in-app offer layout."
+			"sourceDigest": "acaf768aa1ee32d7f14e27c17efc4a067ca59311d2b7fdf35de26fd003754b2d",
+			"docs": ["docs/runbooks/voice-capture.md"],
+			"note": "Document voice availability after Dictate, list name parsing and disambiguation, Enter submission, the due control and local acceptance feedback in quick add."
 		},
 		"release": {
 			"sourceDigest": "98d834f1f7c042ae33a1984d6ae39401f5df31377c4f9faab00a1513827ba24e",

@@ -3,6 +3,12 @@
 Quick add can take dictation in the browser, on-device where the browser supports it. The recognized text is shown for review
 and reaches the task field only after **Use this text**. It is never submitted
 automatically, and the normal quick-add parser then handles dates, `#labels` and `~lists`.
+Choose a destination with `~` or the destination button. The picker shows the workspace
+for each list; an unknown or ambiguous name must be resolved before adding. A known
+name can contain spaces; an unknown name ends at the first word, leaving later words
+in the task. Press Enter to add when the destination is resolved. The Due
+control offers Today and Tomorrow. After local acceptance, quick add briefly shows the
+destination; this does not confirm server persistence.
 
 ## Privacy
 
@@ -31,7 +37,7 @@ service case.
 
 ## When the control is unavailable
 
-The control stays visible with a localized reason instead of failing silently:
+Choose Dictate to see voice availability and recovery. Reasons include:
 
 - No Web Speech API (for example Firefox).
 - Insecure context. Use HTTPS or localhost; plain HTTP origins have no microphone access.
@@ -42,7 +48,7 @@ The control stays visible with a localized reason instead of failing silently:
   the browser's speech service being unreachable, or a result longer than 500 characters. Your typed text is left unchanged.
 - The Android and desktop apps. Their webviews do not provide a qualified local
   recognizer and there is no native speech plugin, so quick add shows an explanation
-  instead of the control; type instead.
+  after Dictate is chosen; type instead.
 
 ## Languages
 

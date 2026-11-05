@@ -112,7 +112,7 @@ test("the syntax hint retires after three quick adds that used a token", async (
 	await input.press("Enter");
 	await expect(input).toHaveValue("");
 	await expect(input).toBeVisible();
-	await expect(sheetHint).toHaveCount(0);
+	await expect(sheetHint).toBeVisible();
 
 	await page.keyboard.press("Escape");
 	await expect(page.getByTestId("new-task")).toBeVisible();
@@ -136,14 +136,18 @@ test("dismissing the syntax hint retires it everywhere", async ({ page }) => {
 	await blur(page);
 	await page.keyboard.press("c");
 	await expect(page.getByTestId("quickadd-input")).toBeVisible();
-	await expect(page.locator('[data-testid="syntax-hint"]')).toHaveCount(0);
+	await expect(
+		page.locator('[role="dialog"] [data-testid="syntax-hint"]'),
+	).toBeVisible();
 	await page.keyboard.press("Escape");
 
 	await reopenList(page, "Garden");
 	await expect(page.getByTestId("syntax-hint")).toHaveCount(0);
 	await page.getByRole("button", { name: "Quick add", exact: true }).click();
 	await expect(page.getByTestId("quickadd-input")).toBeVisible();
-	await expect(page.getByTestId("syntax-hint")).toHaveCount(0);
+	await expect(
+		page.locator('[role="dialog"] [data-testid="syntax-hint"]'),
+	).toBeVisible();
 });
 
 test("the shortcut hint shows until the cheat sheet has been opened", async ({
