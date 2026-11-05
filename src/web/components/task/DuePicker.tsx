@@ -76,7 +76,7 @@ export function DuePicker({
 	// "00:00" into a date change would silently turn it into a timed task.
 	const time = dueAt == null || dueAllDay ? "" : due.time;
 	const overdue = isOverdue({ done, dueAt, dueAllDay });
-	const shown = dueAt != null ? formatDue(dueAt, true) : m.task_due_add();
+	const shown = dueAt != null ? formatDue(dueAt, dueAllDay) : m.task_due_add();
 
 	function pick(date: string, typedTime: string | null = null) {
 		onSet(date, typedTime ?? time);

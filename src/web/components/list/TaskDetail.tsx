@@ -72,6 +72,7 @@ import { formatTimeValue } from "../../lib/date-picker.ts";
 import { formatList } from "../../lib/intl-format.ts";
 import { requestMembersSheet } from "../../lib/members-sheet.ts";
 import { onMutationFailure } from "../../lib/mutation-outcome.ts";
+import { taskAudience } from "../../lib/task-audience.ts";
 import { markTaskPanelOpen } from "../../lib/use-wide-content.ts";
 import { AttachmentList } from "../attachments/AttachmentList.tsx";
 import { AssigneePicker } from "../people/AssigneePicker.tsx";
@@ -637,11 +638,11 @@ export function TaskDetail({
 		currentLabels.map((l) => l.name),
 		"unit",
 	);
-	const audience = !sourceWorkspace
-		? null
-		: sourceWorkspace.kind === "personal"
-			? m.task_visibility_personal()
-			: m.task_visibility_shared({ workspace: sourceWorkspace.name });
+	const audience = taskAudience(
+		sourceWorkspace,
+		memberships.filter((row) => row.workspaceId === list.workspaceId),
+		zero.userID,
+	);
 
 	const shown = shownProps.current;
 	if (shown.taskId !== t.id) {
@@ -678,18 +679,21 @@ export function TaskDetail({
 					{m.workspace_read_only()}
 				</p>
 			)}
-			<Checkbox
-				disabled={!activation.canWrite}
-				checked={checked}
-				aria-label={m.task_detail_done_aria()}
-				data-testid="task-detail-done"
-				aria-describedby={
-					!activation.canWriteWorkspace ? readOnlyReasonId : undefined
-				}
-				onCheckedChange={toggleDone}
-				shape={checkShapeFor(kind ?? "tasks")}
-				priority={checkToneFor(kind ?? "tasks", t.priority)}
-			/>
+			{/* Same box as the title's first line (py-1 + one line), so the circle centers on it. */}
+			<span className="flex h-[calc(1lh+0.5rem)] items-center text-base">
+				<Checkbox
+					disabled={!activation.canWrite}
+					checked={checked}
+					aria-label={m.task_detail_done_aria()}
+					data-testid="task-detail-done"
+					aria-describedby={
+						!activation.canWriteWorkspace ? readOnlyReasonId : undefined
+					}
+					onCheckedChange={toggleDone}
+					shape={checkShapeFor(kind ?? "tasks")}
+					priority={checkToneFor(kind ?? "tasks", t.priority)}
+				/>
+			</span>
 			<textarea
 				ref={setTitleRef}
 				rows={1}
@@ -748,7 +752,7 @@ export function TaskDetail({
 	const body = (
 		<div className="flex flex-col gap-6 px-4 pb-6">
 			{audience &&
-				(sourceWorkspace?.kind === "shared" ? (
+				(audience.opensMembers ? (
 					<button
 						type="button"
 						data-testid="task-visibility-context"
@@ -756,14 +760,14 @@ export function TaskDetail({
 						onClick={() => requestMembersSheet(list.workspaceId)}
 					>
 						<Users aria-hidden className="size-3.5 shrink-0" />
-						<span className="min-w-0 wrap-anywhere">{audience}</span>
+						<span className="min-w-0 wrap-anywhere">{audience.text}</span>
 					</button>
 				) : (
 					<p
 						data-testid="task-visibility-context"
 						className="break-words text-xs text-muted-foreground"
 					>
-						{audience}
+						{audience.text}
 					</p>
 				))}
 			{activation.status !== "native" && activation.status !== "active" && (
