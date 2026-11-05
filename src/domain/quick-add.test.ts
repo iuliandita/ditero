@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { parseQuickAdd } from "./quick-add.ts";
+import {
+	type KeptSpan,
+	parseLeadingAmount,
+	parseQuickAdd,
+	shiftKeptSpans,
+} from "./quick-add.ts";
 
 const NOW = new Date(2024, 0, 15, 9, 0, 0); // Mon Jan 15 2024, 09:00 local
 
@@ -166,6 +171,23 @@ describe("parseQuickAdd", () => {
 		expect(r.title).toBe("eggs");
 		expect(r.tokens.map((t) => t.text)).toEqual(["~home", "~work"]);
 	});
+
+	test.each([
+		"Queued 55ccea73-813d-406e-95c3-9b97999f3fcd",
+		"Ship build v2-3d",
+		"Fix 3dprinter",
+	])("a date glued to a word stays in the title: %s", (input) => {
+		const r = parseQuickAdd(input, NOW);
+		expect(r.title).toBe(input);
+		expect(r.dueAt).toBeNull();
+	});
+
+	test("a standalone duration and an ISO date still parse", () => {
+		expect(parseQuickAdd("water plants in 3d", NOW).title).toBe("water plants");
+		const iso = parseQuickAdd("renew pass 2024-03-01", NOW);
+		expect(iso.title).toBe("renew pass");
+		expect(iso.dueAt).toEqual(new Date(2024, 2, 1, 12, 0, 0));
+	});
 });
 
 test("known destinations use the longest full name and leave unresolved text visible", () => {
@@ -203,4 +225,161 @@ test.each([
 	const result = parseQuickAdd(input, NOW, "ro", names);
 	expect(result.title).toBe(title);
 	expect(result.listName).toBe(name);
+});
+
+describe("tokens turned back into words", () => {
+	const spanOf = (input: string, text: string, nth = 0): KeptSpan => {
+		let start = -1;
+		for (let i = 0; i <= nth; i++) start = input.indexOf(text, start + 1);
+		return { start, end: start + text.length, text };
+	};
+
+	test.each([
+		["Pay rent p1", "p1", "priority"],
+		["Buy milk #Home", "#Home", "label"],
+		["Call mum tomorrow", "tomorrow", "date"],
+		["Stamps ~Post", "~Post", "list"],
+	])("%s keeps %s as title text", (input, text, type) => {
+		const kept = parseQuickAdd(input, NOW, "en", undefined, [
+			spanOf(input, text),
+		]);
+		expect(kept.tokens).toEqual([]);
+		expect(kept.title).toBe(input);
+		expect(parseQuickAdd(input, NOW, "en").tokens.map((t) => t.type)).toEqual([
+			type,
+		]);
+	});
+
+	test("only the named token stays prose", () => {
+		const input = "Pay rent p1 #home";
+		const r = parseQuickAdd(input, NOW, "en", undefined, [spanOf(input, "p1")]);
+		expect(r.title).toBe("Pay rent p1");
+		expect(r.priority).toBe(0);
+		expect(r.labels).toEqual(["home"]);
+	});
+
+	test("a kept list token is not read again as a date", () => {
+		const input = "Buy flowers ~Friday";
+		const r = parseQuickAdd(
+			input,
+			NOW,
+			"en",
+			["Friday"],
+			[spanOf(input, "~Friday")],
+		);
+		expect(r.title).toBe("Buy flowers ~Friday");
+		expect(r.dueAt).toBeNull();
+		expect(r.listName).toBeNull();
+		expect(r.tokens).toEqual([]);
+	});
+
+	test("a kept label is not read again as a priority", () => {
+		const input = "Book #p1";
+		const r = parseQuickAdd(input, NOW, "en", undefined, [
+			spanOf(input, "#p1"),
+		]);
+		expect(r.title).toBe("Book #p1");
+		expect(r.priority).toBe(0);
+		expect(r.labels).toEqual([]);
+	});
+
+	test("keeping one of two identical tokens leaves the other read", () => {
+		const input = "a p1 b p1";
+		const r = parseQuickAdd(input, NOW, "en", undefined, [
+			spanOf(input, "p1", 1),
+		]);
+		expect(r.title).toBe("a b p1");
+		expect(r.tokens.map((t) => [t.start, t.text])).toEqual([[2, "p1"]]);
+		const first = parseQuickAdd(input, NOW, "en", undefined, [
+			spanOf(input, "p1", 0),
+		]);
+		expect(first.title).toBe("a p1 b");
+		expect(first.tokens.map((t) => t.start)).toEqual([7]);
+	});
+
+	test("a span that no longer matches the input is ignored", () => {
+		const r = parseQuickAdd("Pay rent p1", NOW, "en", undefined, [
+			{ start: 0, end: 2, text: "p1" },
+			{ start: 40, end: 42, text: "p1" },
+		]);
+		expect(r.priority).toBe(3);
+		expect(r.title).toBe("Pay rent");
+	});
+});
+
+describe("shiftKeptSpans", () => {
+	const kept: KeptSpan = { start: 4, end: 6, text: "p1" };
+
+	test("typing before the span shifts it", () => {
+		expect(shiftKeptSpans("Buy p1", "Buy milk p1", [kept])).toEqual([
+			{ start: 9, end: 11, text: "p1" },
+		]);
+	});
+
+	test("typing after the span leaves it", () => {
+		expect(shiftKeptSpans("Buy p1", "Buy p1 now", [kept])).toEqual([kept]);
+	});
+
+	test("deleting before the span shifts it back", () => {
+		const prev: KeptSpan = { start: 9, end: 11, text: "p1" };
+		expect(shiftKeptSpans("Buy milk p1", "Buy p1", [prev])).toEqual([kept]);
+	});
+
+	test("an edit inside the span drops it", () => {
+		expect(shiftKeptSpans("Buy p1", "Buy p2", [kept])).toEqual([]);
+		expect(shiftKeptSpans("Buy p1", "Buy ", [kept])).toEqual([]);
+	});
+
+	test("a span stays valid through repeated identical text", () => {
+		const prev = "a p1 b p1";
+		const second: KeptSpan = { start: 7, end: 9, text: "p1" };
+		expect(shiftKeptSpans(prev, "a p1 bb p1", [second])).toEqual([
+			{ start: 8, end: 10, text: "p1" },
+		]);
+		expect(shiftKeptSpans(prev, "a b p1", [second])).toEqual([
+			{ start: 4, end: 6, text: "p1" },
+		]);
+	});
+
+	test("edits before a kept span keep it out of the parse", () => {
+		const prev = "Book #p1";
+		const next = "Please book #p1";
+		const spans = shiftKeptSpans(prev, next, [
+			{ start: 5, end: 8, text: "#p1" },
+		]);
+		const r = parseQuickAdd(next, NOW, "en", undefined, spans);
+		expect(r.title).toBe("Please book #p1");
+		expect(r.priority).toBe(0);
+	});
+});
+
+describe("parseLeadingAmount", () => {
+	test.each([
+		["2 milk", "2", "", "milk", "2"],
+		["2x eggs", "2", "", "eggs", "2x"],
+		["500 g flour", "500", "g", "flour", "500 g"],
+		["500g flour", "500", "g", "flour", "500g"],
+		["1,5 L oat milk", "1,5", "L", "oat milk", "1,5 L"],
+		["  3   bananas", "3", "", "bananas", "3"],
+		["2 lemons", "2", "", "lemons", "2"],
+	])("%j reads as an amount", (input, quantity, unit, title, chip) => {
+		const r = parseLeadingAmount(input);
+		expect(r).toMatchObject({ quantity, unit, title });
+		expect(r && input.slice(r.token.start, r.token.end)).toBe(chip);
+		expect(r?.token).toMatchObject({ type: "quantity", text: chip });
+	});
+
+	test.each([
+		"milk",
+		"7up",
+		"2% milk",
+		"2",
+		"2 ",
+		"0 apples",
+		"1234567 apples",
+		"milk 2",
+		"",
+	])("%j stays a plain name", (input) => {
+		expect(parseLeadingAmount(input)).toBeNull();
+	});
 });

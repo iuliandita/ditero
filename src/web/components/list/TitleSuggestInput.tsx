@@ -7,13 +7,13 @@ import {
 import { m } from "../../../paraglide/messages.js";
 
 // The add-item field with a listbox of titles the user has written before.
-// Accepting one only fills the field, and the title is then saved exactly as
-// written: this field does not parse quick-add tokens, so a suggestion carrying
-// "#label" or a date word becomes plain title text, same as if it were typed.
+// Accepting one only fills the field; what the text means is the caller's call,
+// so a suggestion is read exactly as if it had been typed.
 export function TitleSuggestInput({
 	value,
 	onChange,
 	onSubmit,
+	onKeyDown: onKeyDownProp,
 	candidates,
 	listId,
 	placeholder,
@@ -26,6 +26,8 @@ export function TitleSuggestInput({
 	value: string;
 	onChange: (next: string) => void;
 	onSubmit: () => void;
+	/** Runs first; a handler that calls preventDefault keeps the field's own keys out. */
+	onKeyDown?: (event: React.KeyboardEvent<HTMLInputElement>) => void;
 	candidates: readonly TitleCandidate[];
 	listId: string;
 	placeholder: string;
@@ -65,6 +67,8 @@ export function TitleSuggestInput({
 	}
 
 	function onKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+		onKeyDownProp?.(event);
+		if (event.defaultPrevented) return;
 		if (event.key === "Escape" && open) {
 			event.preventDefault();
 			setDismissed(true);
