@@ -95,6 +95,7 @@ export function TitleSuggestInput({
 		<div className={cn("relative flex-1", className)}>
 			<input
 				ref={ref}
+				dir="auto"
 				data-testid={testId}
 				disabled={disabled}
 				aria-describedby={describedBy}

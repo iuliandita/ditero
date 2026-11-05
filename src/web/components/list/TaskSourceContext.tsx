@@ -29,7 +29,7 @@ export function TaskSourceContext({
 				<>
 					<span aria-hidden="true" className="inline-flex items-center gap-1.5">
 						<Icon className="size-3 shrink-0" />
-						<span>{workspace.name}</span>
+						<bdi>{workspace.name}</bdi>
 					</span>
 					<span className="sr-only">{context}</span>
 				</>

@@ -2,8 +2,9 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "4d03430663efab5377d2b2b45359533b37931af6a869149102814fbe49457cd5",
-			"noImpact": "Task and shopping rows align the check with the title line, put the priority flag right after the title with its label in the accessible name, keep the menu in a fixed trailing rail and show the select toggle only in selection mode, show assignee first names and one context line, show shopping quantity as text after the item name, and use one focus ring and stronger hover, press and palette cursor fills. Priority group headings read High, Medium and Low priority. Behavior, permissions, data and keyboard shortcuts are unchanged and no guide describes these row details."
+			"sourceDigest": "40a9b34166a8a88645ea6d35d2b4c25ee400c4301b1e9e8fac36f6dde3afb699",
+			"docs": ["docs/typography.md"],
+			"note": "Text people type keeps its own direction in Arabic: input and textarea fields use dir=auto, rendered notes and comments take their own direction, and titles, list and people names and label chips inside translated text are isolated so punctuation and list separators stay in place. Arabic link underlines use a larger offset. Behavior, permissions, data and keyboard shortcuts are unchanged."
 		},
 		"release": {
 			"sourceDigest": "98d834f1f7c042ae33a1984d6ae39401f5df31377c4f9faab00a1513827ba24e",

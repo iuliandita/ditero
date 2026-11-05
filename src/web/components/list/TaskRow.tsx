@@ -555,7 +555,7 @@ export function TaskRow({
 									)}
 								>
 									<span className={strikeClass(displayedDone)}>
-										{task.title}
+										<bdi>{task.title}</bdi>
 									</span>
 								</span>
 								{!bare && (
@@ -615,7 +615,7 @@ export function TaskRow({
 											className="min-w-0 truncate text-xs text-muted-foreground"
 											title={list.title}
 										>
-											{list.title}
+											<bdi>{list.title}</bdi>
 										</span>
 									)}
 									{sourceContext && (
@@ -634,7 +634,7 @@ export function TaskRow({
 											variant="outline"
 											className="h-4 border-transparent bg-muted/60 px-1.5 text-muted-foreground"
 										>
-											{l.name}
+											<bdi>{l.name}</bdi>
 										</Badge>
 									))}
 									{total > 0 && kind !== "project" && (
@@ -752,7 +752,7 @@ export function TaskRow({
 							>
 								<span className="block truncate">
 									<span className={strikeClass(s.done ?? false)}>
-										{s.title}
+										<bdi>{s.title}</bdi>
 									</span>
 								</span>
 								<CompletedBy task={s} id={`${ids}-completion-${s.id}`} />

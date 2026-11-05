@@ -68,6 +68,7 @@ import {
 } from "../../hooks/useTaskImportActivation.ts";
 import { useTaskToggle } from "../../hooks/useTaskToggle.ts";
 import { useUserPref } from "../../hooks/useUserPref.ts";
+import { NameList } from "../../lib/bidi.tsx";
 import { formatTimeValue } from "../../lib/date-picker.ts";
 import { formatList } from "../../lib/intl-format.ts";
 import { requestMembersSheet } from "../../lib/members-sheet.ts";
@@ -697,6 +698,7 @@ export function TaskDetail({
 			<textarea
 				ref={setTitleRef}
 				rows={1}
+				dir="auto"
 				disabled={!activation.canWrite}
 				defaultValue={
 					titleDraft.current?.id === t.id ? titleDraft.current.value : t.title
@@ -865,7 +867,10 @@ export function TaskDetail({
 										<>
 											<Tag />
 											<span className="min-w-0 wrap-anywhere">
-												{labelNames}
+												<NameList
+													names={currentLabels.map((l) => l.name)}
+													type="unit"
+												/>
 											</span>
 										</>
 									) : (
@@ -889,7 +894,7 @@ export function TaskDetail({
 											<span className="flex size-4 items-center justify-center">
 												{selected.has(l.id) && <Check className="size-3.5" />}
 											</span>
-											{l.name}
+											<bdi>{l.name}</bdi>
 										</button>
 									))}
 									{allLabels.length === 0 && (
@@ -900,6 +905,7 @@ export function TaskDetail({
 								</div>
 								<div className="flex items-center gap-1.5 border-t pt-2">
 									<Input
+										dir="auto"
 										disabled={!canEditLabels}
 										value={newLabel}
 										placeholder={m.task_new_label_placeholder()}
@@ -942,6 +948,7 @@ export function TaskDetail({
 			<textarea
 				aria-label={m.task_field_notes()}
 				placeholder={m.task_field_notes()}
+				dir="auto"
 				disabled={!activation.canWrite}
 				key={`notes-${t.id}`}
 				defaultValue={t.notes ?? ""}
@@ -980,7 +987,7 @@ export function TaskDetail({
 											s.done && "text-muted-foreground line-through",
 										)}
 									>
-										{s.title}
+										<bdi>{s.title}</bdi>
 									</span>
 									<Button
 										variant="ghost"
@@ -1000,6 +1007,7 @@ export function TaskDetail({
 					)}
 					<div className="flex items-center gap-1.5">
 						<Input
+							dir="auto"
 							disabled={!activation.canWrite}
 							value={newSubtask}
 							placeholder={m.task_add_subtask_placeholder()}
@@ -1171,10 +1179,12 @@ export function TaskDetail({
 										<SelectValue />
 									</SelectTrigger>
 									<SelectContent>
-										<SelectItem value={list.id}>{list.title}</SelectItem>
+										<SelectItem value={list.id}>
+											<bdi>{list.title}</bdi>
+										</SelectItem>
 										{moveTargets.map((l) => (
 											<SelectItem key={l.id} value={l.id}>
-												{l.title}
+												<bdi>{l.title}</bdi>
 											</SelectItem>
 										))}
 									</SelectContent>

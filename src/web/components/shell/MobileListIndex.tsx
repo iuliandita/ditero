@@ -111,7 +111,9 @@ export function MobileListIndex({
 						title={l.title}
 					/>
 					<span className="flex min-w-0 flex-1 flex-col">
-						<span className="truncate">{l.title}</span>
+						<span className="truncate">
+							<bdi>{l.title}</bdi>
+						</span>
 						{l.kind === "project" && progressByList.has(l.id) && (
 							<ListProgress
 								done={progressByList.get(l.id)?.done ?? 0}

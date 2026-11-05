@@ -13,6 +13,8 @@ The base hierarchy uses rem units so browser text preferences and reading preset
 
 Compact exceptions are supporting marks, not instructions: keycaps use 0.6875rem and avatar overflow counts use 0.65rem. Small buttons and channel disclosure labels use 0.8rem. Meaningful names stay at the body or metadata size.
 
+In Arabic, link underlines use a larger offset so they clear the letters. Text people type keeps its own direction: fields use `dir="auto"` and names, titles and chips shown inside translated text sit in `<bdi>`.
+
 Standard retains the base hierarchy. Comfortable and Large enlarge the rem scale, completion marks, tap targets, and spacing together. High contrast is independent of reading size and theme. Long names and metadata reflow in the larger presets.
 
 Priority flags carry semantic color; ordinary priority text uses foreground so it stays readable on both resting and hover surfaces. Spatial overlay animation is removed when reduced motion is requested.

@@ -177,7 +177,7 @@ export function MembersPanel({
 												)}
 											</span>
 											<span className="min-w-0 flex-1 truncate text-sm">
-												{name}
+												<bdi>{name}</bdi>
 												{mem.userId === zero.userID && (
 													<span className="text-muted-foreground">
 														{" "}

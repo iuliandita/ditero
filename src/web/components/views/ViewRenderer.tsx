@@ -233,7 +233,7 @@ export function ViewRenderer(props: {
 			const parent = task.parentId ? taskById.get(task.parentId) : undefined;
 			const parentContext =
 				parent && parent.listId === task.listId
-					? m.task_part_of({ title: parent.title })
+					? m.task_part_of({ title: `\u2068${parent.title}\u2069` })
 					: undefined;
 			const filterTask: FilterTask = {
 				id: task.id,

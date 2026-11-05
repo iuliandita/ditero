@@ -73,7 +73,7 @@ export function RestrictedTaskDetail({
 							done && "text-muted-foreground line-through",
 						)}
 					>
-						{t.title}
+						<bdi>{t.title}</bdi>
 					</SheetTitle>
 				</SheetHeader>
 
@@ -122,7 +122,9 @@ export function RestrictedTaskDetail({
 							<span className="text-muted-foreground">
 								{m.restricted_detail_notes()}
 							</span>
-							<p className="whitespace-pre-wrap break-words">{t.notes}</p>
+							<p dir="auto" className="whitespace-pre-wrap break-words">
+								{t.notes}
+							</p>
 						</div>
 					)}
 

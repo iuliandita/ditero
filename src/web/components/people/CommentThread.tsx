@@ -623,15 +623,19 @@ function CommentComposer({
 												: "font-medium"
 										}
 									>
-										{imported
-											? c.historicalAuthorKind === "source_claim" &&
-												c.historicalAuthorName
-												? m.comment_imported_author({
-														// Keep source text from reordering the translated label.
-														name: `\u2068${c.historicalAuthorName}\u2069`,
-													})
-												: m.comment_imported_unknown()
-											: name}
+										{imported ? (
+											c.historicalAuthorKind === "source_claim" &&
+											c.historicalAuthorName ? (
+												m.comment_imported_author({
+													// Keep source text from reordering the translated label.
+													name: `\u2068${c.historicalAuthorName}\u2069`,
+												})
+											) : (
+												m.comment_imported_unknown()
+											)
+										) : (
+											<bdi>{name}</bdi>
+										)}
 									</span>
 									{c.createdAt != null && (
 										<time
@@ -656,6 +660,7 @@ function CommentComposer({
 									<div className="flex flex-col gap-1.5">
 										<textarea
 											aria-label={m.comment_edit_label()}
+											dir="auto"
 											rows={2}
 											value={editBody}
 											onChange={(e) => setEditBody(e.target.value)}
@@ -679,7 +684,9 @@ function CommentComposer({
 										</div>
 									</div>
 								) : (
-									<p className="whitespace-pre-wrap break-words">{c.body}</p>
+									<p dir="auto" className="whitespace-pre-wrap break-words">
+										{c.body}
+									</p>
 								)}
 
 								{commentIdsWithAttachments.has(c.id) && (
@@ -888,6 +895,7 @@ function CommentComposer({
 							ref={textareaRef}
 							aria-label={m.comment_input_label()}
 							data-testid="comment-input"
+							dir="auto"
 							disabled={busy}
 							placeholder={m.comment_input_label()}
 							rows={2}
@@ -922,7 +930,9 @@ function CommentComposer({
 												image={p.image}
 												className="size-5"
 											/>
-											<span className="min-w-0 flex-1 truncate">{p.name}</span>
+											<span className="min-w-0 flex-1 truncate">
+												<bdi>{p.name}</bdi>
+											</span>
 										</button>
 									</li>
 								))}

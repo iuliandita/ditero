@@ -75,7 +75,7 @@ function RestrictedRow({
 						task.done && "text-muted-foreground line-through",
 					)}
 				>
-					{task.title}
+					<bdi>{task.title}</bdi>
 				</span>
 				<CompletedBy task={task} id={completionId} />
 				{(activation.status === "pending" ||
