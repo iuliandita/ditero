@@ -106,6 +106,23 @@ describe("habits / karma / focus schema", () => {
 		expect(reminder?.is_nullable).toBe("YES");
 	});
 
+	test("completed_by is a nullable user reference with set-null deletion", async () => {
+		const column = await columnType("habit_log", "completed_by");
+		expect(column).toMatchObject({
+			data_type: "text",
+			is_nullable: "YES",
+			column_default: null,
+		});
+		const { rows } =
+			await pool.query(`select rc.delete_rule, ccu.table_name, ccu.column_name
+			from information_schema.referential_constraints rc
+			join information_schema.constraint_column_usage ccu on ccu.constraint_name=rc.constraint_name
+			where rc.constraint_name='habit_log_completed_by_user_id_fk'`);
+		expect(rows).toEqual([
+			{ delete_rule: "SET NULL", table_name: "user", column_name: "id" },
+		]);
+	});
+
 	test("(habit_id, date) unique constraint present", async () => {
 		const { rows } = await pool.query(
 			`SELECT tc.constraint_type

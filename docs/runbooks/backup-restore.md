@@ -86,6 +86,18 @@ Never test a restore by pointing it at the production Zero replica or notificati
 Read [E2E Key Loss](e2e-key-loss.md) before treating a successful infrastructure restore as proof
 that encrypted files remain decryptable.
 
+## Habit completion attribution upgrade
+
+Migration `0091_habit_completed_by` adds a nullable user reference to each habit
+log. Before upgrade, back up PostgreSQL with the recovery set above and stop app
+and Zero writers. Run migrations with the migration role, then start the updated
+app and Zero. Existing logs keep a null actor; new completions record the caller.
+Removing a member preserves history, and deleting their account clears the actor.
+Reload web clients and update native clients to display attribution. The shared
+rule stays one completion per habit per day across client versions. For rollback,
+retain the additive column and foreign key: the preceding app ignores them.
+Restoring a pre-upgrade backup loses completions made after that backup.
+
 ## Kubernetes logical backup and restore
 
 The same logical path applies to Helm, bare Kustomize and CloudNativePG. Record

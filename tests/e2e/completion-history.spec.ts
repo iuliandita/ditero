@@ -798,7 +798,19 @@ test("shared completion cues name other people and reveal time on desktop and mo
 		await expect(
 			page.getByTestId("habit-card").getByTestId("completed-by"),
 		).toContainText(/Done by.*Alex Rivera/u);
-		await expect(member.getByTestId("completed-by")).toHaveCount(0);
+		await expect(member.getByTestId("completed-by")).toContainText(
+			/Done by.*Alex Rivera/u,
+		);
+		await page
+			.getByRole("button", { name: "Shared habit", exact: true })
+			.click();
+		await expect(
+			page.getByText(
+				"One completion per day counts for everyone in this space. Use a personal list for your own habits.",
+				{ exact: true },
+			),
+		).toBeVisible();
+		await page.keyboard.press("Escape");
 		await kid
 			.getByRole("checkbox", { name: "Water the balcony plants", exact: true })
 			.uncheck();
