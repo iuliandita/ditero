@@ -5,8 +5,10 @@ import {
 	Flag,
 	Plus,
 	SkipForward,
+	Tag,
 	Timer,
 	Trash2,
+	Users,
 	X,
 } from "lucide-react";
 import {
@@ -18,7 +20,6 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -69,7 +70,9 @@ import { useTaskToggle } from "../../hooks/useTaskToggle.ts";
 import { useUserPref } from "../../hooks/useUserPref.ts";
 import { formatTimeValue } from "../../lib/date-picker.ts";
 import { formatList } from "../../lib/intl-format.ts";
+import { requestMembersSheet } from "../../lib/members-sheet.ts";
 import { onMutationFailure } from "../../lib/mutation-outcome.ts";
+import { taskAudience } from "../../lib/task-audience.ts";
 import { markTaskPanelOpen } from "../../lib/use-wide-content.ts";
 import { AttachmentList } from "../attachments/AttachmentList.tsx";
 import { AssigneePicker } from "../people/AssigneePicker.tsx";
@@ -94,6 +97,9 @@ const PRIORITY_ORDER = [3, 2, 1, 0];
 // get the bottom sheet. The widths here (w-96, xl:w-110) are the ones AppShell
 // reserves while [data-task-panel] is mounted.
 const DOCKED_QUERY = "(min-width: 1024px)";
+
+const CHIP =
+	"h-auto min-h-8 max-w-full justify-start gap-1.5 py-1 text-start whitespace-normal pointer-coarse:min-h-11";
 
 const MORE_KEY = "ditero.taskDetail.moreOpen";
 
@@ -214,6 +220,7 @@ export function TaskDetail({
 	const [workspaces] = useQuery(queries.workspaces.mine());
 	const sourceWorkspace = workspaces.find((w) => w.id === list.workspaceId);
 	const [memberships] = useQuery(queries.memberships.mine());
+	const [assignees] = useQuery(queries.assignees.mine());
 	const callerRole = memberships.find(
 		(row) => row.workspaceId === list.workspaceId && row.userId === zero.userID,
 	)?.role;
@@ -227,6 +234,14 @@ export function TaskDetail({
 	const [newSubtask, setNewSubtask] = useState("");
 	const [newLabel, setNewLabel] = useState("");
 	const [moreOpen, setMoreOpen] = useState(readMoreOpen);
+	// Empty properties stay out of the summary until asked for, per task.
+	const [revealedFor, setRevealedFor] = useState<string | null>(null);
+	// A property stays in the summary once shown for this task, so clearing its
+	// last value inside its own editor does not unmount the editor.
+	const shownProps = useRef<{ taskId: string | null; keys: Set<string> }>({
+		taskId: null,
+		keys: new Set(),
+	});
 	const moreId = useId();
 	const panelRef = useRef<HTMLDivElement>(null);
 	const titleRef = useRef<HTMLTextAreaElement>(null);
@@ -619,6 +634,41 @@ export function TaskDetail({
 		"unit",
 	);
 
+	const labelNames = formatList(
+		currentLabels.map((l) => l.name),
+		"unit",
+	);
+	const audience = taskAudience(
+		sourceWorkspace,
+		memberships.filter((row) => row.workspaceId === list.workspaceId),
+		zero.userID,
+	);
+
+	const shown = shownProps.current;
+	if (shown.taskId !== t.id) {
+		shown.taskId = t.id;
+		shown.keys.clear();
+	}
+	const hasValue: Record<string, boolean> = {
+		due: t.dueAt != null,
+		priority: (t.priority ?? 0) > 0,
+		assignees: assignees.some((a) => a.taskId === t.id),
+		labels: currentLabels.length > 0,
+	};
+	for (const [key, set] of Object.entries(hasValue)) {
+		if (set) shown.keys.add(key);
+	}
+	// Checklist items carry neither priority nor labels.
+	const available =
+		kind === "checklist"
+			? ["due", "assignees"]
+			: ["due", "priority", "assignees", "labels"];
+	const revealed = revealedFor === t.id;
+	const showProp = (key: string) =>
+		available.includes(key) && (revealed || shown.keys.has(key));
+	const hiddenProps =
+		!revealed && available.some((key) => !shown.keys.has(key));
+
 	const header = (
 		<div className="flex flex-wrap items-start gap-3 px-4 pt-4 pb-3">
 			{!activation.canWriteWorkspace && (
@@ -629,18 +679,21 @@ export function TaskDetail({
 					{m.workspace_read_only()}
 				</p>
 			)}
-			<Checkbox
-				disabled={!activation.canWrite}
-				checked={checked}
-				aria-label={m.task_detail_done_aria()}
-				data-testid="task-detail-done"
-				aria-describedby={
-					!activation.canWriteWorkspace ? readOnlyReasonId : undefined
-				}
-				onCheckedChange={toggleDone}
-				shape={checkShapeFor(kind ?? "tasks")}
-				priority={checkToneFor(kind ?? "tasks", t.priority)}
-			/>
+			{/* Same box as the title's first line (py-1 + one line), so the circle centers on it. */}
+			<span className="flex h-[calc(1lh+0.5rem)] items-center text-base">
+				<Checkbox
+					disabled={!activation.canWrite}
+					checked={checked}
+					aria-label={m.task_detail_done_aria()}
+					data-testid="task-detail-done"
+					aria-describedby={
+						!activation.canWriteWorkspace ? readOnlyReasonId : undefined
+					}
+					onCheckedChange={toggleDone}
+					shape={checkShapeFor(kind ?? "tasks")}
+					priority={checkToneFor(kind ?? "tasks", t.priority)}
+				/>
+			</span>
 			<textarea
 				ref={setTitleRef}
 				rows={1}
@@ -698,15 +751,25 @@ export function TaskDetail({
 
 	const body = (
 		<div className="flex flex-col gap-6 px-4 pb-6">
-			<p
-				data-testid="task-visibility-context"
-				className="break-words text-xs text-muted-foreground"
-			>
-				{list.title}
-				{sourceWorkspace
-					? ` / ${sourceWorkspace.kind === "personal" ? m.scope_source_personal({ workspace: sourceWorkspace.name }) : m.scope_source_shared({ workspace: sourceWorkspace.name })}`
-					: ""}
-			</p>
+			{audience &&
+				(audience.opensMembers ? (
+					<button
+						type="button"
+						data-testid="task-visibility-context"
+						className="-my-1 -mx-2 flex min-h-11 w-fit max-w-full items-center gap-1.5 rounded-lg px-2 text-start text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring md:min-h-9"
+						onClick={() => requestMembersSheet(list.workspaceId)}
+					>
+						<Users aria-hidden className="size-3.5 shrink-0" />
+						<span className="min-w-0 wrap-anywhere">{audience.text}</span>
+					</button>
+				) : (
+					<p
+						data-testid="task-visibility-context"
+						className="break-words text-xs text-muted-foreground"
+					>
+						{audience.text}
+					</p>
+				))}
 			{activation.status !== "native" && activation.status !== "active" && (
 				<ImportActivationRecovery
 					key={taskImportRecoveryKey(t.id, list.workspaceId, activation.status)}
@@ -722,9 +785,12 @@ export function TaskDetail({
 				</p>
 			)}
 
-			<div className="flex flex-col gap-4">
-				<div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,9rem),1fr))] items-start gap-4 [&>*]:min-w-0 [&>*]:max-w-full">
-					<Field label={m.task_field_due()}>
+			<div className="flex flex-col gap-2">
+				<div
+					data-testid="task-summary"
+					className="flex flex-wrap items-start gap-2"
+				>
+					{showProp("due") && (
 						<DuePicker
 							key={t.id}
 							dueAt={t.dueAt ?? null}
@@ -736,150 +802,156 @@ export function TaskDetail({
 						>
 							<ReminderChip task={t} />
 						</DuePicker>
-					</Field>
+					)}
 
-					{kind !== "checklist" && (
-						<Field label={m.task_field_priority()}>
-							<Select
-								disabled={!activation.canWrite}
-								value={String(t.priority ?? 0)}
-								onValueChange={(v) => update({ id: t.id, priority: Number(v) })}
+					{showProp("priority") && (
+						<Select
+							disabled={!activation.canWrite}
+							value={String(t.priority ?? 0)}
+							onValueChange={(v) => update({ id: t.id, priority: Number(v) })}
+						>
+							<SelectTrigger
+								size="sm"
+								aria-label={m.task_field_priority()}
+								data-testid="task-priority"
+								className="w-fit max-w-full gap-1.5 pointer-coarse:data-[size=sm]:h-11"
 							>
-								<SelectTrigger
-									size="sm"
-									aria-label={m.task_field_priority()}
-									data-testid="task-priority"
-									className="w-fit min-w-36 pointer-coarse:data-[size=sm]:h-11"
-								>
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									{PRIORITY_ORDER.map((level) => (
-										<SelectItem
-											key={level}
-											value={String(level)}
-											data-testid={`task-priority-${level}`}
-										>
-											<Flag
-												className={
-													priorityMeta(level)?.color ?? "text-muted-foreground"
-												}
-											/>
-											{priorityLabel(level)}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-						</Field>
-					)}
-				</div>
-
-				<div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,9rem),1fr))] items-start gap-4 [&>*]:min-w-0 [&>*]:max-w-full">
-					<AssigneePicker
-						task={t}
-						workspaceId={list.workspaceId}
-						disabled={!activation.canWrite}
-					/>
-
-					{kind !== "checklist" && (
-						<Field label={m.task_field_labels()}>
-							<div className="flex flex-wrap items-center gap-1.5">
-								{currentLabels.map((l) => (
-									<Badge
-										key={l.id}
-										variant="secondary"
-										className="h-auto min-h-5 min-w-0 max-w-full text-start whitespace-normal wrap-anywhere"
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								{PRIORITY_ORDER.map((level) => (
+									<SelectItem
+										key={level}
+										value={String(level)}
+										data-testid={`task-priority-${level}`}
 									>
-										{l.name}
-									</Badge>
-								))}
-								<Popover>
-									<PopoverTrigger asChild>
-										<Button
-											disabled={!canEditLabels}
-											aria-describedby={
-												!canEditLabels ? labelsReasonId : undefined
+										<Flag
+											className={
+												priorityMeta(level)?.color ?? "text-muted-foreground"
 											}
-											variant="outline"
-											size="sm"
-											className="pointer-coarse:h-11"
-										>
-											<Plus /> {m.task_field_labels()}
-										</Button>
-									</PopoverTrigger>
-									<PopoverContent align="start" className="w-64">
-										<div className="flex max-h-48 flex-col gap-0.5 overflow-y-auto">
-											{allLabels.map((l) => (
-												<button
-													key={l.id}
-													type="button"
-													aria-pressed={selected.has(l.id)}
-													disabled={!canEditLabels}
-													onClick={() => toggleLabel(l.id)}
-													className="flex items-center gap-2 rounded-md px-1.5 py-1 text-start text-sm hover:bg-muted disabled:opacity-60 disabled:hover:bg-transparent"
-												>
-													<span className="flex size-4 items-center justify-center">
-														{selected.has(l.id) && (
-															<Check className="size-3.5" />
-														)}
-													</span>
-													{l.name}
-												</button>
-											))}
-											{allLabels.length === 0 && (
-												<span className="px-1.5 py-1 text-xs text-muted-foreground">
-													{m.task_no_labels()}
-												</span>
-											)}
-										</div>
-										<div className="flex items-center gap-1.5 border-t pt-2">
-											<Input
-												disabled={!canEditLabels}
-												value={newLabel}
-												placeholder={m.task_new_label_placeholder()}
-												onChange={(e) => setNewLabel(e.target.value)}
-												onKeyDown={(e) => {
-													if (e.key === "Enter") void createLabel();
-												}}
-											/>
-											<Button
-												size="sm"
-												onClick={() => void createLabel()}
-												disabled={!canEditLabels || !newLabel.trim()}
-											>
-												{m.action_add()}
-											</Button>
-										</div>
-									</PopoverContent>
-								</Popover>
-							</div>
-							{!canEditLabels && (
-								<p
-									id={labelsReasonId}
-									className="text-xs text-muted-foreground"
+										/>
+										{priorityLabel(level)}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+					)}
+
+					{showProp("assignees") && (
+						<AssigneePicker
+							task={t}
+							workspaceId={list.workspaceId}
+							disabled={!activation.canWrite}
+						/>
+					)}
+
+					{showProp("labels") && (
+						<Popover>
+							<PopoverTrigger asChild>
+								<Button
+									disabled={!canEditLabels}
+									aria-describedby={!canEditLabels ? labelsReasonId : undefined}
+									aria-label={
+										currentLabels.length > 0
+											? `${m.task_field_labels()}: ${labelNames}`
+											: undefined
+									}
+									data-testid="task-labels"
+									variant="outline"
+									size="sm"
+									className={CHIP}
 								>
-									{m.mutator_error_denied()}
-								</p>
-							)}
-						</Field>
+									{currentLabels.length > 0 ? (
+										<>
+											<Tag />
+											<span className="min-w-0 wrap-anywhere">
+												{labelNames}
+											</span>
+										</>
+									) : (
+										<>
+											<Plus /> {m.task_field_labels()}
+										</>
+									)}
+								</Button>
+							</PopoverTrigger>
+							<PopoverContent align="start" className="w-64">
+								<div className="flex max-h-48 flex-col gap-0.5 overflow-y-auto">
+									{allLabels.map((l) => (
+										<button
+											key={l.id}
+											type="button"
+											aria-pressed={selected.has(l.id)}
+											disabled={!canEditLabels}
+											onClick={() => toggleLabel(l.id)}
+											className="flex items-center gap-2 rounded-md px-1.5 py-1 text-start text-sm hover:bg-muted disabled:opacity-60 disabled:hover:bg-transparent"
+										>
+											<span className="flex size-4 items-center justify-center">
+												{selected.has(l.id) && <Check className="size-3.5" />}
+											</span>
+											{l.name}
+										</button>
+									))}
+									{allLabels.length === 0 && (
+										<span className="px-1.5 py-1 text-xs text-muted-foreground">
+											{m.task_no_labels()}
+										</span>
+									)}
+								</div>
+								<div className="flex items-center gap-1.5 border-t pt-2">
+									<Input
+										disabled={!canEditLabels}
+										value={newLabel}
+										placeholder={m.task_new_label_placeholder()}
+										onChange={(e) => setNewLabel(e.target.value)}
+										onKeyDown={(e) => {
+											if (e.key === "Enter") void createLabel();
+										}}
+									/>
+									<Button
+										size="sm"
+										onClick={() => void createLabel()}
+										disabled={!canEditLabels || !newLabel.trim()}
+									>
+										{m.action_add()}
+									</Button>
+								</div>
+							</PopoverContent>
+						</Popover>
+					)}
+
+					{hiddenProps && (
+						<Button
+							variant="ghost"
+							size="sm"
+							data-testid="task-add-details"
+							className="pointer-coarse:h-11"
+							onClick={() => setRevealedFor(t.id)}
+						>
+							<Plus /> {m.task_add_details()}
+						</Button>
 					)}
 				</div>
+				{showProp("labels") && !canEditLabels && (
+					<p id={labelsReasonId} className="text-xs text-muted-foreground">
+						{m.mutator_error_denied()}
+					</p>
+				)}
 			</div>
 
-			<label className="flex flex-col gap-1.5 text-sm">
-				<span className="text-muted-foreground">{m.task_field_notes()}</span>
-				<textarea
-					disabled={!activation.canWrite}
-					key={`notes-${t.id}`}
-					defaultValue={t.notes ?? ""}
-					rows={3}
-					className="w-full rounded-lg border bg-transparent p-2 text-sm outline-none focus-visible:border-ring"
-					onBlur={(e) => {
-						const v = e.target.value;
-						if (v !== (t.notes ?? "")) update({ id: t.id, notes: v || null });
-					}}
-				/>
-			</label>
+			<textarea
+				aria-label={m.task_field_notes()}
+				placeholder={m.task_field_notes()}
+				disabled={!activation.canWrite}
+				key={`notes-${t.id}`}
+				defaultValue={t.notes ?? ""}
+				rows={3}
+				className="max-h-72 min-h-20 w-full field-sizing-content rounded-lg border bg-transparent p-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring"
+				onBlur={(e) => {
+					const v = e.target.value;
+					if (v !== (t.notes ?? "")) update({ id: t.id, notes: v || null });
+				}}
+			/>
 
 			{!isSubtask && (
 				<Field label={m.task_field_subtasks()}>

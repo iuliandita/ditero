@@ -590,7 +590,6 @@
 	"task_field_subtasks": "Subtasks",
 	"task_due_date_aria": "Due date",
 	"task_due_time_aria": "Due time",
-	"task_due_clear": "Clear due date",
 	"task_no_focus_time": "No focus time yet",
 	"task_start_focus": "Start focus",
 	"task_skip_occurrence": "Skip this occurrence",
@@ -603,6 +602,7 @@
 	"task_delete": "Delete task",
 	"task_detail_done_aria": "Done",
 	"task_detail_more": "More options",
+	"task_add_details": "Add details",
 	"task_more_repeats": "Repeats",
 	"task_more_reminder": "Reminder {time}",
 	"task_more_urgent": "Urgent",
@@ -1398,20 +1398,6 @@
 	"accept_error_revoked": "This invite has been revoked.",
 	"accept_error_generic": "This invite could not be accepted.",
 	"assignee_open": "Assign",
-	"assignee_open_count": [
-		{
-			"declarations": [
-				"input count",
-				"local countNum = count: number",
-				"local countPlural = count: plural"
-			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "Assignees ({countNum})",
-				"countPlural=other": "Assignees ({countNum})"
-			}
-		}
-	],
 	"assignee_chips_aria": "Assignees: {names}",
 	"assignee_invite_confirm": "Invite {name} to {workspace} and assign?",
 	"assignee_invite_confirm_no_workspace": "Invite {name} to this workspace and assign?",
@@ -2218,6 +2204,8 @@
 	"aggregate_scope_selected": "Across: {workspaces}",
 	"scope_source_personal": "{workspace} · Personal",
 	"scope_source_shared": "{workspace} · Shared",
+	"task_visibility_shared": "Everyone in {workspace} can see this",
+	"task_visibility_personal": "Only you can see this",
 	"calendar_go_today": "Today",
 	"calendar_show_earlier": "Show earlier dates",
 	"calendar_hide_earlier": "Hide earlier dates",

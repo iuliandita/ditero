@@ -103,6 +103,7 @@ import {
 	saveLastNavigation,
 } from "../lib/last-navigation.ts";
 import type { Locale } from "../lib/locale.ts";
+import { onMembersSheetRequest } from "../lib/members-sheet.ts";
 import {
 	useAccountStorageScope,
 	useNativeAccount,
@@ -258,6 +259,10 @@ function NormalWorkspace({
 	const [collapsed, setCollapsed] = useState(false);
 	const [quickAddOpen, setQuickAddOpen] = useState(false);
 	const [membersOpen, setMembersOpen] = useState(false);
+	// Set only when the task detail asks for a workspace other than the active one.
+	const [membersWorkspaceId, setMembersWorkspaceId] = useState<string | null>(
+		null,
+	);
 	const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
 	const navSections = useNavSections(storageScope);
 	const [cheatOpen, setCheatOpen] = useState(false);
@@ -309,8 +314,17 @@ function NormalWorkspace({
 	}, [cancelNavigationRestore]);
 	const openMembers = () => {
 		cancelNavigationRestore();
+		setMembersWorkspaceId(null);
 		setMembersOpen(true);
 	};
+	useEffect(
+		() =>
+			onMembersSheetRequest((workspaceId) => {
+				setMembersWorkspaceId(workspaceId);
+				setMembersOpen(true);
+			}),
+		[],
+	);
 	const openCreateWorkspace = () => {
 		cancelNavigationRestore();
 		setCreateWorkspaceOpen(true);
@@ -1435,6 +1449,7 @@ function NormalWorkspace({
 						selectWorkspace(id);
 					}}
 					membersOpen={membersOpen}
+					membersWorkspaceId={membersWorkspaceId}
 					onMembersOpenChange={setMembersOpen}
 					quickAddOpen={quickAddOpen}
 					onQuickAddOpenChange={setQuickAddOpen}
