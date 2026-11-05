@@ -5,6 +5,7 @@ import {
 	goToSettings,
 	leaveSettings,
 	openDetails,
+	revealDetails,
 	sidebarLists,
 	signUp,
 	uniqueEmail,
@@ -240,6 +241,7 @@ test("imports assignments, recovers a lost response, and supports ordinary unass
 		page.getByTestId("list").getByText("A task to import", { exact: true }),
 	).toBeVisible();
 	await openDetails(page, "A task to import");
+	await revealDetails(page);
 	await page.getByTestId("assignee-open").click();
 	const self = page
 		.getByTestId("assignee-picker")
@@ -408,6 +410,7 @@ test("imports assignments, recovers a lost response, and supports ordinary unass
 		.locator("button", { hasText: "Imported assigned task" });
 	await expect(task.getByTestId("assignee-chips")).toBeVisible();
 	await task.click();
+	await revealDetails(page);
 	await page.getByTestId("assignee-open").click();
 	const importedSelf = page
 		.getByTestId("assignee-picker")

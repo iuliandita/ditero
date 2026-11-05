@@ -250,6 +250,13 @@ export function sidebarLists(page: Page): Locator {
 	return page.getByRole("navigation", { name: "Lists" });
 }
 
+// The detail's summary shows only the properties a task has; the rest appear
+// once "Add details" is pressed, which is a no-op when they already are.
+export async function revealDetails(scope: Page | Locator): Promise<void> {
+	const reveal = scope.getByTestId("task-add-details");
+	if (await reveal.isVisible()) await reveal.click();
+}
+
 // The task detail's due date is a popover with a typed field; the typed field
 // accepts an ISO day key, which keeps callers locale-independent. The popover
 // is portaled, so it is found on the page, not inside the detail.
@@ -258,6 +265,7 @@ export async function setDueDate(
 	detail: Locator,
 	date: string,
 ): Promise<void> {
+	await revealDetails(detail);
 	await detail.getByTestId("due-picker").click();
 	const input = page.getByTestId("due-picker-input");
 	await input.fill(date);

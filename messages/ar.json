@@ -606,7 +606,6 @@
 	"task_field_subtasks": "المهام الفرعية",
 	"task_due_date_aria": "تاريخ الاستحقاق",
 	"task_due_time_aria": "وقت الاستحقاق",
-	"task_due_clear": "مسح تاريخ الاستحقاق",
 	"task_no_focus_time": "لا وقت تركيز بعد",
 	"task_start_focus": "بدء التركيز",
 	"task_skip_occurrence": "تخطي هذا التكرار",
@@ -619,6 +618,7 @@
 	"task_delete": "حذف المهمة",
 	"task_detail_done_aria": "منجزة",
 	"task_detail_more": "خيارات إضافية",
+	"task_add_details": "إضافة تفاصيل",
 	"task_more_repeats": "تتكرر",
 	"task_more_reminder": "تذكير {time}",
 	"task_more_urgent": "عاجلة",
@@ -1513,24 +1513,6 @@
 	"accept_error_revoked": "أُبطلت هذه الدعوة.",
 	"accept_error_generic": "تعذّر قبول هذه الدعوة.",
 	"assignee_open": "إسناد",
-	"assignee_open_count": [
-		{
-			"declarations": [
-				"input count",
-				"local countNum = count: number",
-				"local countPlural = count: plural"
-			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=zero": "المكلَّفون ({countNum})",
-				"countPlural=one": "المكلَّفون ({countNum})",
-				"countPlural=two": "المكلَّفون ({countNum})",
-				"countPlural=few": "المكلَّفون ({countNum})",
-				"countPlural=many": "المكلَّفون ({countNum})",
-				"countPlural=other": "المكلَّفون ({countNum})"
-			}
-		}
-	],
 	"assignee_chips_aria": "المكلَّفون: {names}",
 	"assignee_invite_confirm": "دعوة {name} إلى {workspace} وإسناد المهمة؟",
 	"assignee_invite_confirm_no_workspace": "دعوة {name} إلى مساحة العمل هذه وإسناد المهمة؟",
@@ -2408,6 +2390,8 @@
 	"aggregate_scope_selected": "في: {workspaces}",
 	"scope_source_personal": "{workspace} · شخصي",
 	"scope_source_shared": "{workspace} · مشترك",
+	"task_visibility_shared": "يمكن لجميع من في {workspace} رؤية هذا",
+	"task_visibility_personal": "أنت وحدك من يمكنه رؤية هذا",
 	"calendar_go_today": "اليوم",
 	"calendar_show_earlier": "إظهار التواريخ السابقة",
 	"calendar_hide_earlier": "إخفاء التواريخ السابقة",

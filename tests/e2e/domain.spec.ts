@@ -6,6 +6,7 @@ import {
 	openMobileLists,
 	openMoreOptions,
 	openShared,
+	revealDetails,
 	signUp,
 	uniqueEmail,
 } from "./helpers.ts";
@@ -845,6 +846,7 @@ test("completing from the detail matches the rows, snackbar included", async ({
 
 	// Recurring: task.complete advances the occurrence, so no Undo is offered.
 	panel = await openPanel(page, "Every day");
+	await revealDetails(panel);
 	await panel.getByTestId("due-picker").click();
 	await page.getByTestId("due-pick-today").click();
 	await openMoreOptions(panel);
@@ -934,10 +936,15 @@ test("detail controls reach 44px on a touch screen", async ({ browser }) => {
 	const sheet = page.getByTestId("task-detail");
 	await expect(sheet.getByLabel("Task title")).toBeVisible();
 
+	const add = await sheet.getByTestId("task-add-details").boundingBox();
+	expect(add?.height ?? 0, "task-add-details").toBeGreaterThanOrEqual(44);
+	await revealDetails(sheet);
+
 	for (const id of [
 		"due-picker",
 		"task-priority",
 		"assignee-open",
+		"task-labels",
 		"subtask-add",
 		"task-more-toggle",
 		"task-detail-close",
@@ -1013,10 +1020,16 @@ test("secondary controls sit behind More options", async ({ page }) => {
 	const panel = await openPanel(page, "Plain");
 	const toggle = panel.getByTestId("task-more-toggle");
 
-	// Up front: due, priority, notes, subtasks. Behind: repeat, focus, files.
+	// Up front: notes and subtasks, plus only the properties the task has.
+	// Behind "Add details": the empty ones. Behind More options: repeat, focus,
+	// files.
+	await expect(panel.getByLabel("Notes")).toBeVisible();
+	await expect(panel.getByPlaceholder("Add subtask")).toBeVisible();
+	await expect(panel.getByTestId("due-picker")).toHaveCount(0);
+	await panel.getByTestId("task-add-details").click();
+	await expect(panel.getByTestId("task-add-details")).toHaveCount(0);
 	await expect(panel.getByTestId("due-picker")).toBeVisible();
 	await expect(panel.getByTestId("task-priority")).toHaveText("No priority");
-	await expect(panel.getByPlaceholder("Add subtask")).toBeVisible();
 	await expect(toggle).toHaveAttribute("aria-expanded", "false");
 	await expect(panel.getByTestId("recurrence-enable")).toHaveCount(0);
 	await expect(panel.getByTestId("task-focus-start")).toHaveCount(0);
@@ -1058,8 +1071,10 @@ test("the due picker sets dates from quick picks and keeps the time", async ({
 		.locator("[data-kbd-row]")
 		.filter({ hasText: "Plan it" });
 
+	await revealDetails(panel);
 	await panel.getByTestId("due-picker").click();
 	await expect(page.getByTestId("due-picker-content")).toBeVisible();
+	await expect(page.getByTestId("due-time")).toHaveCount(0);
 	await expectNoSeriousA11y(page, "due picker");
 	await page.getByTestId("due-pick-tomorrow").click();
 	await expect(page.getByTestId("due-picker-content")).toHaveCount(0);
@@ -1074,20 +1089,24 @@ test("the due picker sets dates from quick picks and keeps the time", async ({
 	await expect(row.getByText("Today", { exact: true })).toBeVisible({
 		timeout: 15000,
 	});
-	await expect(panel.getByTestId("due-time")).toHaveValue("");
 	await panel.getByTestId("due-picker").click();
+	await expect(page.getByTestId("due-time")).toHaveValue("");
 	await page.getByTestId("due-pick-tomorrow").click();
 	await expect(row.getByText("Tomorrow", { exact: true })).toBeVisible({
 		timeout: 15000,
 	});
 
-	// A typed time, then a different day: the time carries over.
-	const time = panel.getByTestId("due-time");
+	// A typed time inside the date editor, then a different day: the time
+	// carries over.
+	await panel.getByTestId("due-picker").click();
+	const time = page.getByTestId("due-time");
 	await time.fill("5:30 pm");
 	await time.press("Enter");
 	await expect(row.getByText(/^Tomorrow 5:30\sPM$/)).toBeVisible({
 		timeout: 15000,
 	});
+	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("due-picker-content")).toHaveCount(0);
 	await panel.getByTestId("due-picker").click();
 	await page.getByTestId("due-pick-today").click();
 	await expect(row.getByText(/^Today 5:30\sPM$/)).toBeVisible({
@@ -1121,20 +1140,25 @@ test("a half-typed due time stays with its task", async ({ page }) => {
 	await listWithTasks(page, "Drafts", ["First", "Second"]);
 	for (const title of ["Second", "First"]) {
 		const panel = await openPanel(page, title);
+		await revealDetails(panel);
 		await panel.getByTestId("due-picker").click();
 		await page.getByTestId("due-pick-tomorrow").click();
 		await expect(panel.getByTestId("due-picker")).toHaveText("Tomorrow");
 	}
 	const panel = page.getByTestId("task-detail");
-	const time = panel.getByTestId("due-time");
+	await panel.getByTestId("due-picker").click();
+	const time = page.getByTestId("due-time");
 	await time.fill("25:99");
 	await time.press("Enter");
-	await expect(panel.getByText(/Enter a time like/)).toBeVisible();
+	await expect(page.getByText(/Enter a time like/)).toBeVisible();
+	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("due-picker-content")).toHaveCount(0);
 
 	await listRow(page, "Second").click();
 	await expect(panel.getByLabel("Task title")).toHaveValue("Second");
+	await panel.getByTestId("due-picker").click();
 	await expect(time).toHaveValue("");
-	await expect(panel.getByText(/Enter a time like/)).toHaveCount(0);
+	await expect(page.getByText(/Enter a time like/)).toHaveCount(0);
 });
 
 test("delete lives in the detail's overflow menu behind a confirm", async ({

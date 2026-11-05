@@ -594,7 +594,6 @@
 	"task_field_subtasks": "Sous-tâches",
 	"task_due_date_aria": "Date d'échéance",
 	"task_due_time_aria": "Heure d'échéance",
-	"task_due_clear": "Effacer l'échéance",
 	"task_no_focus_time": "Pas encore de temps de focus",
 	"task_start_focus": "Démarrer le focus",
 	"task_skip_occurrence": "Passer cette occurrence",
@@ -607,6 +606,7 @@
 	"task_delete": "Supprimer la tâche",
 	"task_detail_done_aria": "Terminée",
 	"task_detail_more": "Plus d'options",
+	"task_add_details": "Ajouter des détails",
 	"task_more_repeats": "Se répète",
 	"task_more_reminder": "Rappel {time}",
 	"task_more_urgent": "Urgente",
@@ -1432,21 +1432,6 @@
 	"accept_error_revoked": "Cette invitation a été révoquée.",
 	"accept_error_generic": "Cette invitation n'a pas pu être acceptée.",
 	"assignee_open": "Assigner",
-	"assignee_open_count": [
-		{
-			"declarations": [
-				"input count",
-				"local countNum = count: number",
-				"local countPlural = count: plural"
-			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "Assignés ({countNum})",
-				"countPlural=many": "Assignés ({countNum})",
-				"countPlural=other": "Assignés ({countNum})"
-			}
-		}
-	],
 	"assignee_chips_aria": "Assignés : {names}",
 	"assignee_invite_confirm": "Inviter {name} dans {workspace} et lui assigner la tâche ?",
 	"assignee_invite_confirm_no_workspace": "Inviter {name} dans ce workspace et lui assigner la tâche ?",
@@ -2270,6 +2255,8 @@
 	"aggregate_scope_selected": "Dans : {workspaces}",
 	"scope_source_personal": "{workspace} · Personnel",
 	"scope_source_shared": "{workspace} · Partagé",
+	"task_visibility_shared": "Tout le monde dans {workspace} peut voir ça",
+	"task_visibility_personal": "Tu es le seul à voir ça",
 	"calendar_go_today": "Aujourd’hui",
 	"calendar_show_earlier": "Afficher les dates précédentes",
 	"calendar_hide_earlier": "Masquer les dates précédentes",

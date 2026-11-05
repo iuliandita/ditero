@@ -6,6 +6,7 @@ import {
 	leaveSettings,
 	openMoreOptions,
 	openShared,
+	revealDetails,
 	setDueDate,
 	signUp,
 	uniqueEmail,
@@ -369,6 +370,7 @@ test("live ack: assignment notifies through /api/zero/mutate, and one ack termin
 		// events.run and calls events.flush afterwards -- delete either and this
 		// wait times out.
 		const detail = await openDetail(pa, TASK);
+		await revealDetails(pa);
 		await pa.getByTestId("assignee-open").click();
 		await expect(pa.getByTestId("assignee-picker")).toBeVisible();
 		for (const name of [memberName, ownerName]) {
@@ -379,9 +381,9 @@ test("live ack: assignment notifies through /api/zero/mutate, and one ack termin
 				.first()
 				.click();
 		}
-		await expect(pa.getByTestId("assignee-open")).toContainText(
-			"Assignees (2)",
-		);
+		for (const name of [memberName, ownerName]) {
+			await expect(pa.getByTestId("assignee-open")).toContainText(name);
+		}
 		// First Escape dismisses the picker popover, second the detail sheet.
 		await pa.keyboard.press("Escape");
 		await expect(pa.getByTestId("assignee-picker")).toBeHidden();

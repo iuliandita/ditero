@@ -590,7 +590,6 @@
 	"task_field_subtasks": "Teilaufgaben",
 	"task_due_date_aria": "Fälligkeitsdatum",
 	"task_due_time_aria": "Uhrzeit der Fälligkeit",
-	"task_due_clear": "Fälligkeitsdatum löschen",
 	"task_no_focus_time": "Noch keine Fokuszeit",
 	"task_start_focus": "Fokus starten",
 	"task_skip_occurrence": "Diesen Termin überspringen",
@@ -603,6 +602,7 @@
 	"task_delete": "Aufgabe löschen",
 	"task_detail_done_aria": "Erledigt",
 	"task_detail_more": "Weitere Optionen",
+	"task_add_details": "Details hinzufügen",
 	"task_more_repeats": "Wiederholt sich",
 	"task_more_reminder": "Erinnerung {time}",
 	"task_more_urgent": "Dringend",
@@ -1405,20 +1405,6 @@
 	"accept_error_revoked": "Diese Einladung wurde widerrufen.",
 	"accept_error_generic": "Diese Einladung konnte nicht angenommen werden.",
 	"assignee_open": "Zuweisen",
-	"assignee_open_count": [
-		{
-			"declarations": [
-				"input count",
-				"local countNum = count: number",
-				"local countPlural = count: plural"
-			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "Zuständige ({countNum})",
-				"countPlural=other": "Zuständige ({countNum})"
-			}
-		}
-	],
 	"assignee_chips_aria": "Zuständige: {names}",
 	"assignee_invite_confirm": "{name} zu {workspace} einladen und zuweisen?",
 	"assignee_invite_confirm_no_workspace": "{name} zu diesem Workspace einladen und zuweisen?",
@@ -2224,6 +2210,8 @@
 	"aggregate_scope_selected": "In: {workspaces}",
 	"scope_source_personal": "{workspace} · Privat",
 	"scope_source_shared": "{workspace} · Geteilt",
+	"task_visibility_shared": "Alle in {workspace} können das sehen",
+	"task_visibility_personal": "Nur du kannst das sehen",
 	"calendar_go_today": "Heute",
 	"calendar_show_earlier": "Frühere Tage anzeigen",
 	"calendar_hide_earlier": "Frühere Tage ausblenden",

@@ -594,7 +594,6 @@
 	"task_field_subtasks": "Subsarcini",
 	"task_due_date_aria": "Data limită",
 	"task_due_time_aria": "Ora limită",
-	"task_due_clear": "Șterge data limită",
 	"task_no_focus_time": "Încă niciun timp de concentrare",
 	"task_start_focus": "Începe concentrarea",
 	"task_skip_occurrence": "Sari peste această apariție",
@@ -607,6 +606,7 @@
 	"task_delete": "Șterge sarcina",
 	"task_detail_done_aria": "Finalizată",
 	"task_detail_more": "Mai multe opțiuni",
+	"task_add_details": "Adaugă detalii",
 	"task_more_repeats": "Se repetă",
 	"task_more_reminder": "Memento {time}",
 	"task_more_urgent": "Urgentă",
@@ -1432,21 +1432,6 @@
 	"accept_error_revoked": "Această invitație a fost revocată.",
 	"accept_error_generic": "Această invitație nu a putut fi acceptată.",
 	"assignee_open": "Atribuie",
-	"assignee_open_count": [
-		{
-			"declarations": [
-				"input count",
-				"local countNum = count: number",
-				"local countPlural = count: plural"
-			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "Responsabili ({countNum})",
-				"countPlural=few": "Responsabili ({countNum})",
-				"countPlural=other": "Responsabili ({countNum})"
-			}
-		}
-	],
 	"assignee_chips_aria": "Responsabili: {names}",
 	"assignee_invite_confirm": "Inviți {name} în {workspace} și îi atribui sarcina?",
 	"assignee_invite_confirm_no_workspace": "Inviți {name} în acest workspace și îi atribui sarcina?",
@@ -2270,6 +2255,8 @@
 	"aggregate_scope_selected": "Din: {workspaces}",
 	"scope_source_personal": "{workspace} · Personal",
 	"scope_source_shared": "{workspace} · Partajat",
+	"task_visibility_shared": "Toți cei din {workspace} pot vedea asta",
+	"task_visibility_personal": "Doar tu poți vedea asta",
 	"calendar_go_today": "Azi",
 	"calendar_show_earlier": "Arată datele anterioare",
 	"calendar_hide_earlier": "Ascunde datele anterioare",
