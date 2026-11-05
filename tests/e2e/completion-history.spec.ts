@@ -798,7 +798,70 @@ test("shared completion cues name other people and reveal time on desktop and mo
 		await expect(
 			page.getByTestId("habit-card").getByTestId("completed-by"),
 		).toContainText(/Done by.*Alex Rivera/u);
-		await expect(member.getByTestId("completed-by")).toHaveCount(0);
+		await expect(member.getByTestId("completed-by")).toContainText(
+			/Done by.*Alex Rivera/u,
+		);
+		const viewport = page.viewportSize();
+		for (const width of [1280, 360]) {
+			await page.setViewportSize({ width, height: 900 });
+			await expect
+				.poll(() =>
+					page.getByTestId("habit-card").evaluate((card) => {
+						const title = card.querySelector("[data-kbd-nav] > span");
+						const meta = card.querySelector(
+							"[data-kbd-nav] > span:nth-child(2)",
+						);
+						const range = card.querySelector(
+							'[data-testid="habit-history-range"]',
+						);
+						const dot = card.querySelector('[aria-current="date"]');
+						const today = card.querySelector(
+							'[data-testid="habit-history-today"]',
+						);
+						if (!title || !meta || !range || !dot || !today)
+							throw new Error("Habit layout is incomplete");
+						const titleBox = title.getBoundingClientRect();
+						const metaBox = meta.getBoundingClientRect();
+						const rangeBox = range.getBoundingClientRect();
+						const dotBox = dot.getBoundingClientRect();
+						const todayBox = today.getBoundingClientRect();
+						return {
+							metaUnderTitle:
+								metaBox.top >= titleBox.bottom &&
+								metaBox.top - titleBox.bottom <= 4,
+							stripUnderMeta:
+								rangeBox.top >= metaBox.bottom &&
+								rangeBox.top - metaBox.bottom <= 10,
+							todayUnderDot:
+								todayBox.top > dotBox.bottom &&
+								Math.abs(
+									todayBox.x + todayBox.width / 2 - dotBox.x - dotBox.width / 2,
+								) <= 1,
+						};
+					}),
+				)
+				.toEqual({
+					metaUnderTitle: true,
+					stripUnderMeta: true,
+					todayUnderDot: true,
+				});
+			const help = await page
+				.getByRole("button", { name: "Shared habit", exact: true })
+				.boundingBox();
+			expect(help?.width).toBeGreaterThanOrEqual(44);
+			expect(help?.height).toBeGreaterThanOrEqual(44);
+		}
+		if (viewport) await page.setViewportSize(viewport);
+		await page
+			.getByRole("button", { name: "Shared habit", exact: true })
+			.click();
+		await expect(
+			page.getByText(
+				"One completion per day counts for everyone in this space. Use a personal list for your own habits.",
+				{ exact: true },
+			),
+		).toBeVisible();
+		await page.keyboard.press("Escape");
 		await kid
 			.getByRole("checkbox", { name: "Water the balcony plants", exact: true })
 			.uncheck();

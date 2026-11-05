@@ -194,6 +194,7 @@ export default drizzleZeroConfig(schema, {
 			status: true,
 			karmaDelta: true,
 			completedAt: true,
+			completedBy: true,
 			createdAt: true,
 		},
 		karma: {

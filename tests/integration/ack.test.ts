@@ -407,6 +407,7 @@ describe("ack route: success", () => {
 			.where(eq(tables.habitLog.habitId, HABIT));
 		expect(logs).toHaveLength(1);
 		expect(logs[0].date).toBe(LOCAL_DATE);
+		expect(logs[0].completedBy).toBe(MEMBER);
 		expect(logs[0].status).toBe("done");
 		expect(logs[0].karmaDelta).toBeGreaterThan(0);
 		const history = await db
@@ -967,6 +968,7 @@ describe("in-app reminder.ack mutator", () => {
 			.where(eq(tables.habitLog.habitId, HABIT));
 		expect(logs).toHaveLength(1);
 		expect(logs[0].date).toBe(LOCAL_DATE);
+		expect(logs[0].completedBy).toBe(MEMBER);
 		expect(logs[0].status).toBe("done");
 	});
 });
