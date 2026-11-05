@@ -1,8 +1,9 @@
-import { useQuery } from "@rocicorp/zero/react";
+import { useQuery, useZero } from "@rocicorp/zero/react";
 import { useMemo } from "react";
 import { m } from "../../../paraglide/messages.js";
 import { getLocale } from "../../../paraglide/runtime.js";
 import { queries } from "../../../zero/queries.ts";
+import type { schema } from "../../../zero/schema.gen.ts";
 import { formatList } from "../../lib/intl-format.ts";
 
 const isolate = (text: string) => `⁨${text}⁩`;
@@ -10,7 +11,8 @@ const firstName = (full: string) => full.trim().split(/\s+/)[0] || full;
 
 // The first assignee's first name, then "+N" for the rest, as plain text in the
 // row's context line. The full list stays in the accessible label and title.
-// Shared workspaces only: a personal row has no one to tell apart.
+// Shared workspaces, or any task assigned to someone other than the viewer: a
+// personal row assigned only to its owner has no one to tell apart.
 export function AssigneeNames({
 	taskId,
 	listId,
@@ -18,24 +20,29 @@ export function AssigneeNames({
 	taskId: string;
 	listId: string;
 }) {
+	const zero = useZero<typeof schema>();
 	const [assignees] = useQuery(queries.assignees.mine());
 	const [memberships] = useQuery(queries.memberships.mine());
 	const [lists] = useQuery(queries.lists.mine());
 	const [workspaces] = useQuery(queries.workspaces.mine());
 
+	const mine = useMemo(
+		() => assignees.filter((a) => a.taskId === taskId),
+		[assignees, taskId],
+	);
 	const names = useMemo(() => {
 		const byUser = new Map<string, string>();
 		for (const mem of memberships)
 			if (mem.user && !byUser.has(mem.userId))
 				byUser.set(mem.userId, mem.user.name);
-		return assignees
-			.filter((a) => a.taskId === taskId)
-			.map((a) => byUser.get(a.userId) ?? m.group_unknown_user());
-	}, [assignees, memberships, taskId]);
+		return mine.map((a) => byUser.get(a.userId) ?? m.group_unknown_user());
+	}, [mine, memberships]);
 
 	const list = lists.find((l) => l.id === listId);
 	const workspace = workspaces.find((w) => w.id === list?.workspaceId);
-	if (names.length === 0 || workspace?.kind !== "shared") return null;
+	const onlyViewer = mine.every((a) => a.userId === zero.userID);
+	if (names.length === 0 || (workspace?.kind !== "shared" && onlyViewer))
+		return null;
 
 	const [lead, ...rest] = names;
 	const short = firstName(lead);

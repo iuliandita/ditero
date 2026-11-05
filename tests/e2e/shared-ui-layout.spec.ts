@@ -58,10 +58,15 @@ test("a live reminder leaves the task title readable beside the sidebar and deta
 		await expect(chip).toBeVisible();
 		await expect(row.getByTestId("reminder-unverified-note")).toBeVisible();
 		await expect(row.getByTestId("subtask-count")).toBeVisible();
+		// The title is as wide as its text, so width alone cannot say it is readable.
 		await expect
-			.poll(async () => (await title.boundingBox())?.width ?? 0)
-			.toBeGreaterThanOrEqual(160);
-		const collapsedWidth = await row.evaluate((element) => {
+			.poll(() =>
+				title.evaluate(
+					(el) => el.clientWidth > 0 && el.scrollWidth <= el.clientWidth,
+				),
+			)
+			.toBe(true);
+		const collapsedReadable = await row.evaluate((element) => {
 			const button = element.querySelector<HTMLElement>("[data-task-id]");
 			const chip = element.querySelector<HTMLElement>(
 				'[data-testid="reminder-chip"]',
@@ -80,15 +85,15 @@ test("a live reminder leaves the task title readable beside the sidebar and deta
 				button.style.minWidth = "0";
 				button.style.flex = "1 1 0%";
 				chip.style.maxWidth = "none";
-				return title.getBoundingClientRect().width;
+				return title.clientWidth > 0 && title.scrollWidth <= title.clientWidth;
 			} finally {
 				[button.style.cssText, group.style.cssText, chip.style.cssText] = saved;
 			}
 		});
 		expect(
-			collapsedWidth,
-			"the original row layout reproduces the narrow title",
-		).toBeLessThan(160);
+			collapsedReadable,
+			"the original row layout reproduces the clipped title",
+		).toBe(false);
 		const titleBox = await title.boundingBox();
 		const chipBox = await chip.boundingBox();
 		const rowBox = await row.boundingBox();
