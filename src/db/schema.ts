@@ -1174,12 +1174,18 @@ export const habitLog = pgTable(
 		// skipped/not-awarded). Recorded so compensation/idempotency reuse the
 		// exact awarded amount instead of recomputing from live priority/status.
 		karmaDelta: integer("karma_delta").notNull().default(0),
+		completedBy: text("completed_by").references(() => user.id, {
+			onDelete: "set null",
+		}),
 		completedAt: timestamp("completed_at", { withTimezone: true }),
 		createdAt: timestamp("created_at", { withTimezone: true })
 			.defaultNow()
 			.notNull(),
 	},
-	(t) => [unique("habit_log_habit_date").on(t.habitId, t.date)],
+	(t) => [
+		unique("habit_log_habit_date").on(t.habitId, t.date),
+		index("habit_log_completed_by_idx").on(t.completedBy),
+	],
 );
 
 export const karma = pgTable("karma", {
@@ -1629,6 +1635,10 @@ export const userPrefRelations = relations(userPref, ({ one }) => ({
 }));
 
 export const habitLogRelations = relations(habitLog, ({ one }) => ({
+	completer: one(user, {
+		fields: [habitLog.completedBy],
+		references: [user.id],
+	}),
 	habit: one(task, { fields: [habitLog.habitId], references: [task.id] }),
 }));
 

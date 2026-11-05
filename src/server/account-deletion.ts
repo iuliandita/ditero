@@ -371,6 +371,10 @@ async function removeAccount(
 		"update task set fallback_user_id = null where fallback_user_id = $1",
 		[userId],
 	);
+	await client.query(
+		"update habit_log set completed_by = null where completed_by = $1",
+		[userId],
+	);
 	await client.query("delete from verification where identifier = $1", [
 		originalEmail,
 	]);

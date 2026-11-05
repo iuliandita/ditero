@@ -171,7 +171,7 @@ test("habits: add habit verb, new habits start daily, one Done label, Undo only 
 
 	const card = page.getByTestId("habit-card").filter({ hasText: "Stretch" });
 	// Started daily: the tracker renders, no recurrence dead end.
-	await expect(card.getByTestId("habit-streak")).toHaveText("0 days", {
+	await expect(card.getByTestId("habit-streak")).toHaveText("Streak: 0 days", {
 		timeout: 15000,
 	});
 	await expect(card.getByTestId("habit-track-daily")).toHaveCount(0);
@@ -183,20 +183,22 @@ test("habits: add habit verb, new habits start daily, one Done label, Undo only 
 	await expect(card.getByTestId("habit-adherence")).toHaveCount(0);
 
 	const done = card.getByTestId("habit-done");
-	await expect(done).toHaveText("Done today");
-	await expect(done).toHaveAttribute("aria-pressed", "false");
+	await expect(done).toHaveAccessibleName("Complete Stretch today");
+	await expect(done).toHaveAttribute("aria-checked", "false");
 	await expect(card.getByTestId("habit-skip")).toBeVisible();
 	await expect(card.getByTestId("habit-undo")).toHaveCount(0);
 
 	await done.click();
-	await expect(done).toHaveAttribute("aria-pressed", "true");
-	await expect(done).toHaveText("Done today");
-	await expect(card.getByRole("button", { name: "Done today" })).toBeVisible();
+	await expect(done).toHaveAttribute("aria-checked", "true");
+	await expect(done).toHaveAccessibleName("Complete Stretch today");
+	await expect(
+		card.getByRole("checkbox", { name: "Complete Stretch today" }),
+	).toBeVisible();
 
 	const undo = card.getByTestId("habit-undo");
 	await expect(undo).toBeVisible();
 	await undo.click();
-	await expect(done).toHaveAttribute("aria-pressed", "false");
+	await expect(done).toHaveAttribute("aria-checked", "false");
 	await expect(undo).toHaveCount(0);
 	await expect(done).toBeFocused();
 });

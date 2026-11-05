@@ -308,7 +308,7 @@ test("live ack: a real tap's action URL acks a habit and the open client sees it
 			.getByTestId("habit-card")
 			.filter({ hasText: HABIT })
 			.getByTestId("habit-done"),
-	).toHaveAttribute("aria-pressed", "true", { timeout: 30_000 });
+	).toHaveAttribute("aria-checked", "true", { timeout: 30_000 });
 	await expectSameDocument(page, url);
 
 	// The capability is single-use: a replay of the same URL is refused.
