@@ -192,9 +192,15 @@ export function parseQuickAdd(
 	}
 
 	const parser = dateParserFor(locale);
-	const dateResults = parser
-		? parser.parse(chars.join(""), now, { forwardDate: true })
-		: [];
+	const scanned = chars.join("");
+	// A match glued to a word ("55ccea73-813d-406e", "v2-3d") is not a date.
+	const glued = (c: string | undefined) => !!c && /[\p{L}\p{N}_-]/u.test(c);
+	const dateResults = (
+		parser ? parser.parse(scanned, now, { forwardDate: true }) : []
+	).filter(
+		(r) =>
+			!glued(scanned[r.index - 1]) && !glued(scanned[r.index + r.text.length]),
+	);
 	let dueAt: Date | null = null;
 	let dueAllDay = true;
 	if (dateResults.length > 0) {

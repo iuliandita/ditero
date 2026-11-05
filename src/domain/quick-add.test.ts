@@ -171,6 +171,23 @@ describe("parseQuickAdd", () => {
 		expect(r.title).toBe("eggs");
 		expect(r.tokens.map((t) => t.text)).toEqual(["~home", "~work"]);
 	});
+
+	test.each([
+		"Queued 55ccea73-813d-406e-95c3-9b97999f3fcd",
+		"Ship build v2-3d",
+		"Fix 3dprinter",
+	])("a date glued to a word stays in the title: %s", (input) => {
+		const r = parseQuickAdd(input, NOW);
+		expect(r.title).toBe(input);
+		expect(r.dueAt).toBeNull();
+	});
+
+	test("a standalone duration and an ISO date still parse", () => {
+		expect(parseQuickAdd("water plants in 3d", NOW).title).toBe("water plants");
+		const iso = parseQuickAdd("renew pass 2024-03-01", NOW);
+		expect(iso.title).toBe("renew pass");
+		expect(iso.dueAt).toEqual(new Date(2024, 2, 1, 12, 0, 0));
+	});
 });
 
 test("known destinations use the longest full name and leave unresolved text visible", () => {
