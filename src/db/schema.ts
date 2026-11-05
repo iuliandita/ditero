@@ -1182,7 +1182,10 @@ export const habitLog = pgTable(
 			.defaultNow()
 			.notNull(),
 	},
-	(t) => [unique("habit_log_habit_date").on(t.habitId, t.date)],
+	(t) => [
+		unique("habit_log_habit_date").on(t.habitId, t.date),
+		index("habit_log_completed_by_idx").on(t.completedBy),
+	],
 );
 
 export const karma = pgTable("karma", {

@@ -1,6 +1,9 @@
 import { zeroNodePg } from "@rocicorp/zero/server/adapters/pg";
+import { Elysia } from "elysia";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
+import { accountDeletionRoutes } from "../../src/server/account-deletion.ts";
+import type { Guards, Session } from "../../src/server/guards.ts";
 import { mutators } from "../../src/zero/mutators.ts";
 import { queries } from "../../src/zero/queries.ts";
 import { schema } from "../../src/zero/schema.gen.ts";
@@ -138,14 +141,57 @@ test.each([
 	expect(await logs()).toEqual([]);
 });
 
-test("membership removal and user deletion preserve the completed occurrence", async () => {
+test("membership removal and account deletion preserve the completed occurrence without its actor", async () => {
+	await log(owner, { ...args, date: "2026-11-04" });
 	await log(member);
 	await admin.query("delete from membership where id='ha-member-seat'");
-	expect(await logs()).toMatchObject([
-		{ completed_by: member, status: "done" },
+	expect(await logs()).toEqual(
+		expect.arrayContaining([
+			expect.objectContaining({ completed_by: member, status: "done" }),
+		]),
+	);
+	const guards: Guards = {
+		foreignOrigin: () => false,
+		guardedPost:
+			(handler) =>
+			async ({ request }) =>
+				handler(request, { user: { id: member } } as Session),
+		guardedGet:
+			(handler) =>
+			async ({ request }) =>
+				handler(request, { user: { id: member } } as Session),
+	};
+	const app = new Elysia().use(accountDeletionRoutes(runtime, guards));
+	const response = await app.handle(
+		new Request("http://localhost/api/account/delete", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ acknowledgeKeyLoss: true }),
+		}),
+	);
+	expect(response.status).toBe(200);
+	expect(await response.json()).toEqual({ deleted: true });
+	const deleted = await admin.query(
+		'select name, deleted_at from "user" where id=$1',
+		[member],
+	);
+	expect(deleted.rows).toEqual([
+		{ name: "Deleted user", deleted_at: expect.any(Date) },
 	]);
-	await admin.query('delete from "user" where id=$1', [member]);
-	expect(await logs()).toMatchObject([
-		{ completed_by: null, status: "done", karma_delta: 3 },
-	]);
+	expect(await logs()).toEqual(
+		expect.arrayContaining([
+			expect.objectContaining({
+				date,
+				completed_by: null,
+				status: "done",
+				karma_delta: 3,
+			}),
+			expect.objectContaining({
+				date: "2026-11-04",
+				completed_by: owner,
+				status: "done",
+				karma_delta: 3,
+			}),
+		]),
+	);
 });

@@ -2,8 +2,8 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "0e402d776e718bd063da3db031e0202030dea00cf2c7edb96a95daabceddb780",
-			"noImpact": "Habit rows use the standard round checkbox, a single muted metadata line, a dated history strip and the completer name in shared spaces. The percentage and repeat decoration are removed. Shared completion is explained on demand; existing task detail, themes, reading presets and access rules remain unchanged. No new setup or user-facing configuration needs documentation."
+			"sourceDigest": "f4826b94edf9c4428008ea92f5080b5c889b632e45f4cf980a0b2c87fc989e3e",
+			"noImpact": "Habit titles and metadata share one detail control, with shared-completion help in a separate 44px action. The dated strip anchors Today below its occurrence. Existing task detail, themes, reading presets and access rules remain unchanged. No new setup or user-facing configuration needs documentation."
 		},
 		"release": {
 			"sourceDigest": "98d834f1f7c042ae33a1984d6ae39401f5df31377c4f9faab00a1513827ba24e",
@@ -28,12 +28,12 @@
 			"note": "Preserve the Better Auth 1.7.12 upgrade, JWT/provider-account migrations, explicit provider linking, nonce validation, verified-email admission and scoped Apple origin checks. Reset atomically consumes its token, writes the password, verifies the mailbox and retires sessions, native authority, access tokens, feeds, passkeys, provider links and pending account proofs while retaining TOTP and backup codes. Enforce the enrolled local factor on every sign-in path, including social/OIDC/SAML callbacks, passkeys and native system-browser flows. Reuse the plugin challenge, provisional-session deletion and reset invalidation. Provider MFA and remembered-device cookies cannot substitute. Native grants retain their ID and stay unapproved until successful factor completion and explicit consent; no bridge permissions or credential formats change. Upgrade server/web together and reload sign-in pages; rollback loses this protection."
 		},
 		"compatibility": {
-			"sourceDigest": "921c688d44fca645f3a7997386b3ce9cd1d26fc3a787e349fc544bfddbda1ac6",
+			"sourceDigest": "9f3b42b57e1325f123ab9ee0955ad09c580db6e09d043e197f0deef49ba88b88",
 			"docs": ["docs/runbooks/backup-restore.md"],
-			"note": "Migration 0091 adds nullable habit_log.completed_by referencing the user with ON DELETE SET NULL. Existing logs remain unattributed. Direct and reminder completion derive the actor from authenticated context; duplicate ticks preserve the original attribution and Karma award. Membership removal and account deletion preserve the occurrence.",
+			"note": "Migration 0091 adds nullable habit_log.completed_by referencing the user with ON DELETE SET NULL. Existing logs remain unattributed. Direct and reminder completion derive the actor from authenticated context; duplicate ticks preserve the original attribution and Karma award. Membership removal preserves attribution; account deletion explicitly clears the actor while preserving the occurrence and anonymized user row. The actor index and validated foreign key match the generated schema.",
 			"upgrade": "Back up the coordinated recovery set, stop app and Zero writers and apply migration 0091 with the migration role before starting the updated app and Zero. No backfill or role-policy change is required.",
 			"backup": "Include habit logs and their nullable attribution in the regular coordinated PostgreSQL recovery set, with the existing attachment ciphertext and secrets.",
-			"rollback": "Retain the additive nullable column and its foreign key when running the preceding app. A pre-upgrade backup restore discards completions written after that backup.",
+			"rollback": "Retain the additive nullable column, index and foreign key when running the preceding app. Before upgrading again, stop writers and clear completed_by on all logs to remove stale attribution from the rollback window. A pre-upgrade backup restore discards later completions.",
 			"clientVersions": "Reload browser clients and update native clients to display attribution. Existing clients retain one shared tick per habit per day, and the updated server sets the caller even for older completion requests."
 		},
 		"clients": {

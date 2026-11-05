@@ -1,5 +1,5 @@
 import { useQuery, useZero } from "@rocicorp/zero/react";
-import { RotateCcw } from "lucide-react";
+import { RotateCcw, UsersRound } from "lucide-react";
 import { useId, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -174,7 +174,7 @@ export function HabitCard({
 				aria-describedby={describedBy}
 				data-task-id={task.id}
 				onClick={() => onOpenDetail(task)}
-				className="min-h-11 min-w-0 rounded text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+				className="min-h-11 min-w-0 rounded py-0.5 text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 			>
 				<span
 					className={cn(
@@ -184,6 +184,35 @@ export function HabitCard({
 					dir="auto"
 				>
 					{task.title}
+				</span>
+				<span className="flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
+					{streak?.projectionStatus === "complete" && (
+						<span data-testid="habit-streak">
+							{m.habit_streak_label({
+								days: m.habit_streak_days({ count: streak.current }),
+							})}
+						</span>
+					)}
+					{completer && (
+						<span
+							id={completionId}
+							data-testid="completed-by"
+							className="wrap-anywhere"
+						>
+							{m.task_completed_by({ name: `\u2068${completer}\u2069` })}
+						</span>
+					)}
+					{task.reminderTime && (
+						<span id={reminderId}>{task.reminderTime}</span>
+					)}
+					{(activation.status === "pending" ||
+						activation.status === "blocked") && (
+						<span id={activationId} className="text-warning">
+							{activation.status === "pending"
+								? m.activation_badge_pending()
+								: m.activation_badge_blocked()}
+						</span>
+					)}
 				</span>
 			</button>
 			<div className="flex items-center">
@@ -216,46 +245,20 @@ export function HabitCard({
 						<RotateCcw aria-hidden />
 					</Button>
 				)}
+				{shared && (
+					<Popover>
+						<PopoverTrigger
+							aria-label={m.habit_shared_label()}
+							className="flex size-11 items-center justify-center rounded text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+						>
+							<UsersRound className="size-4" aria-hidden />
+						</PopoverTrigger>
+						<PopoverContent>{m.habit_shared_rule()}</PopoverContent>
+					</Popover>
+				)}
 				<ReminderChip task={task} />
 			</div>
 			<div className="col-span-2 col-start-2 min-w-0">
-				<div className="flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
-					{streak?.projectionStatus === "complete" && (
-						<span data-testid="habit-streak">
-							{m.habit_streak_label({
-								days: m.habit_streak_days({ count: streak.current }),
-							})}
-						</span>
-					)}
-					{completer && (
-						<span
-							id={completionId}
-							data-testid="completed-by"
-							className="wrap-anywhere"
-						>
-							{m.task_completed_by({ name: `\u2068${completer}\u2069` })}
-						</span>
-					)}
-					{shared && (
-						<Popover>
-							<PopoverTrigger className="min-h-11 rounded underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-								{m.habit_shared_label()}
-							</PopoverTrigger>
-							<PopoverContent>{m.habit_shared_rule()}</PopoverContent>
-						</Popover>
-					)}
-					{task.reminderTime && (
-						<span id={reminderId}>{task.reminderTime}</span>
-					)}
-					{(activation.status === "pending" ||
-						activation.status === "blocked") && (
-						<span id={activationId} className="text-warning">
-							{activation.status === "pending"
-								? m.activation_badge_pending()
-								: m.activation_badge_blocked()}
-						</span>
-					)}
-				</div>
 				{streak ? (
 					streak.projectionStatus === "complete" ? (
 						<HabitTracker streak={streak} today={today} />

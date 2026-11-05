@@ -121,6 +121,19 @@ describe("habits / karma / focus schema", () => {
 		expect(rows).toEqual([
 			{ delete_rule: "SET NULL", table_name: "user", column_name: "id" },
 		]);
+		const constraint = await pool.query(
+			"select convalidated from pg_constraint where conrelid='habit_log'::regclass and conname='habit_log_completed_by_user_id_fk'",
+		);
+		expect(constraint.rows).toEqual([{ convalidated: true }]);
+		const indexes = await pool.query(
+			"select indexdef from pg_indexes where schemaname='public' and tablename='habit_log' and indexname='habit_log_completed_by_idx'",
+		);
+		expect(indexes.rows).toEqual([
+			{
+				indexdef:
+					"CREATE INDEX habit_log_completed_by_idx ON public.habit_log USING btree (completed_by)",
+			},
+		]);
 	});
 
 	test("(habit_id, date) unique constraint present", async () => {

@@ -1,5 +1,5 @@
 {
-  "id": "f3f6747d-b07c-4c87-8a87-328874c1eb1b",
+  "id": "34f88834-2c2a-4727-af9d-c3374b59cccd",
   "prevId": "4c898102-d1d1-47ba-b3a7-70745347a4ed",
   "version": "7",
   "dialect": "postgresql",
@@ -1780,7 +1780,23 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "habit_log_completed_by_idx": {
+          "name": "habit_log_completed_by_idx",
+          "columns": [
+            {
+              "expression": "completed_by",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "habit_log_habit_id_task_id_fk": {
           "name": "habit_log_habit_id_task_id_fk",

@@ -37,9 +37,15 @@ export function HabitTracker({
 	const last = heatmap.at(-1);
 	if (!first || !last) return null;
 	return (
-		<div className="mt-1 flex max-w-sm flex-col gap-1.5 text-xs text-muted-foreground">
+		<div className="mt-1 flex max-w-sm flex-col gap-1 text-xs text-muted-foreground">
+			<span data-testid="habit-history-range">
+				{m.habit_history_range({
+					first: formatDayKey(first.date),
+					last: formatDayKey(last.date),
+				})}
+			</span>
 			<div
-				className="grid gap-1"
+				className="grid gap-x-1 gap-y-1.5"
 				style={{
 					gridTemplateColumns: `repeat(${heatmap.length}, minmax(0, 1fr))`,
 					width: `min(100%, ${heatmap.length * 12 - 4}px)`,
@@ -55,6 +61,7 @@ export function HabitTracker({
 							aria-label={label}
 							title={label}
 							aria-current={cell.date === today ? "date" : undefined}
+							style={{ gridRow: 1 }}
 							className={cn(
 								"aspect-square w-full max-w-2 rounded-full",
 								CELL_STYLE[cell.status],
@@ -64,19 +71,14 @@ export function HabitTracker({
 						/>
 					);
 				})}
-			</div>
-			<div
-				className="flex flex-wrap items-center justify-between gap-x-2"
-				data-testid="habit-history-range"
-			>
-				<span>
-					{m.habit_history_range({
-						first: formatDayKey(first.date),
-						last: formatDayKey(last.date),
-					})}
-				</span>
 				{last.date === today && (
-					<span data-testid="habit-history-today">{m.due_today()}</span>
+					<span
+						data-testid="habit-history-today"
+						className="justify-self-center whitespace-nowrap"
+						style={{ gridRow: 2, gridColumn: heatmap.length }}
+					>
+						{m.due_today()}
+					</span>
 				)}
 			</div>
 		</div>
