@@ -104,11 +104,12 @@ test("sidebar leads with Today, nests lists under folders, and has no bare headi
 	await expect(rows.nth(1)).toHaveText("All tasks");
 	await expect(rows.nth(2)).toHaveText("Assigned to me");
 
-	// Section order: built-ins, then lists, then dashboards.
+	// Section order: account-wide first (built-ins, dashboards), then the
+	// workspace's lists, headed by the switcher.
 	const order = await nav
 		.locator("[data-nav-group]")
 		.evaluateAll((els) => els.map((el) => el.getAttribute("data-nav-group")));
-	expect(order).toEqual(["primary", "lists", "dashboards"]);
+	expect(order).toEqual(["primary", "dashboards", "lists"]);
 
 	// The empty folder is a row with a next step under it, not a bare heading
 	// stacked on a generic one.
@@ -117,7 +118,8 @@ test("sidebar leads with Today, nests lists under folders, and has no bare headi
 	await expect(folder).toContainText("Trips");
 	await expect(folder.getByTestId("folder-empty")).toBeVisible();
 	const lists = nav.getByRole("region", { name: "Lists" });
-	await expect(lists.getByText("Lists", { exact: true })).toHaveCount(1);
+	await expect(lists.getByTestId("workspace-switcher")).toHaveCount(1);
+	await expect(lists.getByText("Lists", { exact: true })).toHaveCount(0);
 	// Every titled section has at least one row under it.
 	for (const section of await nav.locator("section[data-nav-group]").all())
 		expect(

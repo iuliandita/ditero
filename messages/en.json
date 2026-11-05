@@ -1516,7 +1516,7 @@
 	"mutation_failed": "Something went wrong.",
 	"mutation_offline_not_saved": "You're offline, this change wasn't saved. Reconnect and try again.",
 	"sync_synced_title": "Synced",
-	"sync_synced_detail": "Connected. Changes you make are saved to the server right away.",
+	"sync_synced_detail": "Connected to the server. Nothing you changed here is waiting to sync.",
 	"sync_syncing_title": "Syncing",
 	"sync_syncing_detail": "Your changes are saved on this device and are on their way to the server.",
 	"sync_offline_title": "Offline",
@@ -1549,6 +1549,7 @@
 	"sync_reauth_title": "Sign in to sync",
 	"sync_reauth_detail": "Your sign-in expired while you were away. Your edits are kept on this device and sync after you sign in again.",
 	"sync_reauth_action": "Sign in again",
+	"sync_details_action": "Details",
 	"sync_pending_count": [
 		{
 			"declarations": [

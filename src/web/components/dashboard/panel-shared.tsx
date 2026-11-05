@@ -83,14 +83,16 @@ export function usePanelEntries(
 				const workspace = workspaces.find((w) => w.id === list?.workspaceId);
 				return {
 					...entry,
-					sourceWorkspace: workspace
-						? { name: workspace.name, kind: workspace.kind ?? "shared" }
-						: undefined,
-					sourceContext: workspace
-						? workspace.kind === "personal"
-							? m.scope_source_personal({ workspace: workspace.name })
-							: m.scope_source_shared({ workspace: workspace.name })
-						: undefined,
+					sourceWorkspace:
+						workspace && workspaces.length > 1
+							? { name: workspace.name, kind: workspace.kind ?? "shared" }
+							: undefined,
+					sourceContext:
+						workspace && workspaces.length > 1
+							? workspace.kind === "personal"
+								? m.scope_source_personal({ workspace: workspace.name })
+								: m.scope_source_shared({ workspace: workspace.name })
+							: undefined,
 				};
 			}),
 		[

@@ -30,6 +30,7 @@ import type {
 } from "../../../zero/schema.gen.ts";
 import type { SavedView } from "../../hooks/useViews.ts";
 import type { BuiltinView } from "../../views/builtins.ts";
+import { BrandLogo, BrandSymbol } from "../BrandLogo.tsx";
 import { KeyText } from "../ui/key-text.tsx";
 import type { RowAction } from "../ui/row-action.ts";
 import { RowActions, useRowContextMenu } from "../ui/row-actions.tsx";
@@ -192,6 +193,7 @@ export function NavGroup({
 	open = true,
 	onToggle,
 	hideTitle,
+	heading,
 	touch,
 	children,
 }: {
@@ -200,20 +202,25 @@ export function NavGroup({
 	open?: boolean;
 	onToggle?: () => void;
 	hideTitle?: boolean;
+	// Replaces the text title: the block is headed by a control (the workspace
+	// switcher) that already says what it scopes.
+	heading?: ReactNode;
 	// Phones: the toggle grows to a 44px target.
 	touch?: boolean;
 	children: ReactNode;
 }) {
 	const id = useId();
 	const expanded = !onToggle || open;
+	const untitled = hideTitle || heading != null;
 	return (
 		<section
-			aria-labelledby={hideTitle ? undefined : id}
-			aria-label={hideTitle ? title : undefined}
+			aria-labelledby={untitled ? undefined : id}
+			aria-label={untitled ? title : undefined}
 			data-nav-group={section}
 			className="mt-5"
 		>
-			{!hideTitle &&
+			{heading}
+			{!untitled &&
 				(onToggle ? (
 					<button
 						type="button"
@@ -247,10 +254,11 @@ export function NavGroup({
 	);
 }
 
-// Persistent desktop rail (280px, collapsible to a 64px icon rail). Top: the
-// workspace switcher. Then navigation in order of use: Today and the other
-// built-in views, the workspace's lists by folder, then pinned views and
-// dashboards (both foldable). Bottom: create, settings, theme, collapse.
+// Persistent desktop rail (280px, collapsible to a 64px icon rail). Account-wide
+// destinations first: Today and the other built-in views, then pinned views and
+// dashboards (both foldable). The workspace switcher then heads the one block
+// it scopes, that workspace's lists by folder. Bottom: create, settings, theme,
+// collapse.
 export function Sidebar({
 	workspaces,
 	activeId,
@@ -366,20 +374,6 @@ export function Sidebar({
 				collapsed ? "w-16" : "w-[280px]",
 			)}
 		>
-			<div className="p-2">
-				<WorkspaceSwitcherMenu
-					workspaces={workspaces}
-					activeId={activeId}
-					onSelect={onSelectWorkspace}
-					onManageMembers={onManageMembers}
-					onCreateWorkspace={onCreateWorkspace}
-					canManageMembers={canManageMembers}
-					onOpenSettings={onOpenSettings}
-					onOpenAppearance={onOpenAppearance}
-					collapsed={collapsed}
-				/>
-			</div>
-
 			<nav
 				className="flex-1 overflow-y-auto px-2 pb-3"
 				aria-label={m.sidebar_lists_nav_label()}
@@ -388,12 +382,70 @@ export function Sidebar({
 					{builtinViews.map(viewRow)}
 				</ul>
 
-				{(groups.length > 0 || canCreateList) && (
+				{pinnedViews.length > 0 && (
 					<NavGroup
-						title={m.sidebar_ungrouped_lists()}
-						section="lists"
+						title={m.sidebar_views_heading()}
+						section="views"
+						open={isSectionOpen("views", pinnedViews.length > 0)}
+						onToggle={
+							collapsed
+								? undefined
+								: () => onToggleSection("views", pinnedViews.length > 0)
+						}
 						hideTitle={collapsed}
 					>
+						<ul className="flex flex-col gap-0.5">
+							{pinnedViews.map(viewRow)}
+						</ul>
+					</NavGroup>
+				)}
+
+				{dashboards.length > 0 && (
+					<NavGroup
+						title={m.sidebar_dashboards_heading()}
+						section="dashboards"
+						open={isSectionOpen("dashboards", dashboards.length > 0)}
+						onToggle={
+							collapsed
+								? undefined
+								: () => onToggleSection("dashboards", dashboards.length > 0)
+						}
+						hideTitle={collapsed}
+					>
+						<ul className="flex flex-col gap-0.5">
+							{dashboards.map((d) => (
+								<NavRow
+									key={d.id}
+									name={d.name}
+									icon={dashboardIcon(d)}
+									kind="dashboard"
+									active={dashboardActive(d.id)}
+									onOpen={() => onOpenDashboard(d.id)}
+									collapsed={collapsed}
+									actions={dashboardActions(d)}
+								/>
+							))}
+						</ul>
+					</NavGroup>
+				)}
+				<NavGroup
+					title={m.sidebar_ungrouped_lists()}
+					section="lists"
+					heading={
+						<WorkspaceSwitcherMenu
+							workspaces={workspaces}
+							activeId={activeId}
+							onSelect={onSelectWorkspace}
+							onManageMembers={onManageMembers}
+							onCreateWorkspace={onCreateWorkspace}
+							canManageMembers={canManageMembers}
+							onOpenSettings={onOpenSettings}
+							onOpenAppearance={onOpenAppearance}
+							collapsed={collapsed}
+						/>
+					}
+				>
+					{(groups.length > 0 || canCreateList) && (
 						<ul className="flex flex-col gap-0.5">
 							{groups.map((group) =>
 								group.folder ? (
@@ -446,55 +498,8 @@ export function Sidebar({
 								</li>
 							)}
 						</ul>
-					</NavGroup>
-				)}
-
-				{pinnedViews.length > 0 && (
-					<NavGroup
-						title={m.sidebar_views_heading()}
-						section="views"
-						open={isSectionOpen("views", pinnedViews.length > 0)}
-						onToggle={
-							collapsed
-								? undefined
-								: () => onToggleSection("views", pinnedViews.length > 0)
-						}
-						hideTitle={collapsed}
-					>
-						<ul className="flex flex-col gap-0.5">
-							{pinnedViews.map(viewRow)}
-						</ul>
-					</NavGroup>
-				)}
-
-				{dashboards.length > 0 && (
-					<NavGroup
-						title={m.sidebar_dashboards_heading()}
-						section="dashboards"
-						open={isSectionOpen("dashboards", dashboards.length > 0)}
-						onToggle={
-							collapsed
-								? undefined
-								: () => onToggleSection("dashboards", dashboards.length > 0)
-						}
-						hideTitle={collapsed}
-					>
-						<ul className="flex flex-col gap-0.5">
-							{dashboards.map((d) => (
-								<NavRow
-									key={d.id}
-									name={d.name}
-									icon={dashboardIcon(d)}
-									kind="dashboard"
-									active={dashboardActive(d.id)}
-									onOpen={() => onOpenDashboard(d.id)}
-									collapsed={collapsed}
-									actions={dashboardActions(d)}
-								/>
-							))}
-						</ul>
-					</NavGroup>
-				)}
+					)}
+				</NavGroup>
 			</nav>
 
 			<div className="border-t p-2">
@@ -580,6 +585,13 @@ export function Sidebar({
 						</span>
 					</button>
 				)}
+			</div>
+
+			<div
+				data-testid="sidebar-brand"
+				className={cn("px-4 pb-2", collapsed && "flex justify-center px-0")}
+			>
+				{collapsed ? <BrandSymbol /> : <BrandLogo lazy className="w-20" />}
 			</div>
 
 			<div
