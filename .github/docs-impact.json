@@ -6,16 +6,19 @@
 			"noImpact": "Copy-only change: clearer child-account, invite-role, members-audience and access-token example text in all six locales. No behavior, permission or documented flow changes, and no docs describe these strings."
 		},
 		"release": {
-			"sourceDigest": "98d834f1f7c042ae33a1984d6ae39401f5df31377c4f9faab00a1513827ba24e",
-			"noImpact": "The pinned checkout action and the security scanner and cosign tool versions receive compatible updates; release steps and published artifacts are unchanged."
+			"sourceDigest": "12d21095b8fc7668bd9a88b77ca720f25255353dff506d997b31bd4cba3fdde8",
+			"docs": ["RELEASING.md"],
+			"note": "Prepare third beta 0.1.0-beta.3/Android code 15 after published 0.1.0-beta.2; retain signing certificate, documentation epoch, remaining prerelease/native limits and prerelease publication wording. The pinned checkout action and the security scanner and cosign tool versions receive compatible updates; release steps and published artifacts are unchanged."
 		},
 		"configuration": {
-			"sourceDigest": "f89929e3553b66d7aa44e447a86d74b21aef54f4eee1c0a114e0838c76311e96",
-			"noImpact": "Re-pins musl 1.2.6-r3 and tzdata 2026f-r0 in the experimental bundle package lock because Alpine removed the previous builds; image contents, configuration and deployment steps are otherwise unchanged."
+			"sourceDigest": "394feec706ba7f5a348b39cfc238c0c713223a1628f5cbd338b0ff2f38640074",
+			"docs": ["deploy/helm/ditero/README.md", "deploy/kustomize/README.md"],
+			"note": "Helm chart/appVersion, default app/Zero tags and Kustomize labels/images/overrides move to 0.1.0-beta.3 with no value or format changes. The experimental bundle package lock re-pins musl 1.2.6-r3 and tzdata 2026f-r0 because Alpine removed the previous builds; configuration is otherwise unchanged."
 		},
 		"deployment": {
-			"sourceDigest": "bdaad2f3cf949dd63209383548342ddb6b69e7d54320a702de6883090b3e27f4",
-			"noImpact": "Re-pins musl 1.2.6-r3 and tzdata 2026f-r0 in the experimental bundle package lock because Alpine removed the previous builds; image contents, configuration and deployment steps are otherwise unchanged."
+			"sourceDigest": "481e1dc63ba19a48fe433a6354e5cec6ec1ffd645d7ab98380357d2f2135d3f5",
+			"docs": ["deploy/helm/ditero/README.md", "deploy/kustomize/README.md"],
+			"note": "Published defaults move to 0.1.0-beta.3; upgrades from beta.2 need no cache rebuild and apply one additive database migration for the habit completer column. The experimental bundle package lock re-pins musl 1.2.6-r3 and tzdata 2026f-r0 because Alpine removed the previous builds; deployment steps are otherwise unchanged."
 		},
 		"native": {
 			"sourceDigest": "b455ef5963764bd40788e6427fa951e73c1ae830399a24e62cc398f55970fa15",

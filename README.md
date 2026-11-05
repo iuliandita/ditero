@@ -23,11 +23,10 @@ are included, with no subscriptions or paid feature unlocks.
 
 [Website](https://ditero.app/) | [Quick start](#run-it-docker-compose) | [Features](#available-on-develop) | [Documentation](#documentation) | [Roadmap](docs/ROADMAP.md) | [Changelog](CHANGELOG.md) | [Brand assets](assets/brand/README.md)
 
-> **Beta.** `0.1.0-beta.2` is being prepared; it is a `0.x` prerelease with
+> **Beta.** `0.1.0-beta.3` is being prepared; it is a `0.x` prerelease with
 > breaking changes possible before `v1.0.0`. It is not stable. Until its
 > publication completes, the latest published prerelease remains
-> [`v0.1.0-beta.1`](https://github.com/iuliandita/ditero/releases/tag/v0.1.0-beta.1),
-> whose Android and desktop apps cannot sync; use the web app or wait for beta 2.
+> [`v0.1.0-beta.2`](https://github.com/iuliandita/ditero/releases/tag/v0.1.0-beta.2).
 > The [changelog](CHANGELOG.md) describes the candidate and earlier releases.
 > The native desktop archive-import entry remains unavailable pending transfer
 > and recovery qualification. Native device/platform qualification, general deep
@@ -193,11 +192,11 @@ and Zero entrypoints percent-encode them when building DSNs. Explicit DSNs must
 already percent-encode credentials. Do not print DSNs in diagnostic reports.
 
 That pulls `ghcr.io/iuliandita/ditero:nightly` and `:nightly-zero`. Add `--build`
-to build from this checkout instead. Set `DITERO_IMAGE_TAG=0.0.1-alpha.12`
-to run the latest published prerelease with matching app and Zero tags until beta
-publication completes. Commit-specific nightly tags use different suffix ordering
-for app and Zero, so pin those two
-service images separately in a Compose override; see [image tags](RELEASING.md#channels).
+to build from this checkout instead. Set `DITERO_IMAGE_TAG=0.1.0-beta.2`
+to run the latest published prerelease with matching app and Zero tags until beta 3
+publication completes, then `0.1.0-beta.3`. Without it the Compose file pulls
+nightly. Commit-specific nightly tags use different suffix ordering for app and
+Zero, so pin those two service images separately in a Compose override; see [image tags](RELEASING.md#channels).
 
 To reach it from anything other than the machine it runs on, set
 `BETTER_AUTH_URL` and `PUBLIC_ZERO_URL` to addresses that machine's browsers can
