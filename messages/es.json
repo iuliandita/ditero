@@ -598,7 +598,6 @@
 	"task_field_subtasks": "Subtareas",
 	"task_due_date_aria": "Fecha de vencimiento",
 	"task_due_time_aria": "Hora de vencimiento",
-	"task_due_clear": "Borrar la fecha de vencimiento",
 	"task_no_focus_time": "Todavía no hay tiempo de concentración",
 	"task_start_focus": "Concentrarme",
 	"task_skip_occurrence": "Saltarme esta repetición",
@@ -611,6 +610,7 @@
 	"task_delete": "Eliminar la tarea",
 	"task_detail_done_aria": "Hecha",
 	"task_detail_more": "Más opciones",
+	"task_add_details": "Añadir detalles",
 	"task_more_repeats": "Se repite",
 	"task_more_reminder": "Recordatorio {time}",
 	"task_more_urgent": "Urgente",
@@ -1429,21 +1429,6 @@
 	"accept_error_revoked": "Esta invitación ha sido revocada.",
 	"accept_error_generic": "No se pudo aceptar esta invitación.",
 	"assignee_open": "Asignar",
-	"assignee_open_count": [
-		{
-			"declarations": [
-				"input count",
-				"local countNum = count: number",
-				"local countPlural = count: plural"
-			],
-			"selectors": ["countPlural"],
-			"match": {
-				"countPlural=one": "Responsables ({countNum})",
-				"countPlural=many": "Responsables ({countNum})",
-				"countPlural=other": "Responsables ({countNum})"
-			}
-		}
-	],
 	"assignee_chips_aria": "Responsables: {names}",
 	"task_assignees_more": "{name} +{count}",
 	"assignee_invite_confirm": "¿Invitar a {name} a {workspace} y asignarle la tarea?",
@@ -2268,6 +2253,8 @@
 	"aggregate_scope_selected": "En: {workspaces}",
 	"scope_source_personal": "{workspace} · Personal",
 	"scope_source_shared": "{workspace} · Compartido",
+	"task_visibility_shared": "Todos en {workspace} pueden ver esto",
+	"task_visibility_personal": "Solo tú puedes ver esto",
 	"calendar_go_today": "Hoy",
 	"calendar_show_earlier": "Mostrar fechas anteriores",
 	"calendar_hide_earlier": "Ocultar fechas anteriores",
