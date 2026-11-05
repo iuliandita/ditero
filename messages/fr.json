@@ -383,6 +383,9 @@
 	"priority_medium": "Moyenne",
 	"priority_high": "Haute",
 	"priority_coded": "{code} {name}",
+	"priority_group_high": "Priorité haute",
+	"priority_group_medium": "Priorité moyenne",
+	"priority_group_low": "Priorité basse",
 	"due_today": "Aujourd'hui",
 	"due_tomorrow": "Demain",
 	"list_completed_count": [
@@ -442,11 +445,6 @@
 	"syntax_hint_title": "Astuces de saisie",
 	"syntax_hint_word": "nom",
 	"syntax_hint_priority": "Priorité, p1 est la plus haute",
-	"syntax_hint_example": "Exemple : Appeler le plombier {date} {priority} #maison",
-	"syntax_hint_example_nodate": "Exemple : Appeler le plombier {priority} #maison",
-	"syntax_hint_dismiss": "Masquer les astuces de saisie",
-	"syntax_hint_inline_lead": "Ouvrir l'ajout rapide ({key})",
-	"syntax_hint_inline_lead_nokey": "Ouvrir l'ajout rapide",
 	"quickadd_adding_to": "Ajout dans {list}",
 	"quickadd_no_list": "Aucune liste disponible",
 	"quickadd_list_not_found": "Aucune liste nommée {list}",
@@ -456,6 +454,7 @@
 	"quickadd_shortcuts": "Raccourcis",
 	"quickadd_failed": "Impossible d'ajouter la tâche.",
 	"quickadd_chip_remove": "Retirer {token}",
+	"list_add_chip_keep": "Garder {token} comme texte",
 	"group_assigned_to_me": "Assignés à moi",
 	"group_unassigned": "Non assignés",
 	"group_unknown_user": "Quelqu'un",
@@ -551,6 +550,7 @@
 	"shopping_category_other": "Autre",
 	"task_reorder_handle": "Réorganiser la tâche",
 	"task_priority_aria": "Priorité : {priority}",
+	"task_part_of": "Fait partie de {title}",
 	"task_open_details": "Ouvrir les détails",
 	"task_subtask_progress_aria": [
 		{
@@ -1433,6 +1433,7 @@
 	"accept_error_generic": "Cette invitation n'a pas pu être acceptée.",
 	"assignee_open": "Assigner",
 	"assignee_chips_aria": "Assignés : {names}",
+	"task_assignees_more": "{name} +{count}",
 	"assignee_invite_confirm": "Inviter {name} dans {workspace} et lui assigner la tâche ?",
 	"assignee_invite_confirm_no_workspace": "Inviter {name} dans ce workspace et lui assigner la tâche ?",
 	"assignee_invite_hint": "L'assignation prend effet dès que la personne accepte l'invitation.",
@@ -1546,7 +1547,7 @@
 	"mutation_failed": "Un problème est survenu.",
 	"mutation_offline_not_saved": "Tu es hors ligne, cette modification n'a pas été enregistrée. Reconnecte-toi et réessaie.",
 	"sync_synced_title": "Synchronisé",
-	"sync_synced_detail": "Connecté. Tes modifications sont enregistrées sur le serveur tout de suite.",
+	"sync_synced_detail": "Connecté au serveur. Rien de ce que tu as modifié ici n'attend d'être synchronisé.",
 	"sync_syncing_title": "Synchronisation",
 	"sync_syncing_detail": "Tes modifications sont enregistrées sur cet appareil et partent vers le serveur.",
 	"sync_offline_title": "Hors ligne",
@@ -1579,6 +1580,7 @@
 	"sync_reauth_title": "Connecte-toi pour synchroniser",
 	"sync_reauth_detail": "Ta connexion a expiré pendant ton absence. Tes modifications restent sur cet appareil et seront synchronisées quand tu te reconnecteras.",
 	"sync_reauth_action": "Se reconnecter",
+	"sync_details_action": "Détails",
 	"sync_pending_count": [
 		{
 			"declarations": [
@@ -2249,8 +2251,6 @@
 	"reset_done_two_factor": "Tes paramètres actuels de double authentification restent inchangés. Si on te demande un code que tu n'as jamais configuré, demande à l'administrateur de cette instance Ditero.",
 	"reset_rate_limited": "Trop de tentatives de réinitialisation. Attends quelques minutes et réessaie.",
 	"login_existing_account": "Tu as déjà un compte ?",
-	"syntax_hint_inline_literal": "Ce champ enregistre ton texte tel quel.",
-	"syntax_hint_details": "Syntaxe de l'ajout rapide",
 	"aggregate_scope_all": "Dans tous tes espaces de travail",
 	"aggregate_scope_selected": "Dans : {workspaces}",
 	"scope_source_personal": "{workspace} · Personnel",

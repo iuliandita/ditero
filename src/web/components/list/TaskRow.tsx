@@ -16,7 +16,6 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { AssigneeChips } from "@/components/people/AssigneeChips";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { checkShapeFor, checkToneFor } from "@/lib/check-shape";
@@ -25,7 +24,6 @@ import {
 	strikeClass,
 	useJustCompleted,
 } from "@/lib/completion-feedback";
-import { ListIcon } from "@/lib/list-icon";
 import {
 	formatDue,
 	isOverdue,
@@ -41,12 +39,15 @@ import { m } from "../../../paraglide/messages.js";
 import { mutators } from "../../../zero/mutators.ts";
 import { queries } from "../../../zero/queries.ts";
 import type { Label, schema, Task } from "../../../zero/schema.gen.ts";
+import { useLocalDay } from "../../hooks/useLocalDay.ts";
 import { useTaskImportActivationMap } from "../../hooks/useTaskImportActivation.ts";
+import { useUserPref } from "../../hooks/useUserPref.ts";
 import { formatDayKey } from "../../lib/intl-format.ts";
 import type { HabitOccurrence } from "../../views/habit-occurrence.ts";
 import { ReminderChip } from "../task/ReminderChip.tsx";
 import { useConfirm } from "../ui/confirm.tsx";
 import { RowActions, useRowContextMenu } from "../ui/row-actions.tsx";
+import { AssigneeNames } from "./AssigneeNames.tsx";
 import { CompletedBy } from "./CompletedBy.tsx";
 import { type RowSelection, SelectToggle } from "./SelectToggle.tsx";
 import {
@@ -190,18 +191,18 @@ function SwipeRow({
 	);
 }
 
-function DueChip({ task }: { task: Task }) {
+function DueChip({ task, omitToday }: { task: Task; omitToday: boolean }) {
 	if (task.dueAt == null) return null;
-	const overdue = isOverdue(task);
+	const label = formatDue(task.dueAt, task.dueAllDay, omitToday);
+	if (!label) return null;
 	return (
 		<span
 			className={cn(
-				"inline-flex items-center gap-1 text-xs",
-				overdue ? "text-destructive" : "text-muted-foreground",
+				"shrink-0 text-xs",
+				isOverdue(task) ? "text-destructive" : "text-muted-foreground",
 			)}
 		>
-			<CalendarClock className="size-3 shrink-0" />
-			{formatDue(task.dueAt, task.dueAllDay)}
+			{label}
 		</span>
 	);
 }
@@ -214,16 +215,14 @@ const FLAG_FILL: Record<number, string> = {
 	1: "fill-none",
 };
 
+// Sits right after the title, so the word lives in the accessible name. High
+// contrast and forced colors show it (index.css), since fill alone is a weak cue.
 function PriorityFlag({
 	id,
 	priority,
-	className,
-	dashboard = false,
 }: {
 	id: string;
 	priority: number | null | undefined;
-	className?: string;
-	dashboard?: boolean;
 }) {
 	const meta = priorityMeta(priority);
 	if (!meta) return null;
@@ -235,18 +234,12 @@ function PriorityFlag({
 			aria-label={m.task_priority_aria({ priority: label })}
 			data-testid="task-priority"
 			data-priority={meta.value}
-			className={cn("inline-flex shrink-0 items-center gap-1", className)}
+			className="inline-flex h-5 shrink-0 items-center gap-1"
 		>
-			{/* Reserve dashboard desktop space; phones keep the word in metadata. */}
 			<span
 				aria-hidden
 				data-testid="task-priority-text"
-				className={cn(
-					"hidden text-xs text-muted-foreground",
-					dashboard
-						? "md:inline md:invisible md:group-hover:visible md:group-has-[:focus-visible]:visible"
-						: "group-hover:inline group-has-[:focus-visible]:inline",
-				)}
+				className="hidden text-xs text-muted-foreground"
 			>
 				{label}
 			</span>
@@ -288,6 +281,7 @@ export function TaskRow({
 	sourceWorkspace,
 	parentContext,
 	occurrence,
+	omitToday = false,
 }: {
 	task: Task;
 	kind: ListKind;
@@ -305,8 +299,10 @@ export function TaskRow({
 	list?: { title: string; icon: string | null } | null;
 	sourceContext?: string;
 	sourceWorkspace?: TaskSourceWorkspace;
-	parentContext?: string;
+	parentContext?: ReactNode;
 	occurrence?: HabitOccurrence;
+	// The Today view already names the day, so a row leaves it out.
+	omitToday?: boolean;
 }) {
 	const card = variant === "card";
 	const dashboard = density === "dashboard";
@@ -328,6 +324,8 @@ export function TaskRow({
 	const displayedDone = occurrence?.done ?? task.done ?? false;
 	const canToggle = canEdit && (occurrence?.canToggle ?? true);
 	const justCompleted = useJustCompleted(displayedDone);
+	const { pref } = useUserPref();
+	const today = useLocalDay(pref.timezone);
 
 	// The caller's role in the workspace owning this task's list. The mutators
 	// re-check on write; this only keeps the menu from offering a refusal.
@@ -416,7 +414,6 @@ export function TaskRow({
 	const ids = useId();
 	const badgeId = `${ids}-badge`;
 	const metaId = `${ids}-meta`;
-	const parentId = `${ids}-parent`;
 	const progressId = `${ids}-progress`;
 	const priorityId = `${ids}-priority`;
 	const completionId = `${ids}-completion`;
@@ -424,14 +421,14 @@ export function TaskRow({
 		activationStatus === "pending" || activationStatus === "blocked";
 	const showProgress = kind === "project" && total > 0;
 	const hasPriority = !bare && priorityMeta(task.priority) != null;
+	const hasMeta = !bare || !!(sourceContext || list || parentContext);
 	// The checkbox carries the title and the done state; the open button would
 	// only repeat it, so it names its action and points at the row's details.
 	const describedBy =
 		[
 			completionId,
-			parentContext && parentId,
 			showBadge && badgeId,
-			(!bare || sourceContext || list) && metaId,
+			hasMeta && metaId,
 			showProgress && progressId,
 			hasPriority && priorityId,
 		]
@@ -477,11 +474,15 @@ export function TaskRow({
 			>
 				{/* data-kbd-row scopes the roving row actions to this row; the open
 				    button carries data-kbd-nav (roving focus + open target). `group`
-				    is what RowActions' md:group-hover reveal keys off. */}
+				    is what RowActions' md:group-hover reveal keys off. --row-slot is
+				    the check's box: the title's first line is centered in the same
+				    height, so check, title and flag share one line. */}
 				<div
 					className={cn(
-						"group group/completion flex min-h-12 gap-2 rounded-md px-1 py-1 transition-colors duration-(--motion-fast) ease-(--motion-ease) [-webkit-touch-callout:none] motion-reduce:transition-none hover:bg-muted/30 active:bg-muted/50 pointer-coarse:select-none data-long-pressed:bg-muted/60 data-selected:bg-muted data-selected:hover:bg-muted",
-						card ? "items-start" : "items-center",
+						"group group/completion flex min-h-12 items-start gap-2 rounded-md px-1 py-1 transition-colors duration-(--motion-fast) ease-(--motion-ease) [-webkit-touch-callout:none] motion-reduce:transition-none hover:bg-(--row-hover) active:bg-(--row-active) pointer-coarse:select-none data-long-pressed:bg-(--row-active) data-selected:bg-(--row-active) data-selected:hover:bg-(--row-active) has-[[data-kbd-nav]:focus-visible]:ring-2 has-[[data-kbd-nav]:focus-visible]:ring-ring has-[[data-kbd-nav]:focus-visible]:ring-inset",
+						card
+							? "[--row-slot:2rem]"
+							: "[--row-slot:2.75rem] md:[--row-slot:2.5rem]",
 					)}
 					title={
 						!activation.canWriteTaskWorkspace(task.id)
@@ -494,18 +495,11 @@ export function TaskRow({
 					{...rowProps}
 				>
 					{selection && selecting ? (
-						<SelectToggle
-							title={task.title}
-							selection={selection}
-							placement="lead"
-						/>
+						<SelectToggle title={task.title} selection={selection} />
 					) : (
 						<div
 							data-reading-check-target
-							className={cn(
-								"flex shrink-0 items-center justify-center",
-								card ? "size-8" : "size-11 md:size-8",
-							)}
+							className="flex size-(--row-slot) shrink-0 items-center justify-center"
 						>
 							<Checkbox
 								disabled={!canToggle}
@@ -530,7 +524,9 @@ export function TaskRow({
 							/>
 						</div>
 					)}
-					<div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+					{/* Title and reminder wrap as a group: a wide reminder chip drops
+					    under the title instead of taking its width. */}
+					<div className="flex min-w-0 flex-1 flex-wrap items-start gap-x-2 gap-y-1">
 						<button
 							type="button"
 							data-kbd-nav
@@ -543,24 +539,28 @@ export function TaskRow({
 							}}
 							onClick={onOpenClick}
 							title={card || dashboard ? task.title : undefined}
-							className={cn(
-								"min-w-[min(12rem,100%)] flex-[1_1_12rem] text-start",
-								card ? "min-h-8 py-1.5" : "min-h-11 content-center",
-							)}
+							className="min-h-(--row-slot) min-w-[min(12rem,100%)] flex-[1_1_12rem] pt-[calc((var(--row-slot)-1.25rem)/2)] pb-1 text-start outline-none"
 						>
-							<span
-								data-reading-title
-								className={cn(
-									"block text-sm",
-									card
-										? "line-clamp-2 break-words"
-										: dashboard
-											? "line-clamp-2 break-words md:line-clamp-none md:truncate"
-											: "truncate",
-									displayedDone && "text-muted-foreground",
+							<span className="flex items-start gap-1">
+								<span
+									data-reading-title
+									className={cn(
+										"min-w-0 text-sm",
+										card
+											? "line-clamp-2 break-words"
+											: dashboard
+												? "line-clamp-2 break-words md:line-clamp-none md:truncate"
+												: "truncate",
+										displayedDone && "text-muted-foreground",
+									)}
+								>
+									<span className={strikeClass(displayedDone)}>
+										<bdi>{task.title}</bdi>
+									</span>
+								</span>
+								{!bare && (
+									<PriorityFlag id={priorityId} priority={task.priority} />
 								)}
-							>
-								<span className={strikeClass(displayedDone)}>{task.title}</span>
 							</span>
 							<CompletedBy
 								task={task}
@@ -568,15 +568,6 @@ export function TaskRow({
 								habitDate={occurrence?.date}
 								id={completionId}
 							/>
-							{parentContext && (
-								<span
-									id={parentId}
-									data-testid="task-parent-context"
-									className="mt-0.5 block wrap-anywhere text-xs text-muted-foreground"
-								>
-									{parentContext}
-								</span>
-							)}
 							{showBadge && (
 								<Badge
 									id={badgeId}
@@ -588,57 +579,43 @@ export function TaskRow({
 										: m.activation_badge_blocked()}
 								</Badge>
 							)}
-							{(!bare || sourceContext || list) && (
+							{hasMeta && (
 								<div
 									id={metaId}
 									data-reading-metadata
-									className={cn(
-										"mt-0.5 flex flex-wrap items-center",
-										dashboard ? "gap-x-2 gap-y-1" : "gap-2",
-									)}
+									className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5"
 								>
-									<AssigneeChips taskId={task.id} density={density} />
-									{dashboard && hasPriority && (
-										<span
-											aria-hidden
-											data-testid="task-priority-metadata"
-											className="text-xs text-muted-foreground md:hidden"
-										>
-											{priorityLabel(task.priority)}
-										</span>
-									)}
 									{occurrence ? (
 										<span
-											className="inline-flex items-center gap-1 text-xs text-muted-foreground"
+											className="shrink-0 text-xs text-muted-foreground"
 											data-testid="habit-occurrence-date"
 										>
-											<CalendarClock aria-hidden className="size-3" />
 											{occurrence.status === "unavailable"
 												? m.habit_occurrence_unavailable()
 												: occurrence.status === "skipped"
 													? m.habit_occurrence_skipped()
-													: occurrence.date
+													: occurrence.date &&
+															!(omitToday && occurrence.date === today)
 														? formatDayKey(occurrence.date)
 														: null}
 										</span>
 									) : (
-										!bare && <DueChip task={task} />
+										!bare && <DueChip task={task} omitToday={omitToday} />
+									)}
+									{parentContext && (
+										<span
+											data-testid="task-parent-context"
+											className="min-w-0 truncate text-xs text-muted-foreground"
+										>
+											{parentContext}
+										</span>
 									)}
 									{list && (
 										<span
-											className={cn(
-												"inline-flex min-w-0 items-center gap-1 text-xs text-muted-foreground",
-												dashboard && "max-w-full",
-											)}
-											title={dashboard ? list.title : undefined}
+											className="min-w-0 truncate text-xs text-muted-foreground"
+											title={list.title}
 										>
-											<ListIcon
-												icon={list.icon}
-												kind={kind}
-												title={list.title}
-												className="size-3 shrink-0"
-											/>
-											<span className="truncate">{list.title}</span>
+											<bdi>{list.title}</bdi>
 										</span>
 									)}
 									{sourceContext && (
@@ -648,13 +625,16 @@ export function TaskRow({
 											compact={dashboard}
 										/>
 									)}
+									{!bare && (
+										<AssigneeNames taskId={task.id} listId={task.listId} />
+									)}
 									{labels.map((l) => (
 										<Badge
 											key={l.id}
 											variant="outline"
 											className="h-4 border-transparent bg-muted/60 px-1.5 text-muted-foreground"
 										>
-											{l.name}
+											<bdi>{l.name}</bdi>
 										</Badge>
 									))}
 									{total > 0 && kind !== "project" && (
@@ -676,15 +656,15 @@ export function TaskRow({
 						</button>
 						{/* Outside the title button: the chip is itself a control when the
 					    reminder is still live, and a button cannot nest in a button. */}
-						{!bare && <ReminderChip task={task} />}
 						{!bare && (
-							<PriorityFlag
-								id={priorityId}
-								dashboard={dashboard}
-								priority={task.priority}
-								className={card ? "mt-2.5" : undefined}
-							/>
+							<div className="mt-[calc((var(--row-slot)-2.25rem)/2)] flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 empty:hidden">
+								<ReminderChip task={task} />
+							</div>
 						)}
+					</div>
+					{/* The trailing rail: the menu always sits in the same place, so
+					    menus line up down the list. */}
+					<div className="flex h-(--row-slot) shrink-0 items-center">
 						{total > 0 && (
 							<button
 								type="button"
@@ -693,7 +673,7 @@ export function TaskRow({
 								}
 								aria-expanded={expanded}
 								onClick={() => setExpanded((e) => !e)}
-								className="mt-0.5 flex shrink-0 items-center justify-center rounded-sm text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background pointer-coarse:size-11"
+								className="flex shrink-0 items-center justify-center rounded-sm text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background pointer-coarse:size-11"
 							>
 								<ChevronRight
 									className={cn(
@@ -702,13 +682,6 @@ export function TaskRow({
 									)}
 								/>
 							</button>
-						)}
-						{selection && !selecting && (
-							<SelectToggle
-								title={task.title}
-								selection={selection}
-								placement="trail"
-							/>
 						)}
 						<RowActions
 							actions={actions}
@@ -779,7 +752,7 @@ export function TaskRow({
 							>
 								<span className="block truncate">
 									<span className={strikeClass(s.done ?? false)}>
-										{s.title}
+										<bdi>{s.title}</bdi>
 									</span>
 								</span>
 								<CompletedBy task={s} id={`${ids}-completion-${s.id}`} />

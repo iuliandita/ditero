@@ -5,18 +5,13 @@ import { locales } from "../../paraglide/runtime.js";
 import { splitAroundKey } from "../components/ui/key-text.tsx";
 import {
 	createHintStore,
-	dismissSyntaxHint,
 	FRESH_HINTS,
-	type Hints,
 	hintsKey,
 	markShortcutsSeen,
 	NO_USER_HINTS,
 	parseHints,
 	readHints,
-	recordSyntaxUse,
-	SYNTAX_HINT_USES,
 	shortcutHintVisible,
-	syntaxHintVisible,
 	syntaxTokens,
 } from "./hints.ts";
 
@@ -30,25 +25,6 @@ function memoryStorage(seed: Record<string, string> = {}) {
 		},
 	};
 }
-
-describe("syntax hint retirement", () => {
-	test("shows until three quick adds actually used a token", () => {
-		let h: Hints = FRESH_HINTS;
-		for (let i = 0; i < SYNTAX_HINT_USES; i++) {
-			expect(syntaxHintVisible(h)).toBe(true);
-			h = recordSyntaxUse(h, 1);
-		}
-		expect(syntaxHintVisible(h)).toBe(false);
-	});
-
-	test("a quick add with no parsed token does not count", () => {
-		expect(recordSyntaxUse(FRESH_HINTS, 0)).toBe(FRESH_HINTS);
-	});
-
-	test("dismissing retires it immediately", () => {
-		expect(syntaxHintVisible(dismissSyntaxHint(FRESH_HINTS))).toBe(false);
-	});
-});
 
 describe("shortcut hint", () => {
 	test("needs a fine pointer and an unopened cheat sheet", () => {
@@ -65,14 +41,12 @@ describe("stored hints", () => {
 		expect(parseHints(null)).toEqual(FRESH_HINTS);
 		expect(parseHints("{nope")).toEqual(FRESH_HINTS);
 		expect(parseHints("42")).toEqual(FRESH_HINTS);
-		expect(
-			parseHints(
-				JSON.stringify({ syntaxUses: -2, syntaxDismissed: "yes", x: 1 }),
-			),
-		).toEqual(FRESH_HINTS);
-		expect(parseHints(JSON.stringify({ syntaxUses: 1e9 })).syntaxUses).toBe(
-			SYNTAX_HINT_USES,
+		expect(parseHints(JSON.stringify({ shortcutsSeen: "yes", x: 1 }))).toEqual(
+			FRESH_HINTS,
 		);
+		expect(parseHints(JSON.stringify({ shortcutsSeen: true }))).toEqual({
+			shortcutsSeen: true,
+		});
 	});
 
 	test("a throwing storage never breaks the read", () => {
@@ -86,8 +60,8 @@ describe("stored hints", () => {
 		};
 		expect(readHints("u1", broken)).toEqual(FRESH_HINTS);
 		const store = createHintStore(() => broken);
-		store.update("u1", dismissSyntaxHint);
-		expect(store.get("u1").syntaxDismissed).toBe(true);
+		store.update("u1", markShortcutsSeen);
+		expect(store.get("u1").shortcutsSeen).toBe(true);
 	});
 
 	test("without a user id nothing is read, written, or shown", () => {
@@ -99,7 +73,6 @@ describe("stored hints", () => {
 		});
 		const h = store.get("");
 		expect(h).toBe(NO_USER_HINTS);
-		expect(syntaxHintVisible(h)).toBe(false);
 		expect(shortcutHintVisible(h, true)).toBe(false);
 		store.update("", () => FRESH_HINTS);
 		expect(reads).toBe(0);
@@ -143,31 +116,9 @@ describe.each(locales)("advertised syntax parses in %s", (locale) => {
 		}
 	});
 
-	test("the example line yields exactly what it shows", () => {
-		const sentence = hasDates
-			? m.syntax_hint_example(
-					{ date: dateWord ?? "", priority: "p1" },
-					{ locale },
-				)
-			: m.syntax_hint_example_nodate({ priority: "p1" }, { locale });
-		const example = sentence.slice(sentence.indexOf(":") + 1).trim();
-		const parsed = parseQuickAdd(example, undefined, locale);
-		const types = parsed.tokens.map((t) => t.type).sort();
-		expect(types).toEqual(
-			hasDates ? ["date", "label", "priority"] : ["label", "priority"],
-		);
-		expect(parsed.priority).toBe(3);
-		expect(parsed.title).not.toMatch(/[#~]|p1/);
-		expect(parsed.title.length).toBeGreaterThan(0);
-	});
-
 	test("keycap sentences carry exactly one key slot", () => {
-		for (const render of [
-			(key: string) => m.shortcut_hint({ key }, { locale }),
-			(key: string) => m.syntax_hint_inline_lead({ key }, { locale }),
-		]) {
-			const [before, after] = splitAroundKey(render);
-			expect(`${before}K${after}`).toBe(render("K"));
-		}
+		const render = (key: string) => m.shortcut_hint({ key }, { locale });
+		const [before, after] = splitAroundKey(render);
+		expect(`${before}K${after}`).toBe(render("K"));
 	});
 });

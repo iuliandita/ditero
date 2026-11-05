@@ -59,6 +59,7 @@ export function MobileSearch({
 				<div className="px-4 pb-3">
 					<Input
 						ref={inputRef}
+						dir="auto"
 						value={query}
 						onChange={(e) => setQuery(e.target.value)}
 						type="search"

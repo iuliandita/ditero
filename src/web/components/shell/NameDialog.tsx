@@ -70,6 +70,7 @@ export function NameDialog({
 				</DialogHeader>
 				<Input
 					data-testid={`${testId}-input`}
+					dir="auto"
 					aria-label={fieldLabel}
 					aria-invalid={error ? true : undefined}
 					aria-describedby={error ? `${testId}-error` : undefined}

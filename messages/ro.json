@@ -383,6 +383,9 @@
 	"priority_medium": "Medie",
 	"priority_high": "Ridicată",
 	"priority_coded": "{code} {name}",
+	"priority_group_high": "Prioritate ridicată",
+	"priority_group_medium": "Prioritate medie",
+	"priority_group_low": "Prioritate scăzută",
 	"due_today": "Azi",
 	"due_tomorrow": "Mâine",
 	"list_completed_count": [
@@ -442,11 +445,6 @@
 	"syntax_hint_title": "Sfaturi de scriere",
 	"syntax_hint_word": "nume",
 	"syntax_hint_priority": "Prioritate, p1 e cea mai mare",
-	"syntax_hint_example": "Exemplu: Sună instalatorul {date} {priority} #casă",
-	"syntax_hint_example_nodate": "Exemplu: Sună instalatorul {priority} #casă",
-	"syntax_hint_dismiss": "Ascunde sfaturile de scriere",
-	"syntax_hint_inline_lead": "Deschide adăugarea rapidă ({key})",
-	"syntax_hint_inline_lead_nokey": "Deschide adăugarea rapidă",
 	"quickadd_adding_to": "Se adaugă în {list}",
 	"quickadd_no_list": "Nicio listă disponibilă",
 	"quickadd_list_not_found": "Nu există nicio listă numită {list}",
@@ -456,6 +454,7 @@
 	"quickadd_shortcuts": "Scurtături",
 	"quickadd_failed": "Nu am putut adăuga sarcina.",
 	"quickadd_chip_remove": "Elimină {token}",
+	"list_add_chip_keep": "Păstrează {token} ca text",
 	"group_assigned_to_me": "Atribuite mie",
 	"group_unassigned": "Neatribuite",
 	"group_unknown_user": "Cineva",
@@ -551,6 +550,7 @@
 	"shopping_category_other": "Altele",
 	"task_reorder_handle": "Reordonează sarcina",
 	"task_priority_aria": "Prioritate: {priority}",
+	"task_part_of": "Parte din {title}",
 	"task_open_details": "Deschide detaliile",
 	"task_subtask_progress_aria": [
 		{
@@ -1433,6 +1433,7 @@
 	"accept_error_generic": "Această invitație nu a putut fi acceptată.",
 	"assignee_open": "Atribuie",
 	"assignee_chips_aria": "Responsabili: {names}",
+	"task_assignees_more": "{name} +{count}",
 	"assignee_invite_confirm": "Inviți {name} în {workspace} și îi atribui sarcina?",
 	"assignee_invite_confirm_no_workspace": "Inviți {name} în acest workspace și îi atribui sarcina?",
 	"assignee_invite_hint": "Sarcina îi este atribuită imediat ce acceptă invitația.",
@@ -1546,7 +1547,7 @@
 	"mutation_failed": "Ceva n-a mers bine.",
 	"mutation_offline_not_saved": "Ești offline, modificarea nu a fost salvată. Reconectează-te și încearcă din nou.",
 	"sync_synced_title": "Sincronizat",
-	"sync_synced_detail": "Conectat. Modificările tale se salvează imediat pe server.",
+	"sync_synced_detail": "Conectat la server. Nimic din ce ai modificat aici nu așteaptă să se sincronizeze.",
 	"sync_syncing_title": "Se sincronizează",
 	"sync_syncing_detail": "Modificările tale sunt salvate pe acest dispozitiv și sunt trimise către server.",
 	"sync_offline_title": "Offline",
@@ -1579,6 +1580,7 @@
 	"sync_reauth_title": "Autentifică-te ca să sincronizezi",
 	"sync_reauth_detail": "Autentificarea ta a expirat cât ai fost plecat. Modificările tale rămân pe acest dispozitiv și se sincronizează după ce te autentifici din nou.",
 	"sync_reauth_action": "Autentifică-te din nou",
+	"sync_details_action": "Detalii",
 	"sync_pending_count": [
 		{
 			"declarations": [
@@ -2249,8 +2251,6 @@
 	"reset_done_two_factor": "Setările existente de autentificare în doi pași rămân neschimbate. Dacă ți se cere un cod pe care nu l-ai configurat niciodată, întreabă administratorul acestei instanțe Ditero.",
 	"reset_rate_limited": "Prea multe încercări de resetare. Așteaptă câteva minute și încearcă din nou.",
 	"login_existing_account": "Ai deja un cont?",
-	"syntax_hint_inline_literal": "Acest câmp salvează textul exact cum îl scrii.",
-	"syntax_hint_details": "Sintaxa adăugării rapide",
 	"aggregate_scope_all": "Din toate spațiile tale de lucru",
 	"aggregate_scope_selected": "Din: {workspaces}",
 	"scope_source_personal": "{workspace} · Personal",

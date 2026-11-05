@@ -9,6 +9,7 @@ import {
 	revealDetails,
 	signUp,
 	uniqueEmail,
+	waitWorkspaceReady,
 } from "./helpers.ts";
 
 // Task 10 cluster: NLP quick-add and drag reorder. Task 11 extends this file
@@ -64,12 +65,6 @@ function sidebarLists(page: Page): Locator {
 // The personal workspace is provisioned in a post-signup hook and reaches the
 // client via sync, so its name button appears a beat after the app shell. Wait
 // for it before writing: an empty active workspace id makes list.create reject.
-async function waitWorkspaceReady(page: Page): Promise<void> {
-	await expect(page.getByRole("button", { name: /'s space/ })).toBeVisible({
-		timeout: 15000,
-	});
-}
-
 async function createListDesktop(
 	page: Page,
 	name: string,
@@ -396,11 +391,18 @@ test("complete on A strikes, settles into the completed group and syncs to B", a
 
 	await listA.getByRole("checkbox", { name: "Finish me" }).check();
 	// A: the strike is a pseudo-element scaled in from 0; measure it, not the class.
+	// The title text sits in a <bdi>; the strike is drawn by its wrapping span.
 	await expect
 		.poll(() =>
 			listA
 				.getByText("Finish me", { exact: true })
-				.evaluate((el) => getComputedStyle(el, "::after").scale),
+				.evaluate(
+					(el) =>
+						getComputedStyle(
+							el.tagName === "BDI" ? (el.parentElement ?? el) : el,
+							"::after",
+						).scale,
+				),
 		)
 		.toMatch(/^1( 1)?$/);
 	// A: after the settle delay the row leaves the open rows for the group.
@@ -1354,7 +1356,11 @@ test("quick add resolves and disambiguates destinations without moving the deskt
 		sidebarLists(page).getByRole("button", { name: "Groceries", exact: true }),
 	).toHaveCount(2);
 	await openListDesktop(page, "Current tasks");
-	await page.getByRole("button", { name: "Quick add", exact: true }).click();
+	// Desktop lists have no quick add button; the c shortcut opens the dialog.
+	await page.evaluate(() =>
+		(document.activeElement as HTMLElement | null)?.blur(),
+	);
+	await page.keyboard.press("c");
 	const input = page.getByTestId("quickadd-input");
 	await expect(page.getByTestId("quickadd-dialog")).toHaveCSS("opacity", "1");
 	const initial = await input.boundingBox();

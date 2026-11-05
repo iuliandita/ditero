@@ -383,6 +383,9 @@
 	"priority_medium": "Media",
 	"priority_high": "Alta",
 	"priority_coded": "{code} {name}",
+	"priority_group_high": "Prioridad alta",
+	"priority_group_medium": "Prioridad media",
+	"priority_group_low": "Prioridad baja",
 	"due_today": "Hoy",
 	"due_tomorrow": "Mañana",
 	"list_completed_count": [
@@ -442,11 +445,6 @@
 	"syntax_hint_title": "Consejos de escritura",
 	"syntax_hint_word": "nombre",
 	"syntax_hint_priority": "Prioridad, p1 es la más alta",
-	"syntax_hint_example": "Ejemplo: Llamar al fontanero {date} {priority} #casa",
-	"syntax_hint_example_nodate": "Ejemplo: Llamar al fontanero {priority} #casa",
-	"syntax_hint_dismiss": "Ocultar consejos de escritura",
-	"syntax_hint_inline_lead": "Abrir añadir rápido ({key})",
-	"syntax_hint_inline_lead_nokey": "Abrir añadir rápido",
 	"quickadd_adding_to": "Se añadirá a {list}",
 	"quickadd_no_list": "No hay ninguna lista disponible",
 	"quickadd_list_not_found": "No hay ninguna lista llamada {list}",
@@ -456,6 +454,7 @@
 	"quickadd_shortcuts": "Atajos",
 	"quickadd_failed": "No se pudo añadir la tarea.",
 	"quickadd_chip_remove": "Quitar {token}",
+	"list_add_chip_keep": "Mantener {token} como texto",
 	"group_assigned_to_me": "Asignados a mí",
 	"group_unassigned": "Sin asignar",
 	"group_unknown_user": "Alguien",
@@ -551,6 +550,7 @@
 	"shopping_category_other": "Otros",
 	"task_reorder_handle": "Reordenar la tarea",
 	"task_priority_aria": "Prioridad: {priority}",
+	"task_part_of": "Parte de {title}",
 	"task_open_details": "Abrir detalles",
 	"task_subtask_progress_aria": [
 		{
@@ -1433,6 +1433,7 @@
 	"accept_error_generic": "No se pudo aceptar esta invitación.",
 	"assignee_open": "Asignar",
 	"assignee_chips_aria": "Responsables: {names}",
+	"task_assignees_more": "{name} +{count}",
 	"assignee_invite_confirm": "¿Invitar a {name} a {workspace} y asignarle la tarea?",
 	"assignee_invite_confirm_no_workspace": "¿Invitar a {name} a este Workspace y asignarle la tarea?",
 	"assignee_invite_hint": "Se le asigna en cuanto acepte la invitación.",
@@ -1546,7 +1547,7 @@
 	"mutation_failed": "Algo ha salido mal.",
 	"mutation_offline_not_saved": "Estás sin conexión, este cambio no se guardó. Vuelve a conectarte e inténtalo de nuevo.",
 	"sync_synced_title": "Sincronizado",
-	"sync_synced_detail": "Conectado. Tus cambios se guardan en el servidor al instante.",
+	"sync_synced_detail": "Conectado al servidor. Nada de lo que cambiaste aquí está esperando a sincronizarse.",
 	"sync_syncing_title": "Sincronizando",
 	"sync_syncing_detail": "Tus cambios están guardados en este dispositivo y se están enviando al servidor.",
 	"sync_offline_title": "Sin conexión",
@@ -1579,6 +1580,7 @@
 	"sync_reauth_title": "Inicia sesión para sincronizar",
 	"sync_reauth_detail": "Tu sesión caducó mientras no estabas. Tus cambios se quedan en este dispositivo y se sincronizarán cuando vuelvas a iniciar sesión.",
 	"sync_reauth_action": "Iniciar sesión de nuevo",
+	"sync_details_action": "Detalles",
 	"sync_pending_count": [
 		{
 			"declarations": [
@@ -2249,8 +2251,6 @@
 	"reset_done_two_factor": "La configuración actual de la verificación en dos pasos no cambia. Si te piden un código que nunca configuraste, pregunta al administrador de esta instancia de Ditero.",
 	"reset_rate_limited": "Demasiados intentos de restablecimiento. Espera unos minutos y vuelve a intentarlo.",
 	"login_existing_account": "¿Ya tienes cuenta?",
-	"syntax_hint_inline_literal": "Este campo guarda el texto tal como lo escribes.",
-	"syntax_hint_details": "Sintaxis de añadir rápido",
 	"aggregate_scope_all": "En todos tus espacios de trabajo",
 	"aggregate_scope_selected": "En: {workspaces}",
 	"scope_source_personal": "{workspace} · Personal",

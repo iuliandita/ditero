@@ -7,6 +7,7 @@ import {
 	openAdvancedSection,
 	signUp,
 	uniqueEmail,
+	waitWorkspaceReady,
 } from "./helpers.ts";
 
 // M1c views + keyboard e2e. Exercises the saved-view lifecycle (build/save/
@@ -21,18 +22,10 @@ import {
 
 test.describe.configure({ timeout: 90_000 });
 
-const SIGNUP_TIMEOUT = 30_000;
-
 // Desktop sidebar list/view nav (aria-label "Lists"): scopes clicks away from the
 // mobile index + create-list controls that share their labels with titles.
 function sidebarLists(page: Page): Locator {
 	return page.getByRole("navigation", { name: "Lists" });
-}
-
-async function waitWorkspaceReady(page: Page): Promise<void> {
-	await expect(page.getByRole("button", { name: /'s space/ })).toBeVisible({
-		timeout: SIGNUP_TIMEOUT,
-	});
 }
 
 async function createListDesktop(page: Page, name: string): Promise<void> {
@@ -260,7 +253,12 @@ test("view: layout switch renders board columns then a real table", async ({
 	await pickLabeled(page, "Layout", "Board");
 	await pickLabeled(page, "Group by", "Priority");
 	await page.getByTestId("view-save").click();
-	for (const col of ["P1 High", "P2 Medium", "P3 Low", "No priority"]) {
+	for (const col of [
+		"High priority",
+		"Medium priority",
+		"Low priority",
+		"No priority",
+	]) {
 		await expect(page.getByRole("region", { name: col })).toBeVisible({
 			timeout: 15000,
 		});
@@ -302,7 +300,7 @@ test("view: dragging a card to another priority column regroups + persists", asy
 
 	// The card starts in the "None" (priority 0) column.
 	const none = page.getByRole("region", { name: "No priority" });
-	const high = page.getByRole("region", { name: "P1 High" });
+	const high = page.getByRole("region", { name: "High priority" });
 	await expect(none.getByText(cardTitle, { exact: true })).toBeVisible({
 		timeout: 15000,
 	});
@@ -351,7 +349,7 @@ test("view: dragging a card to another priority column regroups + persists", asy
 	await expect(page.getByTestId("view-surface")).toBeVisible();
 	await expect(
 		page
-			.getByRole("region", { name: "P1 High" })
+			.getByRole("region", { name: "High priority" })
 			.getByText(cardTitle, { exact: true }),
 	).toBeVisible({ timeout: 15000 });
 });
@@ -715,7 +713,7 @@ test("view: a board beside the docked detail falls back to the list", async ({
 	await page.getByTestId("view-save").click();
 	// Only the board pads empty priority columns; the list fallback groups the
 	// same tasks but shows just the groups that have any.
-	const column = page.getByRole("region", { name: "P1 High" });
+	const column = page.getByRole("region", { name: "High priority" });
 	await expect(column).toBeVisible({ timeout: 15000 });
 
 	// No panel open: a desktop board at every md width, as before, including

@@ -34,8 +34,8 @@ import type {
 	Task,
 	Workspace,
 } from "../../../zero/schema.gen.ts";
-import { useHints } from "../../hooks/useHints.ts";
 import { useWorkspaceWriteAccess } from "../../hooks/useTaskImportActivation.ts";
+import { isolated } from "../../lib/bidi.tsx";
 import { addCopyFor } from "../../lib/kind-copy.ts";
 import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
 import { useNativeAccount } from "../../lib/native-account.tsx";
@@ -74,7 +74,6 @@ export function QuickAddSheet({
 	const pickerSearchRef = useRef<HTMLInputElement>(null);
 	const voiceRef = useRef<HTMLDivElement>(null);
 	const [listNotice, setListNotice] = useState(0);
-	const { recordUse } = useHints();
 	const [allLists] = useQuery(queries.lists.mine());
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [pickerOpen, setPickerOpen] = useState(false);
@@ -341,7 +340,6 @@ export function QuickAddSheet({
 				await zero.mutate(mutators.taskLabel.set({ taskId: id, labelIds }))
 					.client;
 			}
-			recordUse(chips.length);
 			setAdded({ list: targetName, id: randomId() });
 			setSelectedId(null);
 			setDue(null);
@@ -366,6 +364,7 @@ export function QuickAddSheet({
 		<div className={cn("flex flex-col gap-3", !isDesktop && "p-4 pt-0")}>
 			<input
 				ref={inputRef}
+				dir="auto"
 				data-testid="quickadd-input"
 				role="combobox"
 				aria-expanded={pickerOpen && !pickerAll}
@@ -535,6 +534,7 @@ export function QuickAddSheet({
 					{pickerAll && (
 						<input
 							ref={pickerSearchRef}
+							dir="auto"
 							role="combobox"
 							aria-expanded={pickerOpen}
 							aria-controls="quickadd-listbox"
@@ -589,9 +589,11 @@ export function QuickAddSheet({
 								className="flex min-h-11 w-full justify-between gap-2 rounded px-2 text-start text-sm aria-selected:bg-muted"
 								onClick={() => selectList(list)}
 							>
-								<span>{list.title}</span>
+								<bdi>{list.title}</bdi>
 								<span className="text-muted-foreground">
-									{workspaces.find((w) => w.id === list.workspaceId)?.name}
+									<bdi>
+										{workspaces.find((w) => w.id === list.workspaceId)?.name}
+									</bdi>
 								</span>
 							</button>
 						))}
@@ -656,10 +658,10 @@ export function QuickAddSheet({
 					<span>
 						{added ? (
 							<span key={added.id}>
-								{m.quickadd_added_to({ list: added.list })}
+								{isolated((list) => m.quickadd_added_to({ list }), added.list)}
 							</span>
 						) : targetList ? (
-							m.quickadd_adding_to({ list: targetName })
+							isolated((list) => m.quickadd_adding_to({ list }), targetName)
 						) : listUnresolved ? (
 							matches.length > 1 ? (
 								m.quickadd_choose_list()
@@ -674,7 +676,7 @@ export function QuickAddSheet({
 				<span role="status" aria-live="polite" className="sr-only">
 					{added && (
 						<span key={added.id}>
-							{m.quickadd_added_to({ list: added.list })}
+							{isolated((list) => m.quickadd_added_to({ list }), added.list)}
 						</span>
 					)}
 				</span>
@@ -733,11 +735,7 @@ export function QuickAddSheet({
 						{m.quickadd_voice_start()}
 					</Button>
 				))}
-			<SyntaxHint
-				quickAdd
-				collapsible
-				onDismiss={() => inputRef.current?.focus()}
-			/>
+			<SyntaxHint />
 		</div>
 	);
 

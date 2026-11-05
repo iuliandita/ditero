@@ -169,6 +169,7 @@ export function CreateWorkspaceDialog({
 						className="pointer-coarse:min-h-11"
 						id="new-workspace-name"
 						data-testid="create-workspace-name"
+						dir="auto"
 						autoFocus
 						maxLength={WORKSPACE_NAME_MAX_LENGTH}
 						value={name}

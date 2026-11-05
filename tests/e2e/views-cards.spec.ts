@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { Pool } from "pg";
-import { signUp, uniqueEmail } from "./helpers.ts";
+import { signUp, uniqueEmail, waitWorkspaceReady } from "./helpers.ts";
 
 // #355: board cards, calendar chips and dashboard task panels carry the same
 // cues a list row does, a board saved with the form's default grouping still
@@ -10,15 +10,8 @@ import { signUp, uniqueEmail } from "./helpers.ts";
 // frozen-frame axe.
 test.describe.configure({ timeout: 90_000 });
 
-const SIGNUP_TIMEOUT = 30_000;
 const LONG_TITLE =
 	"Replace the hallway light bulb and check the fuse box while the power is off";
-
-async function waitWorkspaceReady(page: Page): Promise<void> {
-	await expect(page.getByRole("button", { name: /'s space/ })).toBeVisible({
-		timeout: SIGNUP_TIMEOUT,
-	});
-}
 
 async function pickSelect(
 	page: Page,
@@ -60,6 +53,18 @@ async function seed(email: string, tasks: SeedTask[]): Promise<string> {
 		);
 		const row = rows.rows[0];
 		if (!row) throw new Error("personal workspace not found");
+		// Source crumbs show only with two or more workspaces.
+		const sharedId = crypto.randomUUID();
+		await pool.query(
+			`insert into workspace (id, name, owner_id, kind)
+			 values ($1, 'Household', $2, 'shared')`,
+			[sharedId, row.ownerId],
+		);
+		await pool.query(
+			`insert into membership (id, workspace_id, user_id, role)
+			 values ($1, $2, $3, 'owner')`,
+			[crypto.randomUUID(), sharedId, row.ownerId],
+		);
 		const lists = { home: crypto.randomUUID(), shop: crypto.randomUUID() };
 		await pool.query(
 			`insert into list (id, workspace_id, owner_id, title, kind, sort_key)
@@ -186,25 +191,28 @@ test("board: default grouping is by priority, cards are one surface with row cue
 	const columns = page.getByTestId("board-column");
 	await expect(columns).toHaveCount(4, { timeout: 15000 });
 	await expect(columns).toHaveText([
-		/^P1 High/,
-		/^P2 Medium/,
-		/^P3 Low/,
+		/^High priority/,
+		/^Medium priority/,
+		/^Low priority/,
 		/^No priority/,
 	]);
 	await expect(
 		page.getByRole("region", { name: "Tasks", exact: true }),
 	).toHaveCount(0);
-	const high = page.getByRole("region", { name: "P1 High" });
+	const high = page.getByRole("region", { name: "High priority" });
 	await expect(
-		page.getByRole("region", { name: "P2 Medium" }).getByText("Book dentist"),
+		page
+			.getByRole("region", { name: "Medium priority" })
+			.getByText("Book dentist"),
 	).toBeVisible();
 	await expect(
-		page.getByRole("region", { name: "P3 Low" }).getByText("Oat milk"),
+		page.getByRole("region", { name: "Low priority" }).getByText("Oat milk"),
 	).toBeVisible();
 
 	// One card surface: a single border, no inner fill of another colour.
 	const card = high.getByTestId("board-card").filter({ hasText: LONG_TITLE });
 	await expect(card).toBeVisible();
+	// The seed adds a shared workspace, so the view spans two and names the source.
 	const source = card.getByTestId("task-source-context");
 	await expect(source).toHaveAttribute("title", `${workspaceName} · Personal`);
 	await expect(source.locator(':scope > span[aria-hidden="true"]')).toHaveText(
@@ -218,7 +226,7 @@ test("board: default grouping is by priority, cards are one surface with row cue
 	expect(await surfaceReport(card)).toEqual({ bordered: 1, innerFills: 0 });
 
 	// Two-line title, clamped, with the whole title still in the accessible name.
-	const title = card.locator("[data-kbd-nav] > span").first();
+	const title = card.locator("[data-kbd-nav] [data-reading-title]").first();
 	const lines = await title.evaluate((el) => {
 		const lh = parseFloat(getComputedStyle(el).lineHeight);
 		return {

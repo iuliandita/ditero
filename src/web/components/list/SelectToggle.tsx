@@ -1,6 +1,5 @@
 import { Check } from "lucide-react";
 import { useId } from "react";
-import { TOUCH_KEYBOARD_ONLY } from "@/lib/touch";
 import { cn } from "@/lib/utils";
 import { m } from "../../../paraglide/messages.js";
 
@@ -18,21 +17,17 @@ export type RowSelection = {
 };
 
 // The select control, a pressed-state button with a square mark in the item
-// checkbox style. `lead` takes the done checkbox's slot in selection mode;
-// `trail` is the quiet way in outside it, revealed by hover or focus on a
-// pointer and left out of the layout on touch, where long-press offers Select.
+// checkbox style. It takes the done checkbox's slot, and only in selection mode;
+// outside it a row offers Select from its menu, a long-press or a modifier click.
 export function SelectToggle({
 	title,
 	selection,
-	placement,
 }: {
 	title: string;
 	selection: RowSelection;
-	placement: "lead" | "trail";
 }) {
 	const reasonId = useId();
 	const blocked = !selection.selectable;
-	const lead = placement === "lead";
 	return (
 		<button
 			type="button"
@@ -44,21 +39,14 @@ export function SelectToggle({
 			}
 			title={blocked ? selection.blockedReason : undefined}
 			data-testid="task-select"
-			data-placement={placement}
+			data-placement="lead"
 			onClick={(event) => {
 				event.stopPropagation();
 				if (event.shiftKey) selection.extend();
 				else selection.toggle();
 			}}
 			className={cn(
-				"flex shrink-0 items-center justify-center rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
-				lead
-					? "size-11 md:size-8 duration-(--motion-fast) motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-90"
-					: [
-							"size-11 md:size-7",
-							"md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 focus-visible:opacity-100",
-							TOUCH_KEYBOARD_ONLY,
-						],
+				"flex size-(--row-slot) shrink-0 items-center justify-center rounded-md duration-(--motion-fast) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-90",
 				blocked && "cursor-not-allowed",
 			)}
 		>

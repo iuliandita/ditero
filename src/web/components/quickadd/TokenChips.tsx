@@ -1,4 +1,12 @@
-import { CalendarClock, Flag, Hash, ListTodo, Plus, X } from "lucide-react";
+import {
+	CalendarClock,
+	Flag,
+	Hash,
+	ListTodo,
+	Plus,
+	Scale,
+	X,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
 	priorityFromToken,
@@ -13,6 +21,7 @@ const ICONS = {
 	priority: Flag,
 	label: Hash,
 	list: ListTodo,
+	quantity: Scale,
 } as const;
 
 // Consumed parser tokens shown as removable chips. An unknown #label renders in
@@ -22,10 +31,13 @@ export function TokenChips({
 	tokens,
 	unknownLabels,
 	onRemove,
+	removeLabel = (token) => m.quickadd_chip_remove({ token }),
 }: {
 	tokens: QuickAddToken[];
 	unknownLabels: Set<string>;
 	onRemove: (token: QuickAddToken) => void;
+	/** Accessible name of the chip's button, for surfaces where it does not delete the text. */
+	removeLabel?: (token: string) => string;
 }) {
 	if (tokens.length === 0) return null;
 	return (
@@ -50,11 +62,11 @@ export function TokenChips({
 						)}
 					>
 						{unknown ? <Plus /> : <Icon />}
-						{level != null ? priorityLabel(level) : tk.text}
+						{level != null ? priorityLabel(level) : <bdi>{tk.text}</bdi>}
 						<button
 							type="button"
 							// `tk.text` is the verbatim input span (sigil included), never translated.
-							aria-label={m.quickadd_chip_remove({ token: tk.text })}
+							aria-label={removeLabel(tk.text)}
 							onClick={() => onRemove(tk)}
 							className="-me-1 ms-0.5 flex min-h-11 min-w-11 items-center justify-center rounded-full hover:bg-foreground/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
 						>

@@ -39,9 +39,9 @@ export type ShoppingHandlers = {
 const FIELD =
 	"h-9 rounded-md border border-input bg-transparent px-2 text-base md:h-7 md:text-sm";
 
-// Quantity stays out of the way until it means something: a quiet chip once
-// set, an "add quantity" affordance otherwise (revealed on hover/focus from md,
-// always reachable on touch). Either opens the two fields in place.
+// Quantity is plain text right after the item name once set, and an "add
+// quantity" affordance otherwise (revealed on hover/focus from md, always
+// reachable on touch). Either opens the two fields in place.
 export function ShoppingRow({
 	task,
 	handlers,
@@ -159,7 +159,7 @@ export function ShoppingRow({
 	return (
 		<div>
 			<div
-				className="group group/completion flex min-h-12 items-center gap-2 rounded-md px-1 transition-colors duration-(--motion-fast) ease-(--motion-ease) [-webkit-touch-callout:none] motion-reduce:transition-none hover:bg-muted/30 pointer-coarse:select-none data-long-pressed:bg-muted/60 data-selected:bg-muted data-selected:hover:bg-muted md:min-h-10"
+				className="group group/completion flex items-start gap-2 rounded-md px-1 py-0.5 transition-colors duration-(--motion-fast) ease-(--motion-ease) [--row-slot:2.75rem] [-webkit-touch-callout:none] motion-reduce:transition-none hover:bg-(--row-hover) pointer-coarse:select-none data-long-pressed:bg-(--row-active) data-selected:bg-(--row-active) data-selected:hover:bg-(--row-active) has-[[data-kbd-nav]:focus-visible]:ring-2 has-[[data-kbd-nav]:focus-visible]:ring-ring has-[[data-kbd-nav]:focus-visible]:ring-inset md:py-1 md:[--row-slot:2rem]"
 				title={
 					!activation.canWriteWorkspace ? m.workspace_read_only() : undefined
 				}
@@ -169,15 +169,11 @@ export function ShoppingRow({
 				{...rowProps}
 			>
 				{selection && selecting ? (
-					<SelectToggle
-						title={task.title}
-						selection={selection}
-						placement="lead"
-					/>
+					<SelectToggle title={task.title} selection={selection} />
 				) : (
 					<div
 						data-reading-check-target
-						className="flex size-11 shrink-0 items-center justify-center md:size-8"
+						className="flex size-(--row-slot) shrink-0 items-center justify-center"
 					>
 						<Checkbox
 							disabled={!canEdit}
@@ -209,14 +205,14 @@ export function ShoppingRow({
 					}}
 					onClick={onOpenClick}
 					className={cn(
-						"min-h-11 min-w-0 flex-1 text-start md:min-h-9",
+						"min-h-(--row-slot) min-w-0 pt-[calc((var(--row-slot)-1.5rem)/2)] pb-1 text-start outline-none",
 						task.done && "text-muted-foreground",
 					)}
 				>
-					<span
-						className={cn("block truncate", strikeClass(task.done ?? false))}
-					>
-						{task.title}
+					<span className="block truncate">
+						<span className={strikeClass(task.done ?? false)}>
+							<bdi>{task.title}</bdi>
+						</span>
 					</span>
 					<CompletedBy task={task} id={completionId} />
 					{(activation.status === "pending" ||
@@ -228,85 +224,93 @@ export function ShoppingRow({
 						</span>
 					)}
 				</button>
-				{editing ? (
-					<fieldset
-						aria-label={m.shopping_quantity_for({ title: task.title })}
-						className="flex shrink-0 items-center gap-1.5"
-						data-testid="shopping-qty-fields"
-						onBlur={onFieldsBlur}
-						onKeyDown={(e) => {
-							// Focus returns to the chip inside this keydown; without
-							// preventDefault the same Enter then activates it and reopens.
-							// Neither key reaches the global shortcuts while editing.
-							if (e.key === "Enter") {
-								e.preventDefault();
-								e.stopPropagation();
-								finish(true, true);
-							} else if (e.key === "Escape") {
-								e.preventDefault();
-								e.stopPropagation();
-								finish(false, true);
-							}
-						}}
-					>
-						<input
-							ref={qtyRef}
-							defaultValue={task.quantity ?? ""}
+				<div className="flex h-(--row-slot) shrink-0 items-center">
+					{editing ? (
+						<fieldset
 							aria-label={m.shopping_quantity_for({ title: task.title })}
-							placeholder={m.shopping_qty_placeholder()}
-							inputMode="decimal"
-							maxLength={QUANTITY_MAX_LENGTH}
-							aria-invalid={invalid || undefined}
-							aria-describedby={invalid ? errorId : undefined}
-							className={cn(FIELD, "w-14 text-center")}
-						/>
-						<input
-							ref={unitRef}
-							defaultValue={task.unit ?? ""}
-							aria-label={m.shopping_unit_for({ title: task.title })}
-							placeholder={m.shopping_unit_placeholder()}
-							maxLength={UNIT_MAX_LENGTH}
-							className={cn(FIELD, "w-16")}
-						/>
-					</fieldset>
-				) : amount ? (
-					<button
-						ref={triggerRef}
-						type="button"
-						disabled={!canEdit}
-						data-testid="shopping-qty-chip"
-						aria-label={m.shopping_quantity_edit({ amount, title: task.title })}
-						onClick={() => setEditing(true)}
-						className="flex min-h-11 shrink-0 items-center rounded-lg px-1 md:min-h-8 disabled:cursor-default"
-					>
-						<span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground tabular-nums">
+							className="flex shrink-0 items-center gap-1.5"
+							data-testid="shopping-qty-fields"
+							onBlur={onFieldsBlur}
+							onKeyDown={(e) => {
+								// Focus returns to the chip inside this keydown; without
+								// preventDefault the same Enter then activates it and reopens.
+								// Neither key reaches the global shortcuts while editing.
+								if (e.key === "Enter") {
+									e.preventDefault();
+									e.stopPropagation();
+									finish(true, true);
+								} else if (e.key === "Escape") {
+									e.preventDefault();
+									e.stopPropagation();
+									finish(false, true);
+								}
+							}}
+						>
+							<input
+								ref={qtyRef}
+								defaultValue={task.quantity ?? ""}
+								aria-label={m.shopping_quantity_for({ title: task.title })}
+								placeholder={m.shopping_qty_placeholder()}
+								inputMode="decimal"
+								maxLength={QUANTITY_MAX_LENGTH}
+								aria-invalid={invalid || undefined}
+								aria-describedby={invalid ? errorId : undefined}
+								className={cn(FIELD, "w-14 text-center")}
+							/>
+							<input
+								ref={unitRef}
+								defaultValue={task.unit ?? ""}
+								aria-label={m.shopping_unit_for({ title: task.title })}
+								placeholder={m.shopping_unit_placeholder()}
+								maxLength={UNIT_MAX_LENGTH}
+								className={cn(FIELD, "w-16")}
+							/>
+						</fieldset>
+					) : amount ? (
+						<button
+							ref={triggerRef}
+							type="button"
+							disabled={!canEdit}
+							data-testid="shopping-qty-chip"
+							aria-label={m.shopping_quantity_edit({
+								amount,
+								title: task.title,
+							})}
+							onClick={() => setEditing(true)}
+							className="flex min-h-full shrink-0 items-center rounded-lg px-1 text-sm text-muted-foreground tabular-nums disabled:cursor-default"
+						>
 							{amount}
-						</span>
-					</button>
-				) : showAdd ? (
-					<button
-						ref={triggerRef}
-						type="button"
-						data-testid="shopping-qty-add"
-						// Starts with the visible label so voice control can say what it sees.
-						aria-label={m.shopping_quantity_add({
-							label: m.shopping_qty_placeholder(),
-							title: task.title,
-						})}
-						onClick={() => setEditing(true)}
-						className="flex min-h-11 shrink-0 items-center gap-1 rounded-lg px-2 text-xs text-muted-foreground transition-[opacity,color] duration-(--motion-fast) ease-(--motion-ease) hover:text-foreground motion-reduce:transition-none md:min-h-8 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
-					>
-						<Plus className="size-3.5" aria-hidden />
-						{m.shopping_qty_placeholder()}
-					</button>
-				) : null}
-				{selection && !selecting && (
-					<SelectToggle
-						title={task.title}
-						selection={selection}
-						placement="trail"
-					/>
-				)}
+						</button>
+					) : showAdd ? (
+						<button
+							ref={triggerRef}
+							type="button"
+							data-testid="shopping-qty-add"
+							// Starts with the visible label so voice control can say what it sees.
+							aria-label={m.shopping_quantity_add({
+								label: m.shopping_qty_placeholder(),
+								title: task.title,
+							})}
+							onClick={() => setEditing(true)}
+							className="flex min-h-full shrink-0 items-center gap-1 rounded-lg px-2 text-xs text-muted-foreground transition-[opacity,color] duration-(--motion-fast) ease-(--motion-ease) hover:text-foreground motion-reduce:transition-none md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+						>
+							<Plus className="size-3.5" aria-hidden />
+							{m.shopping_qty_placeholder()}
+						</button>
+					) : null}
+				</div>
+				{/* Pointer-only: the name no longer fills the row, so the rest of it
+				    still opens the item. The name button is the keyboard stop. */}
+				<button
+					type="button"
+					tabIndex={-1}
+					aria-hidden
+					onMouseDown={(event) => {
+						if (selection && event.shiftKey) event.preventDefault();
+					}}
+					onClick={onOpenClick}
+					className="min-h-(--row-slot) min-w-0 flex-1 cursor-default outline-none"
+				/>
 			</div>
 			{menu}
 			{editing && invalid && (

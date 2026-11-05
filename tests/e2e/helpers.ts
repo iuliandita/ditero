@@ -90,6 +90,12 @@ export async function openAdvancedSection(
 }
 
 export async function openWorkspaceSwitcher(page: Page): Promise<void> {
+	// On phones the switcher heads the Lists block, not Today.
+	if (
+		(page.viewportSize()?.width ?? 1280) < 768 &&
+		(await page.getByTestId("workspace-switcher").count()) === 0
+	)
+		await openMobileLists(page);
 	// A menu still animating closed would swallow the click and toggle back.
 	await expect(page.getByTestId("switcher-settings")).toHaveCount(0);
 	await page.getByTestId("workspace-switcher").click();
@@ -223,11 +229,11 @@ export async function signUp(page: Page, email: string): Promise<string> {
 // query has synced, so its id is the seam between "shell mounted" and "data
 // usable". Any active workspace counts, personal or shared.
 export async function waitWorkspaceReady(page: Page): Promise<void> {
-	await expect(page.getByTestId("workspace-switcher")).toHaveAttribute(
-		"data-workspace-id",
-		/.+/,
-		{ timeout: SIGNUP_TIMEOUT },
-	);
+	// Phones show no switcher on the tab roots; their header carries the id.
+	const phone = (page.viewportSize?.()?.width ?? 1280) < 768;
+	await expect(
+		page.getByTestId(phone ? "phone-header" : "workspace-switcher"),
+	).toHaveAttribute("data-workspace-id", /.+/, { timeout: SIGNUP_TIMEOUT });
 }
 
 // A task row's title lives on its checkbox; the open control is named "Open
@@ -253,6 +259,8 @@ export function sidebarLists(page: Page): Locator {
 // The detail's summary shows only the properties a task has; the rest appear
 // once "Add details" is pressed, which is a no-op when they already are.
 export async function revealDetails(scope: Page | Locator): Promise<void> {
+	// Decide only once the detail has rendered; an early isVisible() is a no-op.
+	await expect(scope.getByTestId("task-detail-title").first()).toBeVisible();
 	const reveal = scope.getByTestId("task-add-details");
 	if (await reveal.isVisible()) await reveal.click();
 }
