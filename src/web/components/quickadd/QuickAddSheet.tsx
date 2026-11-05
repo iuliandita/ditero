@@ -398,6 +398,7 @@ export function QuickAddSheet({
 				onChange={(e) => {
 					const value = e.target.value;
 					setRaw(value);
+					setAdded(null);
 					const next = parseQuickAdd(
 						value,
 						undefined,
