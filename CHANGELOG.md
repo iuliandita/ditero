@@ -7,8 +7,17 @@ Back up your database and attachments before upgrading, and retain the original
 encryption keys and service secrets. Breaking changes remain possible throughout
 the `0.x` prereleases.
 
-## 0.1.0-beta.3 - 2026-11-05
+## 0.1.0-beta.4 - 2026-11-05
 
+The `v0.1.0-beta.3` tag never published: its Debian app image failed the image
+security gate. Beta 4 carries the same changes.
+
+- Releases ship the Alpine app image and the Zero image only. The Debian app
+  image (`-debian`) is held out because its Debian 13 base carries zlib
+  CVE-2026-76844, which Debian has not fixed for trixie yet; it returns once a
+  fixed zlib is available
+  ([#1267](https://github.com/iuliandita/ditero/issues/1267)). Use the Alpine
+  image, which the Compose, Helm and Kustomize packages already default to.
 - Task detail leads with the task: title, who can see it, one summary of its
   date, priority, assignees and labels, then notes and subtasks. Empty properties
   stay hidden until "Add details" is pressed, and the time field sits in the date

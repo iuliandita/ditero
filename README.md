@@ -23,7 +23,7 @@ are included, with no subscriptions or paid feature unlocks.
 
 [Website](https://ditero.app/) | [Quick start](#run-it-docker-compose) | [Features](#available-on-develop) | [Documentation](#documentation) | [Roadmap](docs/ROADMAP.md) | [Changelog](CHANGELOG.md) | [Brand assets](assets/brand/README.md)
 
-> **Beta.** `0.1.0-beta.3` is being prepared; it is a `0.x` prerelease with
+> **Beta.** `0.1.0-beta.4` is being prepared; it is a `0.x` prerelease with
 > breaking changes possible before `v1.0.0`. It is not stable. Until its
 > publication completes, the latest published prerelease remains
 > [`v0.1.0-beta.2`](https://github.com/iuliandita/ditero/releases/tag/v0.1.0-beta.2).
@@ -193,8 +193,8 @@ already percent-encode credentials. Do not print DSNs in diagnostic reports.
 
 That pulls `ghcr.io/iuliandita/ditero:nightly` and `:nightly-zero`. Add `--build`
 to build from this checkout instead. Set `DITERO_IMAGE_TAG=0.1.0-beta.2`
-to run the latest published prerelease with matching app and Zero tags until beta 3
-publication completes, then `0.1.0-beta.3`. Without it the Compose file pulls
+to run the latest published prerelease with matching app and Zero tags until beta 4
+publication completes, then `0.1.0-beta.4`. Without it the Compose file pulls
 nightly. Commit-specific nightly tags use different suffix ordering for app and
 Zero, so pin those two service images separately in a Compose override; see [image tags](RELEASING.md#channels).
 
