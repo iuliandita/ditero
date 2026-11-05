@@ -90,18 +90,36 @@ test("the list field reads quick-add syntax into chips and saves them", async ({
 
 	const input = page.getByTestId("new-task");
 	const chips = page.getByTestId("list-composer-chips");
-	await input.fill("Call plumber tomorrow p1 #home");
+	await input.fill("Call plumber Jan 15 2030 p1 #home");
 	await expect(chips.getByTestId("chip-date")).toBeVisible();
 	await expect(chips.getByTestId("chip-priority")).toBeVisible();
 	await expect(chips.getByTestId("chip-label")).toBeVisible();
 	await input.press("Enter");
 	await expect(input).toHaveValue("");
 	await expect(chips).toHaveCount(0);
-	const list = page.getByTestId("list");
-	await expect(list.getByText("Call plumber", { exact: true })).toBeVisible({
-		timeout: 15000,
-	});
-	await expect(list.getByText("Call plumber tomorrow")).toHaveCount(0);
+
+	// Fixed expectations, not the parser's output: an all-day Jan 15, P1, home.
+	const saved = () =>
+		page
+			.getByTestId("list")
+			.locator("[data-kbd-row]")
+			.filter({
+				has: page.getByRole("checkbox", { name: "Call plumber", exact: true }),
+			});
+	const expectSaved = async () => {
+		const row = saved();
+		await expect(row).toBeVisible({ timeout: 15000 });
+		await expect(row.getByText("Jan 15", { exact: true })).toBeVisible();
+		const flag = row.getByRole("img", { name: "Priority: P1 High" });
+		await expect(flag).toHaveAttribute("data-priority", "3");
+		await expect(row.getByText("home", { exact: true })).toBeVisible();
+	};
+	await expectSaved();
+	await expect(
+		page.getByTestId("list").getByText("Call plumber Jan 15"),
+	).toHaveCount(0);
+	await page.reload();
+	await expectSaved();
 });
 
 test("one Backspace after a chip turns it back into plain words", async ({
@@ -127,6 +145,39 @@ test("one Backspace after a chip turns it back into plain words", async ({
 	await page.getByRole("button", { name: "Keep #home as text" }).click();
 	await expect(page.getByTestId("chip-label")).toHaveCount(0);
 	await expect(input).toHaveValue("Pay water #home");
+});
+
+test("on a phone the draft and a kept chip survive the list regrouping", async ({
+	browser,
+}) => {
+	const ctx = await browser.newContext({
+		viewport: { width: 390, height: 844 },
+		hasTouch: true,
+		isMobile: true,
+	});
+	const page = await ctx.newPage();
+	await signUp(page, uniqueEmail("hint11"));
+	await waitWorkspaceReady(page);
+	await firstBlankList(page, "Rent");
+
+	const input = page.getByTestId("new-task");
+	await input.fill("Seed");
+	await input.press("Enter");
+	await expect(
+		page.getByTestId("list").getByText("Seed", { exact: true }),
+	).toBeVisible({ timeout: 15000 });
+
+	await input.fill("Pay rent p1");
+	await input.press("Backspace");
+	await expect(page.getByTestId("chip-priority")).toHaveCount(0);
+
+	// Grouping moves the phone add field to another subtree.
+	await page.getByTestId("row-actions").first().tap();
+	await page.getByTestId("group-by-assignee").tap();
+	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("new-task")).toHaveValue("Pay rent p1");
+	await expect(page.getByTestId("chip-priority")).toHaveCount(0);
+	await ctx.close();
 });
 
 test("a ~list that does not exist is refused instead of filed elsewhere", async ({

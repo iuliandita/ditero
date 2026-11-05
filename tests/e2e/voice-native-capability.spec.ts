@@ -56,13 +56,11 @@ async function forceEnglish(page: Page) {
 
 // Renderer crashes and uncaught page errors are observed from Node: a crashed
 // page can no longer answer evaluate() or run in-page assertions.
-// Quick add opens from `c`, or from + on a phone, which hides + on a list and
-// so goes through Today.
+// Quick add opens from `c`, or from + on a phone.
 async function openQuickAddFromKeyboard(page: Page) {
-	const today = page.getByTestId("nav-tab-today");
-	if (await today.isVisible()) {
-		await today.click();
-		await page.getByRole("button", { name: "Quick add", exact: true }).click();
+	const fab = page.getByRole("button", { name: "Quick add", exact: true });
+	if (await fab.isVisible()) {
+		await fab.click();
 		return;
 	}
 	await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());

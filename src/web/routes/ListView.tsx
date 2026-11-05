@@ -42,7 +42,11 @@ import {
 } from "../components/attachments/AttachmentList.tsx";
 import { BulkSelection } from "../components/list/BulkSelection.tsx";
 import { IconPicker } from "../components/list/IconPicker.tsx";
-import { ListComposer } from "../components/list/ListComposer.tsx";
+import {
+	type ComposerDraft,
+	EMPTY_DRAFT,
+	ListComposer,
+} from "../components/list/ListComposer.tsx";
 import { ScheduleSheet } from "../components/list/ScheduleSheet.tsx";
 import { TaskDetail } from "../components/list/TaskDetail.tsx";
 import { TaskList } from "../components/list/TaskList.tsx";
@@ -109,6 +113,7 @@ export function ListView({
 	const coarse = useMediaQuery("(pointer: coarse)");
 	const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
 	const [scheduleTaskId, setScheduleTaskId] = useState<string | null>(null);
+	const [draft, setDraft] = useState<ComposerDraft>(EMPTY_DRAFT);
 	const titleInput = useRef<HTMLInputElement>(null);
 	const attachmentsRef = useRef<AttachmentListHandle>(null);
 	const listHeaderRef = useRef<HTMLDivElement>(null);
@@ -421,6 +426,8 @@ export function ListView({
 			inputRef={titleInput}
 			candidates={titleCandidates}
 			run={run}
+			draft={draft}
+			onDraft={setDraft}
 		/>
 	);
 	const mobileAdd = isDesktop ? undefined : addForm;

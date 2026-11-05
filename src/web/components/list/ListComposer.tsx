@@ -4,10 +4,12 @@ import { Button } from "@/components/ui/button";
 import { addCopyFor } from "@/lib/kind-copy";
 import type { ListKind } from "../../../domain/icon-map.ts";
 import {
+	type KeptSpan,
 	normalizeListName,
 	parseLeadingAmount,
 	parseQuickAdd,
 	type QuickAddToken,
+	shiftKeptSpans,
 } from "../../../domain/quick-add.ts";
 import { randomId } from "../../../domain/random-id.ts";
 import { keyBetween } from "../../../domain/sort-key.ts";
@@ -21,6 +23,11 @@ import { TitleSuggestInput } from "./TitleSuggestInput.tsx";
 
 const READ_ONLY_ID = "list-read-only";
 const REASON_ID = "list-composer-reason";
+
+// Owned by ListView: the phone layout mounts this component in a different
+// place when the list empties, fills or regroups, and the draft must outlive it.
+export type ComposerDraft = { text: string; kept: KeptSpan[] };
+export const EMPTY_DRAFT: ComposerDraft = { text: "", kept: [] };
 
 // The in-list add field. Tasks, projects and checklists read the quick-add
 // grammar; shopping reads only a leading amount; habits stay literal. A chip
@@ -37,6 +44,8 @@ export function ListComposer({
 	inputRef,
 	candidates,
 	run,
+	draft,
+	onDraft,
 }: {
 	list: List;
 	kind: ListKind;
@@ -48,12 +57,12 @@ export function ListComposer({
 	inputRef: React.RefObject<HTMLInputElement | null>;
 	candidates: readonly TitleCandidate[];
 	run: (mutation: { client: Promise<unknown> }) => Promise<boolean>;
+	draft: ComposerDraft;
+	onDraft: (draft: ComposerDraft) => void;
 }) {
 	const zero = useZero<typeof schema>();
 	const addCopy = addCopyFor(kind);
-	const [text, setText] = useState("");
-	// Lowercased token texts the user turned back into plain words.
-	const [literal, setLiteral] = useState<string[]>([]);
+	const { text, kept } = draft;
 	const [added, setAdded] = useState<{ list: string; id: string } | null>(null);
 	const mode =
 		kind === "shopping" ? "amount" : kind === "habits" ? "text" : "quick";
@@ -70,18 +79,22 @@ export function ListComposer({
 			undefined,
 			locale,
 			workspaceLists.map((l) => l.title),
-			literal,
+			kept,
 		);
 		// Nothing left to name the task: save the words as typed instead.
 		return parsed.title ? parsed : null;
-	}, [mode, text, locale, workspaceLists, literal]);
+	}, [mode, text, locale, workspaceLists, kept]);
 	const amount = useMemo(() => {
 		if (mode !== "amount") return null;
 		const parsed = parseLeadingAmount(text);
-		return parsed && !literal.includes(parsed.token.text.toLowerCase())
-			? parsed
-			: null;
-	}, [mode, text, literal]);
+		if (!parsed) return null;
+		const { start, end, text: word } = parsed.token;
+		return kept.some(
+			(k) => k.start === start && k.end === end && k.text === word,
+		)
+			? null
+			: parsed;
+	}, [mode, text, kept]);
 
 	const listToken = quick?.tokens.find((t) => t.type === "list");
 	const matches = quick?.listName
@@ -131,17 +144,13 @@ export function ListComposer({
 	}, [added]);
 
 	function change(next: string) {
-		setText(next);
 		setAdded(null);
-		const lower = next.toLowerCase();
-		setLiteral((prev) => {
-			const kept = prev.filter((token) => lower.includes(token));
-			return kept.length === prev.length ? prev : kept;
-		});
+		onDraft({ text: next, kept: shiftKeptSpans(text, next, kept) });
 	}
 
 	function keepAsText(token: QuickAddToken) {
-		setLiteral((prev) => [...prev, token.text.toLowerCase()]);
+		const { start, end, text: word } = token;
+		onDraft({ text, kept: [...kept, { start, end, text: word }] });
 		inputRef.current?.focus();
 	}
 
@@ -168,8 +177,7 @@ export function ListComposer({
 				null,
 			);
 		const id = randomId();
-		setText("");
-		setLiteral([]);
+		onDraft(EMPTY_DRAFT);
 		const created = await run(
 			zero.mutate(
 				mutators.task.create({

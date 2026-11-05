@@ -76,22 +76,68 @@ export function normalizeListName(value: string): string {
 	return value.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 }
 
+/** A chip the user turned back into plain words, located by its span in the input. */
+export type KeptSpan = { start: number; end: number; text: string };
+
+// Stands in for a kept span while parsing. A private-use code point is neither
+// space, word, sigil nor digit, so no pass can read or cross it.
+const KEPT = "\uE000";
+
 /**
- * `literal` lists token texts (any case) the caller wants left in the title,
- * for a chip the user turned back into plain words.
+ * Carries kept spans across an edit from `prev` to `next`. Only the changed
+ * middle is unknown: a span before it stays, one after it shifts, one touching
+ * it is dropped. Survivors must still spell the same characters.
+ */
+export function shiftKeptSpans(
+	prev: string,
+	next: string,
+	spans: readonly KeptSpan[],
+): KeptSpan[] {
+	const max = Math.min(prev.length, next.length);
+	let head = 0;
+	while (head < max && prev[head] === next[head]) head++;
+	let tail = 0;
+	while (
+		tail < max - head &&
+		prev[prev.length - 1 - tail] === next[next.length - 1 - tail]
+	)
+		tail++;
+	const delta = next.length - prev.length;
+	const out: KeptSpan[] = [];
+	for (const span of spans) {
+		const moved =
+			span.end <= head
+				? span
+				: span.start >= prev.length - tail
+					? { ...span, start: span.start + delta, end: span.end + delta }
+					: null;
+		if (moved && next.slice(moved.start, moved.end) === moved.text)
+			out.push(moved);
+	}
+	return out;
+}
+
+/**
+ * `kept` lists spans the caller wants left in the title untouched, for a chip
+ * the user turned back into plain words. A span whose characters no longer
+ * match the input is ignored.
  */
 export function parseQuickAdd(
 	input: string,
 	now: Date = new Date(),
 	locale = "en",
 	listNames?: readonly string[],
-	literal: readonly string[] = [],
+	kept: readonly KeptSpan[] = [],
 ): QuickAddParse {
 	// Task 10 feeds an onChange value; guard the never-throws contract.
 	if (typeof input !== "string") return emptyParse();
 	const chars = input.split("");
-	const literalSet = new Set(literal.map((text) => text.toLowerCase()));
-	const isLiteral = (text: string) => literalSet.has(text.toLowerCase());
+	const keptRanges: [number, number][] = [];
+	for (const span of kept) {
+		if (input.slice(span.start, span.end) !== span.text) continue;
+		keptRanges.push([span.start, span.end]);
+		for (let i = span.start; i < span.end; i++) chars[i] = KEPT;
+	}
 	const mask = (start: number, end: number) => {
 		for (let i = start; i < end; i++) chars[i] = " ";
 	};
@@ -103,7 +149,6 @@ export function parseQuickAdd(
 	let prioritySeen = false;
 
 	for (const m of chars.join("").matchAll(LABEL_RE)) {
-		if (isLiteral(m[0])) continue;
 		const start = m.index;
 		const end = start + m[0].length;
 		labels.push(m[1]);
@@ -129,14 +174,12 @@ export function parseQuickAdd(
 		}
 		if (!length) length = /^[\p{L}\p{M}\p{N}_-]+/u.exec(rest)?.[0].length ?? 0;
 		const end = start + 1 + length;
-		if (isLiteral(input.slice(start, end))) continue;
 		if (listName === null) listName = input.slice(start + 1, end);
 		tokens.push({ type: "list", text: input.slice(start, end), start, end });
 		mask(start, end);
 	}
 
 	for (const m of chars.join("").matchAll(PRIORITY_RE)) {
-		if (isLiteral(m[0])) continue;
 		const start = m.index;
 		const end = start + m[0].length;
 		// First priority wins; later dupes still consumed+tokenized so they don't leak into title.
@@ -149,9 +192,9 @@ export function parseQuickAdd(
 	}
 
 	const parser = dateParserFor(locale);
-	const dateResults = (
-		parser ? parser.parse(chars.join(""), now, { forwardDate: true }) : []
-	).filter((result) => !isLiteral(result.text));
+	const dateResults = parser
+		? parser.parse(chars.join(""), now, { forwardDate: true })
+		: [];
 	let dueAt: Date | null = null;
 	let dueAllDay = true;
 	if (dateResults.length > 0) {
@@ -164,6 +207,8 @@ export function parseQuickAdd(
 		mask(start, end);
 	}
 
+	for (const [start, end] of keptRanges)
+		for (let i = start; i < end; i++) chars[i] = input[i];
 	const title = chars.join("").split(/\s+/).filter(Boolean).join(" ");
 
 	// Task 10's TokenChips walks tokens left-to-right; return sorted by span start.
