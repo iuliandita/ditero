@@ -24,7 +24,7 @@ import { copyText } from "../../lib/clipboard.ts";
 import { useKeyring } from "../../lib/e2e/KeyringProvider.tsx";
 import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
 import { InviteMailNotice } from "./InviteMailNotice";
-import { ROLE_LABELS } from "./role-labels.ts";
+import { ROLE_DESCRIPTIONS, ROLE_LABELS } from "./role-labels.ts";
 
 // Roles a caller may grant, mirroring the server escalation gate in
 // auth/invite-create.ts (default policy): only an owner grants owner, admin+
@@ -167,6 +167,9 @@ export function InviteDialog({
 				{link ? (
 					<div className="flex flex-col gap-2">
 						<InviteMailNotice mail={mail} email={sentTo} />
+						<p className="text-sm text-muted-foreground">
+							{ROLE_DESCRIPTIONS[role]()}
+						</p>
 						<span className="text-sm text-muted-foreground">
 							{m.invite_link_once_hint()}
 						</span>
@@ -237,6 +240,9 @@ export function InviteDialog({
 									))}
 								</SelectContent>
 							</Select>
+							<p className="text-sm text-muted-foreground">
+								{ROLE_DESCRIPTIONS[role]()}
+							</p>
 						</div>
 
 						{error && (
