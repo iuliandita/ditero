@@ -259,6 +259,8 @@ export function sidebarLists(page: Page): Locator {
 // The detail's summary shows only the properties a task has; the rest appear
 // once "Add details" is pressed, which is a no-op when they already are.
 export async function revealDetails(scope: Page | Locator): Promise<void> {
+	// Decide only once the detail has rendered; an early isVisible() is a no-op.
+	await expect(scope.getByTestId("task-detail-title").first()).toBeVisible();
 	const reveal = scope.getByTestId("task-add-details");
 	if (await reveal.isVisible()) await reveal.click();
 }
