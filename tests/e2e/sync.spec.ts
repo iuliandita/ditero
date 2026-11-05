@@ -174,7 +174,9 @@ test("desktop: offline edits are kept, counted, and land on reconnect", async ({
 	await indicator.hover();
 	const popover = page.locator('[data-testid="sync-popover"]');
 	await expect(popover).toBeVisible();
-	await expect(popover).toContainText("saved to the server right away");
+	await expect(popover).toContainText(
+		"Nothing you changed here is waiting to sync",
+	);
 	await expectNoSeriousA11y(page, "sync popover (synced)");
 	await page.mouse.move(700, 450);
 	await expect(popover).toHaveCount(0);

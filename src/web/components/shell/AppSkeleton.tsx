@@ -22,8 +22,10 @@ export function BootSkeleton() {
 	);
 }
 
-// Mirrors AppShell's frame (single md breakpoint, auto_1fr grid, 280px sidebar)
-// so real content replaces the silhouette in place instead of reflowing.
+// Mirrors the signed-in AppShell (single md breakpoint, auto_1fr grid, 280px
+// sidebar, 56px phone header, three-tab bottom bar, 12px content padding scale)
+// so real content replaces the silhouette in place instead of reflowing. Only
+// rendered once a session exists; BootSkeleton covers the undecided state.
 export function ShellSkeleton() {
 	return (
 		<div
@@ -33,32 +35,52 @@ export function ShellSkeleton() {
 			className="min-h-dvh md:grid md:grid-cols-[auto_1fr]"
 		>
 			<div className="hidden h-dvh w-[280px] flex-col gap-2 border-e bg-sidebar p-2 md:flex">
-				<Skeleton className="h-8 w-full" />
-				<Skeleton className="h-8 w-full" />
-				<div className="mt-4 flex flex-col gap-2">
+				{[0, 1, 2].map((i) => (
+					<Skeleton key={i} className="h-8 w-full" />
+				))}
+				<Skeleton className="mt-5 h-10 w-full" />
+				<div className="flex flex-col gap-2">
 					{[0, 1, 2, 3, 4].map((i) => (
 						<Skeleton key={i} className="h-7 w-full" />
 					))}
 				</div>
 			</div>
-			<main className="p-4 md:p-6">
-				<div className="mx-auto flex w-full max-w-3xl flex-col gap-4 md:max-w-[1200px]">
-					<Skeleton className="h-7 w-48" />
-					<TaskRowsSkeleton />
+			<div className="md:min-w-0">
+				<div className="flex h-14 items-center gap-2 border-b ps-4 pe-2 md:hidden">
+					<Skeleton className="h-6 w-32" />
+					<div className="ms-auto flex size-11 items-center justify-center">
+						<Skeleton className="size-5" />
+					</div>
 				</div>
-			</main>
+				<main className="mx-auto w-full md:max-w-[1200px]">
+					<div className="p-4 md:p-6">
+						<div className="flex max-w-3xl flex-col gap-3">
+							<Skeleton className="h-7 w-48" />
+							<TaskRowsSkeleton />
+						</div>
+					</div>
+				</main>
+			</div>
+			<div
+				aria-hidden
+				className="fixed inset-x-0 bottom-0 grid h-14 grid-cols-3 items-center justify-items-center border-t bg-background pb-[env(safe-area-inset-bottom)] md:hidden"
+			>
+				{[0, 1, 2].map((i) => (
+					<Skeleton key={i} className="h-9 w-12" />
+				))}
+			</div>
 		</div>
 	);
 }
 
-// Row silhouettes at TaskRow's height (py-1.5 around a min-h-9 row). Used by
+// Row silhouettes at TaskRow's 48px minimum height. Used by
 // every task surface so a list and a view degrade to the same shape.
 export function TaskRowsSkeleton({ rows = 5 }: { rows?: number }) {
 	const keys = Array.from({ length: rows }, (_, i) => `skeleton-row-${i}`);
 	return (
 		<div className="flex flex-col gap-2">
 			{keys.map((key) => (
-				<div key={key} className="flex items-center gap-2 py-1.5">
+				<div key={key} className="flex min-h-12 items-center gap-2">
 					<Skeleton className="size-5 shrink-0 rounded-md" />
 					<Skeleton className="h-5 flex-1" />
 				</div>

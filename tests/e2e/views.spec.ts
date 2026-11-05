@@ -7,6 +7,7 @@ import {
 	openAdvancedSection,
 	signUp,
 	uniqueEmail,
+	waitWorkspaceReady,
 } from "./helpers.ts";
 
 // M1c views + keyboard e2e. Exercises the saved-view lifecycle (build/save/
@@ -21,18 +22,10 @@ import {
 
 test.describe.configure({ timeout: 90_000 });
 
-const SIGNUP_TIMEOUT = 30_000;
-
 // Desktop sidebar list/view nav (aria-label "Lists"): scopes clicks away from the
 // mobile index + create-list controls that share their labels with titles.
 function sidebarLists(page: Page): Locator {
 	return page.getByRole("navigation", { name: "Lists" });
-}
-
-async function waitWorkspaceReady(page: Page): Promise<void> {
-	await expect(page.getByRole("button", { name: /'s space/ })).toBeVisible({
-		timeout: SIGNUP_TIMEOUT,
-	});
 }
 
 async function createListDesktop(page: Page, name: string): Promise<void> {

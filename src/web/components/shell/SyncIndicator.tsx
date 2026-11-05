@@ -31,7 +31,7 @@ import {
 } from "../../lib/zero-lifecycle.ts";
 
 // Distinct shapes per state so color is never the only carrier.
-const PHASE: Record<
+export const PHASE: Record<
 	SyncPhase,
 	{
 		icon: LucideIcon;
@@ -115,6 +115,13 @@ const PHASE: Record<
 
 const HOVER_CLOSE_DELAY_MS = 150;
 
+// The inline notice asks for the same popover the icon opens, so there is one
+// place for the details and its actions.
+const detailsRequests = new Set<() => void>();
+export function requestSyncDetails() {
+	for (const request of detailsRequests) request();
+}
+
 // A quiet status control: the sidebar footer on desktop, the end of the phone
 // header. Hover previews the explanation; a click or tap pins it open, which
 // is also the keyboard and touch path.
@@ -139,6 +146,16 @@ export function SyncIndicator({
 	const showCount = pending > 0 && phase !== "synced";
 
 	useEffect(() => () => window.clearTimeout(closeTimer.current), []);
+	useEffect(() => {
+		const show = () => {
+			setOpen(true);
+			setPinned(true);
+		};
+		detailsRequests.add(show);
+		return () => {
+			detailsRequests.delete(show);
+		};
+	}, []);
 
 	function hoverOpen(event: PointerEvent) {
 		if (event.pointerType !== "mouse") return;
