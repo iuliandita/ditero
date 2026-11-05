@@ -41,12 +41,13 @@ are published, with full runtime qualification still pending. See the
 [Android](../apps/android/README.md) and [desktop](../apps/desktop/README.md)
 qualification notes. Native delivery remains open in issue #346.
 
-Development happens on `develop`. The fourth beta, `0.1.0-beta.4`, is being prepared;
-betas remain `0.x` prereleases with breaking changes possible, not stable releases.
-The first published release was `0.0.1-alpha.1`; the latest published prerelease is
-[`0.1.0-beta.2`](https://github.com/iuliandita/ditero/releases/tag/v0.1.0-beta.2).
-Beta 4 carries the beta 3 changes, whose tag never published: it reworks task detail, quick add, task rows and the workspace shell, and
-fixes mixed-direction text in Arabic.
+Development happens on `develop`. Betas remain `0.x` prereleases with breaking
+changes possible, not stable releases. The first published release was
+`0.0.1-alpha.1`; the latest published prerelease is
+[`0.1.0-beta.4`](https://github.com/iuliandita/ditero/releases/tag/v0.1.0-beta.4).
+Beta 4 carries the beta 3 changes, whose tag never published: it reworks task
+detail, quick add, task rows and the workspace shell, and fixes mixed-direction
+text in Arabic.
 The native desktop archive-import entry
 remains unavailable pending transfer and recovery qualification. Broader native
 device qualification remains open.
