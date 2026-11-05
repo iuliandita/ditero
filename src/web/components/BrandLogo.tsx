@@ -1,6 +1,6 @@
-import symbol from "../../../assets/brand/ditero-symbol-teal.png";
-import darkWordmark from "../../../assets/brand/ditero-wordmark-dark.png";
-import lightWordmark from "../../../assets/brand/ditero-wordmark-light.png";
+import symbol from "../../../assets/brand/web/ditero-symbol-teal.png";
+import darkWordmark from "../../../assets/brand/web/ditero-wordmark-dark.png";
+import lightWordmark from "../../../assets/brand/web/ditero-wordmark-light.png";
 import { cn } from "../lib/utils.ts";
 
 // `lazy` keeps the theme variant that is not shown (display: none) from being
@@ -20,8 +20,8 @@ export function BrandLogo({
 				src={lightWordmark}
 				alt=""
 				aria-hidden="true"
-				width={2172}
-				height={724}
+				width={432}
+				height={144}
 				loading={loading}
 				className="h-auto w-full dark:hidden"
 			/>
@@ -29,8 +29,8 @@ export function BrandLogo({
 				src={darkWordmark}
 				alt=""
 				aria-hidden="true"
-				width={2172}
-				height={724}
+				width={432}
+				height={144}
 				loading={loading}
 				className="hidden h-auto w-full dark:block"
 			/>
@@ -46,8 +46,8 @@ export function BrandSymbol({ className }: { className?: string }) {
 				src={symbol}
 				alt=""
 				aria-hidden="true"
-				width={1254}
-				height={1254}
+				width={96}
+				height={96}
 				loading="lazy"
 				className="size-full"
 			/>

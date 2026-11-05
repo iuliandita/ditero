@@ -42,7 +42,6 @@ import { CreateList } from "../components/shell/CreateList.tsx";
 import { Fab } from "../components/shell/Fab.tsx";
 import { FirstRunActions } from "../components/shell/FirstRunActions.tsx";
 import { groupLists } from "../components/shell/grouping.ts";
-import { publishMembersLauncher } from "../components/shell/MembersLauncher.tsx";
 import { MobileListIndex } from "../components/shell/MobileListIndex.tsx";
 import { PageFrame } from "../components/shell/PageFrame.tsx";
 import { RestrictedShell } from "../components/shell/RestrictedShell.tsx";
@@ -475,16 +474,6 @@ function NormalWorkspace({
 	const canManageMembers =
 		workspaces.find((w) => w.id === activeId)?.kind === "shared" ||
 		memberships.filter((row) => row.workspaceId === activeId).length > 1;
-	const openMembersRef = useRef(openMembers);
-	openMembersRef.current = openMembers;
-	useEffect(() => {
-		publishMembersLauncher(
-			canManageMembers && activeId
-				? { workspaceId: activeId, open: () => openMembersRef.current() }
-				: null,
-		);
-		return () => publishMembersLauncher(null);
-	}, [canManageMembers, activeId]);
 	const canEditList = (listId: string) =>
 		!viewRowsLoading &&
 		tasks

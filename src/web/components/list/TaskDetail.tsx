@@ -74,7 +74,6 @@ import { markTaskPanelOpen } from "../../lib/use-wide-content.ts";
 import { AttachmentList } from "../attachments/AttachmentList.tsx";
 import { AssigneePicker } from "../people/AssigneePicker.tsx";
 import { CommentThread } from "../people/CommentThread.tsx";
-import { useMembersLauncher } from "../shell/MembersLauncher.tsx";
 import { DuePicker } from "../task/DuePicker.tsx";
 import { RecurrenceEditor } from "../task/RecurrenceEditor.tsx";
 import { ReminderChip } from "../task/ReminderChip.tsx";
@@ -214,12 +213,6 @@ export function TaskDetail({
 	const zero = useZero<typeof schema>();
 	const [workspaces] = useQuery(queries.workspaces.mine());
 	const sourceWorkspace = workspaces.find((w) => w.id === list.workspaceId);
-	const openMembers = useMembersLauncher(list.workspaceId);
-	const visibilityContext = `${list.title}${
-		sourceWorkspace
-			? ` / ${sourceWorkspace.kind === "personal" ? m.scope_source_personal({ workspace: sourceWorkspace.name }) : m.scope_source_shared({ workspace: sourceWorkspace.name })}`
-			: ""
-	}`;
 	const [memberships] = useQuery(queries.memberships.mine());
 	const callerRole = memberships.find(
 		(row) => row.workspaceId === list.workspaceId && row.userId === zero.userID,
@@ -705,24 +698,15 @@ export function TaskDetail({
 
 	const body = (
 		<div className="flex flex-col gap-6 px-4 pb-6">
-			{openMembers ? (
-				<button
-					type="button"
-					data-testid="task-visibility-context"
-					aria-haspopup="dialog"
-					onClick={openMembers}
-					className="min-h-11 self-start break-words text-start text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:min-h-0"
-				>
-					{visibilityContext}
-				</button>
-			) : (
-				<p
-					data-testid="task-visibility-context"
-					className="break-words text-xs text-muted-foreground"
-				>
-					{visibilityContext}
-				</p>
-			)}
+			<p
+				data-testid="task-visibility-context"
+				className="break-words text-xs text-muted-foreground"
+			>
+				{list.title}
+				{sourceWorkspace
+					? ` / ${sourceWorkspace.kind === "personal" ? m.scope_source_personal({ workspace: sourceWorkspace.name }) : m.scope_source_shared({ workspace: sourceWorkspace.name })}`
+					: ""}
+			</p>
 			{activation.status !== "native" && activation.status !== "active" && (
 				<ImportActivationRecovery
 					key={taskImportRecoveryKey(t.id, list.workspaceId, activation.status)}
