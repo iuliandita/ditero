@@ -382,6 +382,9 @@
 	"priority_medium": "Medium",
 	"priority_high": "High",
 	"priority_coded": "{code} {name}",
+	"priority_group_high": "High priority",
+	"priority_group_medium": "Medium priority",
+	"priority_group_low": "Low priority",
 	"due_today": "Today",
 	"due_tomorrow": "Tomorrow",
 	"list_completed_count": [
@@ -543,6 +546,7 @@
 	"shopping_category_other": "Other",
 	"task_reorder_handle": "Reorder task",
 	"task_priority_aria": "Priority: {priority}",
+	"task_part_of": "Part of {title}",
 	"task_open_details": "Open details",
 	"task_subtask_progress_aria": [
 		{
@@ -1404,6 +1408,7 @@
 		}
 	],
 	"assignee_chips_aria": "Assignees: {names}",
+	"task_assignees_more": "{name} +{count}",
 	"assignee_invite_confirm": "Invite {name} to {workspace} and assign?",
 	"assignee_invite_confirm_no_workspace": "Invite {name} to this workspace and assign?",
 	"assignee_invite_hint": "They are assigned once they accept the invite.",

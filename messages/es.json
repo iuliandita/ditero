@@ -383,6 +383,9 @@
 	"priority_medium": "Media",
 	"priority_high": "Alta",
 	"priority_coded": "{code} {name}",
+	"priority_group_high": "Prioridad alta",
+	"priority_group_medium": "Prioridad media",
+	"priority_group_low": "Prioridad baja",
 	"due_today": "Hoy",
 	"due_tomorrow": "Mañana",
 	"list_completed_count": [
@@ -546,6 +549,7 @@
 	"shopping_category_other": "Otros",
 	"task_reorder_handle": "Reordenar la tarea",
 	"task_priority_aria": "Prioridad: {priority}",
+	"task_part_of": "Parte de {title}",
 	"task_open_details": "Abrir detalles",
 	"task_subtask_progress_aria": [
 		{
@@ -1432,6 +1436,7 @@
 		}
 	],
 	"assignee_chips_aria": "Responsables: {names}",
+	"task_assignees_more": "{name} +{count}",
 	"assignee_invite_confirm": "¿Invitar a {name} a {workspace} y asignarle la tarea?",
 	"assignee_invite_confirm_no_workspace": "¿Invitar a {name} a este Workspace y asignarle la tarea?",
 	"assignee_invite_hint": "Se le asigna en cuanto acepte la invitación.",

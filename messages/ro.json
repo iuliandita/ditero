@@ -383,6 +383,9 @@
 	"priority_medium": "Medie",
 	"priority_high": "Ridicată",
 	"priority_coded": "{code} {name}",
+	"priority_group_high": "Prioritate ridicată",
+	"priority_group_medium": "Prioritate medie",
+	"priority_group_low": "Prioritate scăzută",
 	"due_today": "Azi",
 	"due_tomorrow": "Mâine",
 	"list_completed_count": [
@@ -546,6 +549,7 @@
 	"shopping_category_other": "Altele",
 	"task_reorder_handle": "Reordonează sarcina",
 	"task_priority_aria": "Prioritate: {priority}",
+	"task_part_of": "Parte din {title}",
 	"task_open_details": "Deschide detaliile",
 	"task_subtask_progress_aria": [
 		{
@@ -1432,6 +1436,7 @@
 		}
 	],
 	"assignee_chips_aria": "Responsabili: {names}",
+	"task_assignees_more": "{name} +{count}",
 	"assignee_invite_confirm": "Inviți {name} în {workspace} și îi atribui sarcina?",
 	"assignee_invite_confirm_no_workspace": "Inviți {name} în acest workspace și îi atribui sarcina?",
 	"assignee_invite_hint": "Sarcina îi este atribuită imediat ce acceptă invitația.",

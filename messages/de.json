@@ -382,6 +382,9 @@
 	"priority_medium": "Mittel",
 	"priority_high": "Hoch",
 	"priority_coded": "{code} {name}",
+	"priority_group_high": "Hohe Priorität",
+	"priority_group_medium": "Mittlere Priorität",
+	"priority_group_low": "Niedrige Priorität",
 	"due_today": "Heute",
 	"due_tomorrow": "Morgen",
 	"list_completed_count": [
@@ -543,6 +546,7 @@
 	"shopping_category_other": "Sonstiges",
 	"task_reorder_handle": "Aufgabe umsortieren",
 	"task_priority_aria": "Priorität: {priority}",
+	"task_part_of": "Teil von {title}",
 	"task_open_details": "Details öffnen",
 	"task_subtask_progress_aria": [
 		{
@@ -1404,6 +1408,7 @@
 		}
 	],
 	"assignee_chips_aria": "Zuständige: {names}",
+	"task_assignees_more": "{name} +{count}",
 	"assignee_invite_confirm": "{name} zu {workspace} einladen und zuweisen?",
 	"assignee_invite_confirm_no_workspace": "{name} zu diesem Workspace einladen und zuweisen?",
 	"assignee_invite_hint": "Die Zuweisung greift, sobald die Einladung angenommen wird.",

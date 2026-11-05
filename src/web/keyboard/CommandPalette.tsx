@@ -98,6 +98,9 @@ export function CommandPalette({
 
 	const [query, setQuery] = useState("");
 	const [active, setActive] = useState(0);
+	// The accent ring marks the cursor only while the keys drive it; under the
+	// pointer the neutral fill alone follows the mouse.
+	const [keyboardCursor, setKeyboardCursor] = useState(true);
 	const [lastQuery, setLastQuery] = useState("");
 	const inputRef = useRef<HTMLInputElement>(null);
 	// Ignore mousemove events that don't actually move the pointer (e.g. a
@@ -113,6 +116,7 @@ export function CommandPalette({
 		if (!isOpen) return;
 		setQuery("");
 		setActive(0);
+		setKeyboardCursor(true);
 		const id = requestAnimationFrame(() => inputRef.current?.focus());
 		return () => cancelAnimationFrame(id);
 	}, [isOpen]);
@@ -324,13 +328,15 @@ export function CommandPalette({
 				showCloseButton={false}
 				aria-describedby={undefined}
 				data-testid="command-palette"
-				className="top-24 translate-y-0 gap-0 p-0 sm:max-w-lg"
+				className="top-24 translate-y-0 gap-0 p-0 shadow-floating sm:max-w-lg"
 				onKeyDown={(e) => {
 					if (e.key === "ArrowDown") {
 						e.preventDefault();
+						setKeyboardCursor(true);
 						setActive((a) => (flat.length ? (a + 1) % flat.length : 0));
 					} else if (e.key === "ArrowUp") {
 						e.preventDefault();
+						setKeyboardCursor(true);
 						setActive((a) =>
 							flat.length ? (a - 1 + flat.length) % flat.length : 0,
 						);
@@ -352,7 +358,7 @@ export function CommandPalette({
 						aria-expanded={flat.length > 0}
 						aria-controls={listboxId}
 						aria-activedescendant={activeOptionId}
-						className="h-9 border-0 focus-visible:ring-0"
+						className="h-9"
 					/>
 				</div>
 				<div
@@ -395,6 +401,9 @@ export function CommandPalette({
 												tabIndex={-1}
 												aria-selected={isActive}
 												data-active={isActive}
+												data-keyboard={
+													(isActive && keyboardCursor) || undefined
+												}
 												onMouseMove={(e) => {
 													if (
 														e.clientX === lastPointer.current.x &&
@@ -402,10 +411,11 @@ export function CommandPalette({
 													)
 														return;
 													lastPointer.current = { x: e.clientX, y: e.clientY };
+													setKeyboardCursor(false);
 													setActive(index);
 												}}
 												onClick={() => activate(item)}
-												className="flex min-h-9 w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-start text-sm data-[active=true]:bg-muted"
+												className="flex min-h-9 w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-start text-sm data-[active=true]:bg-(--cursor-fill) data-[active=true]:font-medium data-keyboard:ring-2 data-keyboard:ring-ring data-keyboard:ring-inset"
 											>
 												{item.icon !== null && (
 													<span className="flex size-4 shrink-0 items-center justify-center">

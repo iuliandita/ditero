@@ -25,6 +25,23 @@ export function priorityLabel(priority: number | null | undefined): string {
 	});
 }
 
+const PRIORITY_GROUP_LABELS: Record<number, () => string> = {
+	1: m.priority_group_low,
+	2: m.priority_group_medium,
+	3: m.priority_group_high,
+};
+
+// A group heading says "High priority" in plain words; the p1-p3 code belongs
+// to quick-add and pickers.
+export function priorityGroupLabel(
+	priority: number | null | undefined,
+): string {
+	const level = priority ?? 0;
+	return Object.hasOwn(PRIORITY_GROUP_LABELS, level)
+		? PRIORITY_GROUP_LABELS[level]()
+		: m.priority_none();
+}
+
 // Priority: 0 none, 1 low, 2 med, 3 high (db default 0). Colors are the
 // --priority-* design tokens (index.css); 0 renders no flag. `label` is a
 // getter for the same import-time-locale reason as the map above.
@@ -79,15 +96,19 @@ function sameDay(a: Date, b: Date) {
 }
 
 // Short due label: Today / Tomorrow / "Mon 15", plus the time for timed tasks.
+// `omitToday` is for the Today view, where the day is already the heading: a
+// task due today shows only its time, or nothing when it is all-day.
 export function formatDue(
 	dueAt: number,
 	dueAllDay: boolean | null | undefined,
+	omitToday = false,
 ) {
 	const d = new Date(dueAt);
 	const now = new Date();
 	const tomorrow = new Date(now);
 	tomorrow.setDate(now.getDate() + 1);
 	let day: string;
+	const timeOnly = omitToday && sameDay(d, now);
 	// Built per call: a cached formatter would freeze the import-time locale.
 	if (sameDay(d, now)) day = m.due_today();
 	else if (sameDay(d, tomorrow)) day = m.due_tomorrow();
@@ -96,12 +117,12 @@ export function formatDue(
 			month: "short",
 			day: "numeric",
 		}).format(d);
-	if (dueAllDay) return day;
+	if (dueAllDay) return timeOnly ? "" : day;
 	const time = new Intl.DateTimeFormat(getLocale(), {
 		hour: "numeric",
 		minute: "2-digit",
 	}).format(d);
-	return `${day} ${time}`;
+	return timeOnly ? time : `${day} ${time}`;
 }
 
 // Split epoch millis into the <input type=date>/<input type=time> string pair.

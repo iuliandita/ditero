@@ -59,8 +59,8 @@ describe("groupTasks", () => {
 		];
 		const groups = groupTasks(tasks, "priority", ctx);
 		expect(groups.map((g) => g.label)).toEqual([
-			"P1 High",
-			"P3 Low",
+			"High priority",
+			"Low priority",
 			"No priority",
 		]);
 		expect(groups.map((g) => g.key)).toEqual(["3", "1", "0"]);
@@ -163,9 +163,9 @@ describe("groupForView", () => {
 	it("a board saved ungrouped renders all four priority columns in order", () => {
 		const groups = groupForView(mixed, "board", "none", ctx);
 		expect(groups.map((g) => g.label)).toEqual([
-			"P1 High",
-			"P2 Medium",
-			"P3 Low",
+			"High priority",
+			"Medium priority",
+			"Low priority",
 			"No priority",
 		]);
 		expect(groups.map((g) => g.tasks.map((t) => t.id))).toEqual([

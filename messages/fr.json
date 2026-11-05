@@ -383,6 +383,9 @@
 	"priority_medium": "Moyenne",
 	"priority_high": "Haute",
 	"priority_coded": "{code} {name}",
+	"priority_group_high": "Priorité haute",
+	"priority_group_medium": "Priorité moyenne",
+	"priority_group_low": "Priorité basse",
 	"due_today": "Aujourd'hui",
 	"due_tomorrow": "Demain",
 	"list_completed_count": [
@@ -546,6 +549,7 @@
 	"shopping_category_other": "Autre",
 	"task_reorder_handle": "Réorganiser la tâche",
 	"task_priority_aria": "Priorité : {priority}",
+	"task_part_of": "Fait partie de {title}",
 	"task_open_details": "Ouvrir les détails",
 	"task_subtask_progress_aria": [
 		{
@@ -1432,6 +1436,7 @@
 		}
 	],
 	"assignee_chips_aria": "Assignés : {names}",
+	"task_assignees_more": "{name} +{count}",
 	"assignee_invite_confirm": "Inviter {name} dans {workspace} et lui assigner la tâche ?",
 	"assignee_invite_confirm_no_workspace": "Inviter {name} dans ce workspace et lui assigner la tâche ?",
 	"assignee_invite_hint": "L'assignation prend effet dès que la personne accepte l'invitation.",
