@@ -23,7 +23,7 @@ import {
 import { m } from "../../../paraglide/messages.js";
 import { copyText } from "../../lib/clipboard.ts";
 import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
-import { ROLE_LABELS } from "./role-labels.ts";
+import { ROLE_DESCRIPTIONS, ROLE_LABELS } from "./role-labels.ts";
 
 // A kid is only ever granted member/viewer in the shared workspace (mirrors the
 // server MANAGED_ROLES gate in auth/managed-account.ts).
@@ -203,6 +203,9 @@ export function AddKid({
 									<SelectItem value="viewer">{ROLE_LABELS.viewer()}</SelectItem>
 								</SelectContent>
 							</Select>
+							<p className="text-sm text-muted-foreground">
+								{ROLE_DESCRIPTIONS[role]()}
+							</p>
 						</div>
 
 						{error && (

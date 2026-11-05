@@ -208,10 +208,9 @@ function TokenAccountPanel() {
 		}
 	}
 
-	async function copy() {
-		if (!secret) return;
+	async function copy(value: string) {
 		const epoch = dialogOwner.current;
-		const copied = await copyText(secret);
+		const copied = await copyText(value);
 		if (epoch === dialogOwner.current)
 			setCopyStatus(copied ? m.channel_copied() : m.pat_copy_failed());
 	}
@@ -320,12 +319,44 @@ function TokenAccountPanel() {
 								dir="ltr"
 								className="font-mono"
 							/>
-							<Button onClick={() => void copy()}>{m.channel_copy()}</Button>
+							<Button onClick={() => void copy(secret)}>
+								{m.channel_copy()}
+							</Button>
 							{copyStatus && (
 								<p role="status" className="text-sm">
 									{copyStatus}
 								</p>
 							)}
+							<p className="text-sm text-muted-foreground">
+								{m.pat_example_help()}
+							</p>
+							<pre
+								dir="ltr"
+								className="overflow-x-auto whitespace-pre-wrap break-all text-sm"
+							>
+								{
+									'curl -H "Authorization: Bearer $DITERO_TOKEN" "$DITERO_URL/api/v1/tasks"'
+								}
+							</pre>
+							<Button
+								variant="outline"
+								onClick={() =>
+									void copy(
+										'curl -H "Authorization: Bearer $DITERO_TOKEN" "$DITERO_URL/api/v1/tasks"',
+									)
+								}
+							>
+								{m.pat_copy_example()}
+							</Button>
+							<pre dir="ltr" className="overflow-x-auto text-sm">
+								./ditero-cli.js profile --json
+							</pre>
+							<Button
+								variant="outline"
+								onClick={() => void copy("./ditero-cli.js profile --json")}
+							>
+								{m.pat_copy_example()}
+							</Button>
 							<DialogFooter>
 								<Button onClick={() => changeDialog(false)}>
 									{m.pat_done()}
