@@ -34,9 +34,9 @@
 		{
 			"architecture": "x86_64",
 			"name": "musl",
-			"version": "1.2.6-r2",
-			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/musl-1.2.6-r2.apk",
-			"sha256": "573712e2f49c15bfc20a2699f204acdfc74c772722b15e7353d768057fae0e71"
+			"version": "1.2.6-r3",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/musl-1.2.6-r3.apk",
+			"sha256": "e142255d0fa397f14318996bc10378093dcc069dc3dd1b6818c8f28a789c21da"
 		},
 		{
 			"architecture": "x86_64",
@@ -195,9 +195,9 @@
 		{
 			"architecture": "x86_64",
 			"name": "tzdata",
-			"version": "2026e-r0",
-			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/tzdata-2026e-r0.apk",
-			"sha256": "7bc6ce864ab55efe009139c98d5626a4d1fc53a3f273b85002230c1b90d446c2"
+			"version": "2026f-r0",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/tzdata-2026f-r0.apk",
+			"sha256": "f41a4a5913372a3694f157825f5133fe32743e679ed8476f258c984e13113602"
 		},
 		{
 			"architecture": "aarch64",
@@ -216,9 +216,9 @@
 		{
 			"architecture": "aarch64",
 			"name": "musl",
-			"version": "1.2.6-r2",
-			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/musl-1.2.6-r2.apk",
-			"sha256": "5e9674b7f41152fe2119093b5cb4c13eaaadb19c2d5422b2d7267913e663ee6e"
+			"version": "1.2.6-r3",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/musl-1.2.6-r3.apk",
+			"sha256": "2e17864102278d9049c3a56f1bceed9e8cf287065617e579325123443daed8a5"
 		},
 		{
 			"architecture": "aarch64",
@@ -377,9 +377,9 @@
 		{
 			"architecture": "aarch64",
 			"name": "tzdata",
-			"version": "2026e-r0",
-			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/tzdata-2026e-r0.apk",
-			"sha256": "fd091890b7042a28126f7312cdf531bdf9048b04f21d92e50d063590bcfa7bec"
+			"version": "2026f-r0",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/tzdata-2026f-r0.apk",
+			"sha256": "e439d40c8fc0bcbe5ccefc7f031e775979596c1a092200faa23136c1cb4c7116"
 		}
 	]
 }
