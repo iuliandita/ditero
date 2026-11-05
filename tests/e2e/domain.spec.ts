@@ -210,12 +210,39 @@ test("quick-add chips + drag reorder sync across clients", async ({
 	// --- NLP quick-add through the visible mobile capture entry ---
 	await pa.setViewportSize({ width: 375, height: 812 });
 	await pa.getByRole("button", { name: "Quick add", exact: true }).click();
-	await pa.getByTestId("quickadd-input").fill("milk tomorrow p2 #store");
+	const quickInput = pa.getByTestId("quickadd-input");
+	await expect(pa.getByTestId("quickadd-sheet")).toHaveCSS("opacity", "1");
+	const emptyBounds = await quickInput.boundingBox();
+	await quickInput.fill("milk ~Missing list");
+	await expect(pa.locator("#quickadd-list-reason")).toHaveText(
+		"No list named Missing",
+	);
+	await expect(pa.getByTestId("quickadd-submit")).toBeDisabled();
+	await quickInput.fill("milk ~Shared list");
+	await expect(pa.getByTestId("chip-list")).toContainText("~Shared list");
+	await quickInput.fill("milk tomorrow p2 #store");
+	const parsedBounds = await quickInput.boundingBox();
+	expect(parsedBounds?.y).toBe(emptyBounds?.y);
 	await expect(pa.getByTestId("chip-date")).toBeVisible();
 	await expect(pa.getByTestId("chip-priority")).toHaveText("P2 Medium");
 	await expect(pa.getByTestId("chip-label")).toBeVisible();
+	const metadata = await pa.getByTestId("quickadd-metadata").boundingBox();
+	for (const chip of await pa.locator('[data-testid^="chip-"]').all()) {
+		const bounds = await chip.boundingBox();
+		expect(
+			bounds &&
+				metadata &&
+				bounds.y >= metadata.y &&
+				bounds.y + bounds.height <= metadata.y + metadata.height,
+		).toBeTruthy();
+	}
 
 	await pa.getByTestId("quickadd-submit").click();
+	await expect(
+		pa
+			.getByRole("button", { name: "Choose a list" })
+			.getByText("Added to Shared list"),
+	).toBeVisible();
 	await pa.keyboard.press("Escape"); // sheet stays open for serial entry
 
 	await expect(pa.getByText("milk", { exact: true })).toBeVisible({
@@ -1311,6 +1338,56 @@ test("a refused complete or move takes its snackbar back", async ({ page }) => {
 	} finally {
 		await pool.query("drop trigger if exists task_sync_refuse on task");
 		await pool.query("drop function if exists task_sync_refuse()");
+		await pool.end();
+	}
+});
+
+test("quick add resolves and disambiguates destinations without moving the desktop input", async ({
+	page,
+}) => {
+	await signUp(page, uniqueEmail("quick-destination"));
+	await createListDesktop(page, "Current tasks");
+	await createListDesktop(page, "Groceries");
+	await createListDesktop(page, "Weekly groceries");
+	await createListDesktop(page, "Groceries");
+	await expect(
+		sidebarLists(page).getByRole("button", { name: "Groceries", exact: true }),
+	).toHaveCount(2);
+	await openListDesktop(page, "Current tasks");
+	await page.getByRole("button", { name: "Quick add", exact: true }).click();
+	const input = page.getByTestId("quickadd-input");
+	await expect(page.getByTestId("quickadd-dialog")).toHaveCSS("opacity", "1");
+	const initial = await input.boundingBox();
+	await input.fill("destination test ~Groceries");
+	await expect(page.locator("#quickadd-list-reason")).toHaveText(
+		"Choose a list",
+	);
+	await expect(input).toHaveAttribute("aria-expanded", "true");
+	expect((await input.boundingBox())?.y).toBe(initial?.y);
+	const selectedOption = await input.getAttribute("aria-activedescendant");
+	expect(selectedOption).toBeTruthy();
+	const selectedListId = selectedOption?.replace("quickadd-option-", "");
+	await input.press("Enter");
+	await expect(input).toHaveAttribute("aria-expanded", "false");
+	await input.press("Enter");
+	await expect(input).toHaveValue("");
+	await expect(page.getByRole("listbox")).toHaveCount(0);
+	await page.keyboard.press("Escape");
+	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
+	try {
+		await expect
+			.poll(
+				async () => {
+					const result = await pool.query(
+						"select list_id from task where title = $1",
+						["destination test"],
+					);
+					return result.rows.map((row) => row.list_id);
+				},
+				{ timeout: 15000 },
+			)
+			.toEqual([selectedListId]);
+	} finally {
 		await pool.end();
 	}
 });
