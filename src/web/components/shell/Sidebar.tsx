@@ -89,7 +89,9 @@ function ListRow({
 				/>
 				{!collapsed && (
 					<span className="flex min-w-0 flex-1 flex-col">
-						<span className="truncate">{list.title}</span>
+						<span className="truncate">
+							<bdi>{list.title}</bdi>
+						</span>
 						{list.kind === "project" && progress && (
 							<ListProgress done={progress.done} total={progress.total} />
 						)}
@@ -174,7 +176,9 @@ function FolderRow({
 			<div className="group flex items-center gap-1" {...rowProps}>
 				<span className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground">
 					<FolderIcon aria-hidden className="size-4 shrink-0" />
-					<span className="truncate">{folder.name}</span>
+					<span className="truncate">
+						<bdi>{folder.name}</bdi>
+					</span>
 				</span>
 				<RowActions actions={actions} label={label} />
 				{menu}

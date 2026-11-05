@@ -4,9 +4,9 @@ import { m } from "../../../paraglide/messages.js";
 import { getLocale } from "../../../paraglide/runtime.js";
 import { queries } from "../../../zero/queries.ts";
 import type { schema } from "../../../zero/schema.gen.ts";
+import { isolated } from "../../lib/bidi.tsx";
 import { formatList } from "../../lib/intl-format.ts";
 
-const isolate = (text: string) => `⁨${text}⁩`;
 const firstName = (full: string) => full.trim().split(/\s+/)[0] || full;
 
 // The first assignee's first name, then "+N" for the rest, as plain text in the
@@ -58,12 +58,18 @@ export function AssigneeNames({
 			className="min-w-0 truncate text-xs text-muted-foreground"
 		>
 			<span aria-hidden>
-				{rest.length > 0
-					? m.task_assignees_more({
-							name: isolate(shown),
-							count: new Intl.NumberFormat(getLocale()).format(rest.length),
-						})
-					: isolate(shown)}
+				{rest.length > 0 ? (
+					isolated(
+						(name) =>
+							m.task_assignees_more({
+								name,
+								count: new Intl.NumberFormat(getLocale()).format(rest.length),
+							}),
+						shown,
+					)
+				) : (
+					<bdi>{shown}</bdi>
+				)}
 			</span>
 		</span>
 	);

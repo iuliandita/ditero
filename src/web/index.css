@@ -595,6 +595,11 @@
 	}
 }
 
+/* Latin underline offsets cut through Arabic descenders. */
+:lang(ar) :is([class*="underline-offset-"], [class*="underline-offset-"] a) {
+	text-underline-offset: 0.3em;
+}
+
 @media (forced-colors: active) {
 	:root [data-slot="checkbox"][data-shape] {
 		border-color: ButtonText;

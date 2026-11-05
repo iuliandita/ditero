@@ -19,7 +19,7 @@ describe("TaskSourceContext", () => {
 		expect(html).toContain(
 			icon === "UserRound" ? "lucide-user-round" : "lucide-users-round",
 		);
-		expect(html).toContain(">Casa</span>");
+		expect(html).toContain("<bdi>Casa</bdi>");
 	});
 
 	it("keeps the original context visible when structured metadata is unavailable", () => {

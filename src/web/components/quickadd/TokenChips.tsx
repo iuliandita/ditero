@@ -62,7 +62,7 @@ export function TokenChips({
 						)}
 					>
 						{unknown ? <Plus /> : <Icon />}
-						{level != null ? priorityLabel(level) : tk.text}
+						{level != null ? priorityLabel(level) : <bdi>{tk.text}</bdi>}
 						<button
 							type="button"
 							// `tk.text` is the verbatim input span (sigil included), never translated.

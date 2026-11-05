@@ -1,8 +1,15 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
+import { Pool } from "pg";
 import type { Locale } from "../../src/domain/locale.ts";
 import { m } from "../../src/paraglide/messages.js";
-import { goToSettings, uniqueEmail } from "./helpers.ts";
+import {
+	goToSettings,
+	openDetails,
+	revealDetails,
+	signUp,
+	uniqueEmail,
+} from "./helpers.ts";
 
 // M-i18n language switcher: pre-auth (Login) + post-auth (settings) mounts,
 // user_pref.locale persistence + round-trip across a reload, dir/lang
@@ -178,4 +185,132 @@ test("switches to Arabic pre-auth, applies RTL, persists post-auth and round-tri
 	// that assertion was not passing against an element that always rotates.
 	await expect(backGlyph).toHaveCSS("rotate", "none");
 	await expect(disclosureGlyph).toHaveCSS("rotate", "none");
+});
+
+const direction = (locator: Locator) =>
+	locator.evaluate((el) => getComputedStyle(el).direction);
+
+// Latin user text inside the Arabic UI keeps its own direction: the note's
+// period stays at its end, and names sit in <bdi> so the translated list
+// separators cannot reorder them.
+test("isolates mixed Latin and Arabic user text in the Arabic UI", async ({
+	page,
+}, testInfo) => {
+	test.setTimeout(90_000);
+	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
+	try {
+		const ownerEmail = uniqueEmail("alex");
+		const memberEmail = uniqueEmail("casey");
+		const ownerName = ownerEmail.split("@")[0];
+		const memberName = memberEmail.split("@")[0];
+		const listTitle = "Weekend plans";
+		const taskTitle = "Plan picnic";
+		const note = "Bring lunch and a blanket. Meet at the park at noon.";
+
+		const ownerId = await signUp(page, ownerEmail);
+		const memberContext = await page.context().browser()?.newContext();
+		if (!memberContext) throw new Error("no browser to create a member");
+		const memberPage = await memberContext.newPage();
+		const memberId = await signUp(memberPage, memberEmail);
+		await memberContext.close();
+		const workspace = await pool.query<{ id: string }>(
+			"select id from workspace where owner_id = $1 and kind = 'personal'",
+			[ownerId],
+		);
+		await pool.query(
+			"insert into membership (id,user_id,workspace_id,role) values ($1,$2,$3,'member')",
+			[crypto.randomUUID(), memberId, workspace.rows[0].id],
+		);
+
+		await page.getByTestId("create-list-open").click();
+		await page.getByTestId("new-list").fill(listTitle);
+		await page.getByTestId("new-list-submit").click();
+		await page
+			.locator('nav[aria-label="Lists"]')
+			.getByRole("button", { name: listTitle, exact: true })
+			.click();
+		await page.getByTestId("new-task").fill(taskTitle);
+		await page.getByTestId("new-task-submit").click();
+		await openDetails(page, taskTitle);
+		const detail = page.getByRole("dialog");
+		await expect(detail).toBeVisible();
+		await revealDetails(detail);
+		await detail
+			.getByRole("textbox", { name: m.task_field_notes({}, { locale: "en" }) })
+			.fill(note);
+		await detail
+			.getByRole("textbox", { name: m.task_field_notes({}, { locale: "en" }) })
+			.blur();
+		await detail.getByTestId("assignee-open").click();
+		for (const name of [ownerName, memberName]) {
+			const option = page
+				.getByTestId("assignee-picker")
+				.getByTestId("assignee-option")
+				.filter({ hasText: name });
+			await option.click();
+			await expect(option).toHaveAttribute("aria-pressed", "true");
+		}
+		await page.keyboard.press("Escape");
+		await detail.getByRole("button", { name: "Close" }).click();
+		await expect(detail).toBeHidden();
+
+		await page.context().addCookies([
+			{
+				name: "PARAGLIDE_LOCALE",
+				value: "ar",
+				url: new URL(page.url()).origin,
+			},
+		]);
+		await page.reload();
+		await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
+		await expect(page.getByTestId("list")).toBeVisible({ timeout: 30_000 });
+
+		await expect(
+			page.locator("nav[aria-label]").locator("bdi", { hasText: listTitle }),
+		).not.toHaveCount(0);
+		const row = page.getByTestId("list").locator("bdi", { hasText: taskTitle });
+		await expect(row).toBeVisible();
+
+		await page
+			.getByTestId("list")
+			.locator("[data-kbd-row], li")
+			.filter({
+				has: page.getByRole("checkbox", { name: taskTitle, exact: true }),
+			})
+			.last()
+			.getByRole("button", { name: m.task_open_details({}, { locale: "ar" }) })
+			.first()
+			.click();
+		const arDetail = page.getByRole("dialog");
+		await expect(arDetail).toBeVisible();
+		await revealDetails(arDetail);
+		const notes = arDetail.getByRole("textbox", {
+			name: m.task_field_notes({}, { locale: "ar" }),
+		});
+		await expect(notes).toHaveAttribute("dir", "auto");
+		expect(await direction(notes)).toBe("ltr");
+		await notes.fill("أحضر الغداء وبطانية. نلتقي في الحديقة ظهرا.");
+		expect(await direction(notes)).toBe("rtl");
+		await notes.fill(note);
+
+		const title = arDetail.getByTestId("task-detail-title");
+		await expect(title).toHaveAttribute("dir", "auto");
+		expect(await direction(title)).toBe("ltr");
+
+		const assignees = arDetail.getByTestId("assignee-open");
+		await expect(assignees.locator("bdi")).toHaveCount(2);
+		expect((await assignees.locator("bdi").allTextContents()).sort()).toEqual(
+			[ownerName, memberName].sort(),
+		);
+		const [first, second] = await Promise.all(
+			[0, 1].map((i) => assignees.locator("bdi").nth(i).boundingBox()),
+		);
+		if (!first || !second) throw new Error("assignee names not laid out");
+		expect(first.x).toBeGreaterThan(second.x);
+		await page.screenshot({
+			path: testInfo.outputPath("ar-mixed-user-text.png"),
+		});
+	} finally {
+		await pool.end();
+	}
 });

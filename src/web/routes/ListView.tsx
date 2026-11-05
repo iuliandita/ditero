@@ -452,7 +452,7 @@ export function ListView({
 					<ListIcon icon={list.icon} kind={kind} title={list.title} />
 				</button>
 				<h1 className="min-w-0 flex-1 break-words text-lg font-semibold">
-					{list.title}
+					<bdi>{list.title}</bdi>
 				</h1>
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>

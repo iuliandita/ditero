@@ -12,11 +12,14 @@ import { runMutation } from "@/lib/run-mutation";
 import { deriveConnections } from "../../../domain/connections.ts";
 import type { InviteMailStatus } from "../../../domain/invite.ts";
 import { m } from "../../../paraglide/messages.js";
+import { getLocale } from "../../../paraglide/runtime.js";
 import { mutators } from "../../../zero/mutators.ts";
 import { queries } from "../../../zero/queries.ts";
 import type { schema, Task } from "../../../zero/schema.gen.ts";
+import { NameList } from "../../lib/bidi.tsx";
 import { copyText } from "../../lib/clipboard.ts";
 import { formatList } from "../../lib/intl-format.ts";
+import { isRtl } from "../../lib/locale.ts";
 import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
 import { MemberAvatar } from "./avatar.tsx";
 import { InviteMailNotice } from "./InviteMailNotice";
@@ -185,11 +188,10 @@ export function AssigneePicker({
 	}
 
 	const assignedCount = assignedIds.size;
-	const assignedNames = formatList(
-		[...assignedIds].map(
-			(id) => userMap.get(id)?.name ?? m.group_unknown_user(),
-		),
+	const assignedNameItems = [...assignedIds].map(
+		(id) => userMap.get(id)?.name ?? m.group_unknown_user(),
 	);
+	const assignedNames = formatList(assignedNameItems);
 
 	return (
 		<div className="min-w-0 max-w-full text-sm">
@@ -218,8 +220,15 @@ export function AssigneePicker({
 						data-testid="assignee-open"
 					>
 						<UserPlus />
-						<span className="min-w-0 wrap-anywhere">
-							{assignedCount > 0 ? assignedNames : m.assignee_open()}
+						<span
+							dir={isRtl(getLocale()) ? "rtl" : "ltr"}
+							className="min-w-0 wrap-anywhere"
+						>
+							{assignedCount > 0 ? (
+								<NameList names={assignedNameItems} />
+							) : (
+								m.assignee_open()
+							)}
 						</span>
 					</Button>
 				</PopoverTrigger>
@@ -326,7 +335,7 @@ export function AssigneePicker({
 											className="size-6"
 										/>
 										<span className="min-w-0 flex-1 truncate">
-											{name}
+											<bdi>{name}</bdi>
 											{mem.userId === me && (
 												<span className="text-muted-foreground">
 													{" "}
@@ -425,7 +434,9 @@ export function AssigneePicker({
 											image={u.image}
 											className="size-6"
 										/>
-										<span className="min-w-0 flex-1 truncate">{u.name}</span>
+										<span className="min-w-0 flex-1 truncate">
+											<bdi>{u.name}</bdi>
+										</span>
 										<span className="text-xs text-muted-foreground">
 											{canInvite
 												? m.assignee_row_invite()

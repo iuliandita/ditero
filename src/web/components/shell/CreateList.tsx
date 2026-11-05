@@ -337,6 +337,7 @@ function Form({
 					id={titleId}
 					ref={titleRef}
 					data-testid="new-list"
+					dir="auto"
 					className="h-9 flex-1 rounded-lg border bg-transparent px-3 text-base md:text-sm"
 					placeholder={m.create_list_name_placeholder()}
 					value={title}

@@ -211,7 +211,7 @@ export function ShoppingRow({
 				>
 					<span className="block truncate">
 						<span className={strikeClass(task.done ?? false)}>
-							{task.title}
+							<bdi>{task.title}</bdi>
 						</span>
 					</span>
 					<CompletedBy task={task} id={completionId} />
