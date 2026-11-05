@@ -2,7 +2,7 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "5a0ff3c85016e5c8e8f69a6fa6ced1a99778b0b110380e3fbf10063b7e729bf9",
+			"sourceDigest": "9f695a6ecdcc09af441c8d46d2a0b7214649c28ef4731c320057f6fb8fc4ad5d",
 			"noImpact": "The in-list add field for tasks, projects and checklists now reads quick-add syntax into removable chips, shopping reads a leading amount as a quantity, and the permanent literal-saving hint is gone; quick add keeps its own sheet and shortcut, and no documented behavior changes."
 		},
 		"release": {
