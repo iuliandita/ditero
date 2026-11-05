@@ -630,6 +630,7 @@ function zeroAckStore(tx: Transaction<Schema>): AckStore {
 					status: "done",
 					karmaDelta: row.karmaDelta,
 					completedAt: row.completedAt,
+					completedBy: row.completedBy,
 				});
 				return;
 			}
@@ -640,6 +641,7 @@ function zeroAckStore(tx: Transaction<Schema>): AckStore {
 				status: "done",
 				karmaDelta: row.karmaDelta,
 				completedAt: row.completedAt,
+				completedBy: row.completedBy,
 			});
 		},
 		async awardKarma(userId, delta, reason, date) {
@@ -1213,9 +1215,11 @@ export const mutators = defineMutators({
 						.where("date", args.date)
 						.one(),
 				);
+				if (existing?.status === args.status) return;
 				const wasDone = existing?.status === "done";
 				const priorDelta = existing?.karmaDelta ?? 0;
 				const completedAt = args.status === "done" ? now : null;
+				const completedBy = args.status === "done" ? ctx.id : null;
 				// The row's attributed Karma follows the transition: award on entering
 				// done, revoke on leaving it, keep it on an idempotent re-log. Never
 				// recompute from live priority while already done.
@@ -1231,6 +1235,7 @@ export const mutators = defineMutators({
 						status: args.status,
 						karmaDelta,
 						completedAt,
+						completedBy,
 					});
 				} else {
 					await tx.mutate.habitLog.insert({
@@ -1240,6 +1245,7 @@ export const mutators = defineMutators({
 						status: args.status,
 						karmaDelta,
 						completedAt,
+						completedBy,
 					});
 				}
 				if (args.status === "done" && !wasDone) {
