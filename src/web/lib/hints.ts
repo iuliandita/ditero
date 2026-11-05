@@ -4,25 +4,16 @@
 // nobody else reads.
 
 export type Hints = {
-	/** Quick adds that carried at least one parsed token. */
-	syntaxUses: number;
-	syntaxDismissed: boolean;
 	shortcutsSeen: boolean;
 };
 
-export const SYNTAX_HINT_USES = 3;
-
 export const FRESH_HINTS: Hints = {
-	syntaxUses: 0,
-	syntaxDismissed: false,
 	shortcutsSeen: false,
 };
 
 // Before the session resolves there is no user to key on: show nothing rather
 // than flash a fresh hint from a shared bucket.
 export const NO_USER_HINTS: Hints = {
-	syntaxUses: SYNTAX_HINT_USES,
-	syntaxDismissed: true,
 	shortcutsSeen: true,
 };
 
@@ -41,15 +32,8 @@ export function parseHints(raw: string | null): Hints {
 		return FRESH_HINTS;
 	}
 	if (typeof value !== "object" || value === null) return FRESH_HINTS;
-	const v = value as Record<string, unknown>;
-	const uses = v.syntaxUses;
 	return {
-		syntaxUses:
-			typeof uses === "number" && Number.isInteger(uses) && uses > 0
-				? Math.min(uses, SYNTAX_HINT_USES)
-				: 0,
-		syntaxDismissed: v.syntaxDismissed === true,
-		shortcutsSeen: v.shortcutsSeen === true,
+		shortcutsSeen: (value as Record<string, unknown>).shortcutsSeen === true,
 	};
 }
 
@@ -73,20 +57,9 @@ export function writeHints(
 	}
 }
 
-export const syntaxHintVisible = (h: Hints): boolean =>
-	!h.syntaxDismissed && h.syntaxUses < SYNTAX_HINT_USES;
-
 // A touch-only device has no keyboard to press `?` on.
 export const shortcutHintVisible = (h: Hints, finePointer: boolean): boolean =>
 	finePointer && !h.shortcutsSeen;
-
-export function recordSyntaxUse(h: Hints, tokenCount: number): Hints {
-	if (tokenCount <= 0 || h.syntaxUses >= SYNTAX_HINT_USES) return h;
-	return { ...h, syntaxUses: h.syntaxUses + 1 };
-}
-
-export const dismissSyntaxHint = (h: Hints): Hints =>
-	h.syntaxDismissed ? h : { ...h, syntaxDismissed: true };
 
 export const markShortcutsSeen = (h: Hints): Hints =>
 	h.shortcutsSeen ? h : { ...h, shortcutsSeen: true };
@@ -111,8 +84,7 @@ export function syntaxTokens(
 	];
 }
 
-// Store: one snapshot per user, shared by every mounted consumer so a use
-// counted in the quick-add sheet retires the inline hint in the same render.
+// Store: one snapshot per user, shared by every mounted consumer.
 export function createHintStore(storage: () => KeyValue | null) {
 	const cache = new Map<string, Hints>();
 	const listeners = new Set<() => void>();

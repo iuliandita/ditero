@@ -2,9 +2,8 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "95eb066a4bb9d48b6942802bb83f19c115e1d0887f90ecc98422f473d13badea",
-			"docs": ["docs/runbooks/database-roles.md"],
-			"note": "The sidebar and phone Lists tab put account-wide destinations first and the workspace switcher above only the lists, a notice above content shows the existing storage-failure and storage-offline instructions with a Details button and no reload (the storage runbook now says so), the connected status wording no longer claims saved edits, source crumbs drop when there is one workspace, and the desktop footer wordmark, brand images and loading silhouette change. No storage, sync, sharing or theme behavior changes."
+			"sourceDigest": "f3c15e5a3494723986e432b2fb1e08f0c591ef541c1f5d4987ac0619f565e449",
+			"noImpact": "The in-list add field for tasks, projects and checklists now reads quick-add syntax into removable chips, shopping reads a leading amount as a quantity, and the permanent literal-saving hint is gone; quick add keeps its own sheet and shortcut, and no documented behavior changes."
 		},
 		"release": {
 			"sourceDigest": "98d834f1f7c042ae33a1984d6ae39401f5df31377c4f9faab00a1513827ba24e",
