@@ -382,6 +382,12 @@ export function useAccountSetup({
 		authoritative,
 		online,
 		outcome: synced?.outcome,
+		createdLists: parsed.success
+			? (parsed.data.generatedIds?.listIds ?? [])
+			: [],
+		createdWorkspaceId: parsed.success
+			? (parsed.data.generatedIds?.workspaceId ?? null)
+			: null,
 		revision: synced?.revision ?? 0,
 		expectedRevision:
 			attempt?.request.expectedRevision ?? synced?.revision ?? 0,

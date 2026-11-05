@@ -333,9 +333,6 @@ function Form({
 	return (
 		<div className="flex flex-col gap-3">
 			<div className="flex items-center gap-2">
-				<span className="flex size-8 shrink-0 items-center justify-center rounded-lg border">
-					<ListIcon icon={null} kind={kind} title={title} />
-				</span>
 				<input
 					id={titleId}
 					ref={titleRef}
