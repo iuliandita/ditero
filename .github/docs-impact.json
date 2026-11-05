@@ -2,7 +2,7 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "29ba266a3793f6231c105f133c3a898d9ddc2921b9035d95526cc328d7897cd7",
+			"sourceDigest": "6e36e70055467e6781f45f32bea6c392d626b6218cd7681618d9d60a2c6bc941",
 			"noImpact": "Task and shopping rows align the check with the title line, put the priority flag right after the title with its label in the accessible name, keep the menu in a fixed trailing rail and show the select toggle only in selection mode, show assignee first names and one context line, show shopping quantity as text after the item name, and use one focus ring and stronger hover, press and palette cursor fills. Priority group headings read High, Medium and Low priority. Behavior, permissions, data and keyboard shortcuts are unchanged and no guide describes these row details."
 		},
 		"release": {
