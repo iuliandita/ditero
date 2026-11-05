@@ -18,8 +18,11 @@ the `0.x` prereleases.
   ambiguous destination must be chosen instead of silently picking a list.
 - The list add field reads the same quick-add syntax as quick add: dates,
   priority, labels and `~list` become chips and are saved with the task, and a
-  leading amount fills a shopping item's quantity. The caption, "Open quick add"
-  link and syntax disclosure under the field are gone.
+  leading amount fills a shopping item's quantity. A chip can be turned back into
+  plain words. The caption, "Open quick add" link and syntax disclosure under the
+  field are gone; on phones the + quick add button now also shows on list pages.
+- Quick add no longer reads a date out of text glued to a word, such as `v2-3d`
+  or an ID.
 - Task and shopping rows are calmer: the check lines up with the first title line,
   strikethrough covers only the text, each row has one context line, the priority
   flag follows the title, and shopping quantities sit next to the item name.
@@ -36,8 +39,9 @@ the `0.x` prereleases.
   that runs on upgrade.
 - Workspace invites, child accounts and access tokens have clearer explanations
   of what each role and token can reach, with copyable token setup examples.
-- Arabic keeps Latin names, titles and notes in their own direction, so notes no
-  longer show the period at the start and assignee lists read in order.
+- Arabic keeps Latin names, titles, notes and comments in their own direction, so
+  notes no longer show the period at the start and assignee lists read in order,
+  and underlines sit clear of Arabic letters.
 - Container image builds pin Alpine packages that Alpine removed.
 - Dependency updates include security fixes for Rust tokio, Go x/net, nodemailer
   and fast-uri.
