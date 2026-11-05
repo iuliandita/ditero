@@ -119,12 +119,16 @@ test("reduced motion: completion is instant and still settles", async ({
 	await box.check();
 	await expect(box).toBeChecked();
 	// Measured on the rendered frame: no strike transition, no check animation.
+	// The title text sits in a <bdi>; the strike is drawn by its wrapping span.
 	const title = list.getByText("Calm", { exact: true });
-	expect(
-		await title.evaluate(
-			(el) => getComputedStyle(el, "::after").transitionProperty,
-		),
-	).toBe("none");
+	const strike = await title.evaluate((el) => {
+		const host = el.tagName === "BDI" ? (el.parentElement ?? el) : el;
+		const after = getComputedStyle(host, "::after");
+		return { content: after.content, transition: after.transitionProperty };
+	});
+	// Positive control: the strike pseudo-element exists on the measured element.
+	expect(strike.content).not.toBe("none");
+	expect(strike.transition).toBe("none");
 	expect(
 		await box.evaluate(
 			(el) =>

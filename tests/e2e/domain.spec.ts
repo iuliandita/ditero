@@ -391,11 +391,18 @@ test("complete on A strikes, settles into the completed group and syncs to B", a
 
 	await listA.getByRole("checkbox", { name: "Finish me" }).check();
 	// A: the strike is a pseudo-element scaled in from 0; measure it, not the class.
+	// The title text sits in a <bdi>; the strike is drawn by its wrapping span.
 	await expect
 		.poll(() =>
 			listA
 				.getByText("Finish me", { exact: true })
-				.evaluate((el) => getComputedStyle(el, "::after").scale),
+				.evaluate(
+					(el) =>
+						getComputedStyle(
+							el.tagName === "BDI" ? (el.parentElement ?? el) : el,
+							"::after",
+						).scale,
+				),
 		)
 		.toMatch(/^1( 1)?$/);
 	// A: after the settle delay the row leaves the open rows for the group.
