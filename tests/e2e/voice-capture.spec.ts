@@ -111,7 +111,8 @@ async function installFake(page: Page) {
 
 // Quick add opens from `c`, or from + on a phone.
 async function openQuickAddFromKeyboard(page: Page) {
-	const fab = page.getByRole("button", { name: "Quick add", exact: true });
+	// Locale-independent: the + label is translated in ar/ro runs.
+	const fab = page.getByTestId("fab-quick-add");
 	if (await fab.isVisible()) {
 		await fab.click();
 		return;
