@@ -2,9 +2,8 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "acaf768aa1ee32d7f14e27c17efc4a067ca59311d2b7fdf35de26fd003754b2d",
-			"docs": ["docs/runbooks/voice-capture.md"],
-			"note": "Document voice availability after Dictate, list name parsing and disambiguation, Enter submission, the due control and local acceptance feedback in quick add."
+			"sourceDigest": "923eda9dc6783fa2fbf421152ec6cf827bba10e2ac8fa1694d0b7c5784bf2ce1",
+			"noImpact": "Task detail now leads with the title and completion, a line saying who can see it (from the workspace's actual members; it opens the Members sheet when others can), one wrapping summary of the properties a task has, then notes and subtasks. A timed due keeps its time in the summary. Empty properties appear under Add details, and time entry and clearing sit inside the date editor. No setting, storage, permission, sync or API behavior changes; three strings are added in all six locales."
 		},
 		"release": {
 			"sourceDigest": "98d834f1f7c042ae33a1984d6ae39401f5df31377c4f9faab00a1513827ba24e",
