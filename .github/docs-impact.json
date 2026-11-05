@@ -2,7 +2,7 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "dd618d1314bc4c2d51dddb99bd3f41efcd6f1680cddcaa503771a1971ea1baa7",
+			"sourceDigest": "e85ff3363c2b1c8acce2c222c8652c2ab2f3868ba2acfa36b4da5f0ff37520a9",
 			"docs": ["docs/runbooks/voice-capture.md"],
 			"note": "Document voice availability after Dictate, list name parsing and disambiguation, Enter submission, the due control and local acceptance feedback in quick add."
 		},
