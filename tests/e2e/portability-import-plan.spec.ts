@@ -435,6 +435,8 @@ test("imports assignments, recovers a lost response, and supports ordinary unass
 		.getByRole("button", { name: "Imported assigned list", exact: true })
 		.click();
 	await task.click();
+	// Unassigned now, so the assignee field is behind "Add details" again.
+	await revealDetails(page);
 	await page.getByTestId("assignee-open").click();
 	await expect(
 		page.getByTestId("assignee-picker").getByTestId("assignee-option").first(),
