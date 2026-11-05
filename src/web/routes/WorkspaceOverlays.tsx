@@ -166,6 +166,7 @@ export function WorkspaceOverlays({
 				open={quickAddOpen}
 				onOpenChange={onQuickAddOpenChange}
 				lists={activeLists}
+				workspaces={workspaces}
 				labels={labels}
 				tasks={tasks}
 				currentListId={openListId}
