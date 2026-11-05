@@ -1094,7 +1094,11 @@
 	"habit_skip_action": "Skip",
 	"habit_undo_action": "Undo",
 	"habit_track_daily": "Track daily",
-	"habit_done_action": "Done today",
+	"habit_complete_label": "Complete {title} today",
+	"habit_streak_label": "Streak: {days}",
+	"habit_shared_label": "Shared habit",
+	"habit_shared_rule": "One completion per day counts for everyone in this space. Use a personal list for your own habits.",
+	"habit_history_range": "{first} to {last}",
 	"habit_streak_days": [
 		{
 			"declarations": [

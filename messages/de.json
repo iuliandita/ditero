@@ -1094,7 +1094,11 @@
 	"habit_skip_action": "Überspringen",
 	"habit_undo_action": "Rückgängig",
 	"habit_track_daily": "Täglich verfolgen",
-	"habit_done_action": "Heute erledigt",
+	"habit_complete_label": "{title} heute erledigen",
+	"habit_streak_label": "Serie: {days}",
+	"habit_shared_label": "Gemeinsame Gewohnheit",
+	"habit_shared_rule": "Ein Häkchen pro Tag zählt für alle in diesem Bereich. Nutze für deine eigenen Gewohnheiten eine persönliche Liste.",
+	"habit_history_range": "{first} bis {last}",
 	"habit_streak_days": [
 		{
 			"declarations": [

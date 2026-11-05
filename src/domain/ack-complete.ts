@@ -65,6 +65,7 @@ export type AckStore = {
 		date: string;
 		karmaDelta: number;
 		completedAt: number;
+		completedBy: string;
 	}): Promise<void>;
 	awardKarma(
 		userId: string,
@@ -153,6 +154,7 @@ export async function completeForAck(
 			date,
 			karmaDelta,
 			completedAt: now,
+			completedBy: actorUserId,
 		});
 		await store.awardKarma(actorUserId, karmaDelta, "habit_done", date);
 		await store.appendEvent({

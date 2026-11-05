@@ -1114,7 +1114,11 @@
 	"habit_skip_action": "Passer",
 	"habit_undo_action": "Annuler",
 	"habit_track_daily": "Suivre chaque jour",
-	"habit_done_action": "Fait aujourd'hui",
+	"habit_complete_label": "Terminer {title} aujourd’hui",
+	"habit_streak_label": "Série : {days}",
+	"habit_shared_label": "Habitude partagée",
+	"habit_shared_rule": "Une validation par jour compte pour tout le monde dans cet espace. Utilise une liste personnelle pour tes propres habitudes.",
+	"habit_history_range": "Du {first} au {last}",
 	"habit_streak_days": [
 		{
 			"declarations": [
