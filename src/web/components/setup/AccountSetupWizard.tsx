@@ -21,6 +21,8 @@ export type AccountSetupWizardLabels = {
 	custom: string;
 	customDescription: string;
 	preview: string;
+	showTasks: string;
+	hideTasks: string;
 	dashboard: string;
 	emptyPreview: string;
 	chooseContent: string;
@@ -53,6 +55,8 @@ export type AccountSetupWizardProps = {
 		| "completed";
 	error?: string;
 	allowEmptyChoice?: boolean;
+	// The host supplies its own title and description (a dialog).
+	hideHeader?: boolean;
 	emptyChoiceReason?: string;
 	onSubmit: (request: AccountSetupRequest) => Promise<void>;
 	onRetry: () => Promise<void>;
@@ -68,6 +72,7 @@ export function AccountSetupWizard({
 	state,
 	error,
 	allowEmptyChoice = true,
+	hideHeader = false,
 	emptyChoiceReason,
 	onSubmit,
 	onRetry,
@@ -138,18 +143,24 @@ export function AccountSetupWizard({
 	}
 	return (
 		<section
-			aria-labelledby={`${id}-title`}
+			aria-labelledby={hideHeader ? undefined : `${id}-title`}
+			aria-label={hideHeader ? labels.title : undefined}
 			aria-busy={busy}
 			className="mx-auto w-full max-w-3xl space-y-6 p-4 text-start sm:p-6"
 		>
-			<header className="space-y-2">
-				<h3 id={`${id}-title`} className="text-base font-semibold text-balance">
-					{labels.title}
-				</h3>
-				<p className="max-w-prose text-sm text-muted-foreground">
-					{labels.description}
-				</p>
-			</header>
+			{!hideHeader && (
+				<header className="space-y-2">
+					<h3
+						id={`${id}-title`}
+						className="text-base font-semibold text-balance"
+					>
+						{labels.title}
+					</h3>
+					<p className="max-w-prose text-sm text-muted-foreground">
+						{labels.description}
+					</p>
+				</header>
+			)}
 			{state === "completed" ? (
 				<div className="space-y-4">
 					<p role="status">{labels.completed}</p>
@@ -205,7 +216,7 @@ export function AccountSetupWizard({
 									{(["basic", "guided", "custom"] as const).map((choice) => (
 										<label
 											key={choice}
-											className={`flex min-h-11 cursor-pointer items-start gap-3 rounded-xl border p-4 focus-within:ring-2 focus-within:ring-ring ${mode === choice ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"}`}
+											className={`flex min-h-11 cursor-pointer items-start gap-3 rounded-xl border p-2 focus-within:ring-2 focus-within:ring-ring ${mode === choice ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"}`}
 										>
 											<input
 												type="radio"
@@ -303,18 +314,28 @@ export function AccountSetupWizard({
 													{labels.taskCount(pack.content.tasks.length)}
 												</span>
 											</h5>
-											<ul className="space-y-1 text-sm">
-												{pack.content.tasks.map((task) => (
-													<li key={task.title} className="break-words">
-														{task.title}
-														{task.category && (
-															<span className="ms-2 text-xs text-muted-foreground">
-																{task.category}
-															</span>
-														)}
-													</li>
-												))}
-											</ul>
+											<details className="group">
+												<summary className="min-h-11 cursor-pointer text-sm">
+													<span className="group-open:hidden">
+														{labels.showTasks}
+													</span>
+													<span className="hidden group-open:inline">
+														{labels.hideTasks}
+													</span>
+												</summary>
+												<ul className="space-y-1 text-sm">
+													{pack.content.tasks.map((task) => (
+														<li key={task.title} className="break-words">
+															{task.title}
+															{task.category && (
+																<span className="ms-2 text-xs text-muted-foreground">
+																	{task.category}
+																</span>
+															)}
+														</li>
+													))}
+												</ul>
+											</details>
 										</div>
 									))}
 								</div>
@@ -338,7 +359,7 @@ export function AccountSetupWizard({
 									{labels.chooseContent}
 								</p>
 							)}
-							<footer className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
+							<footer className="sticky bottom-0 flex flex-wrap items-center gap-3 border-t border-border bg-background py-4 sm:static">
 								{review ? (
 									<>
 										<Button

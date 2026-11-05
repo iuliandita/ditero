@@ -1090,7 +1090,11 @@
 	"habit_skip_action": "Überspringen",
 	"habit_undo_action": "Rückgängig",
 	"habit_track_daily": "Täglich verfolgen",
-	"habit_done_action": "Heute erledigt",
+	"habit_complete_label": "{title} heute erledigen",
+	"habit_streak_label": "Serie: {days}",
+	"habit_shared_label": "Gemeinsame Gewohnheit",
+	"habit_shared_rule": "Ein Häkchen pro Tag zählt für alle in diesem Bereich. Nutze für deine eigenen Gewohnheiten eine persönliche Liste.",
+	"habit_history_range": "{first} bis {last}",
 	"habit_streak_days": [
 		{
 			"declarations": [
@@ -2713,6 +2717,8 @@
 	"setup_preview": "Sieh dir deine Startinhalte an",
 	"setup_dashboard": "Persönliches Dashboard",
 	"setup_empty_preview": "Es werden keine Listen oder Aufgaben hinzugefügt.",
+	"setup_show_tasks": "Aufgaben anzeigen",
+	"setup_hide_tasks": "Aufgaben ausblenden",
 	"setup_choose_content": "Wähle mindestens eine Liste oder das Dashboard aus, oder nimm Individuell.",
 	"setup_continue": "Weiter",
 	"setup_back": "Zurück",

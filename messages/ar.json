@@ -1170,7 +1170,11 @@
 	"habit_skip_action": "تخطي",
 	"habit_undo_action": "تراجع",
 	"habit_track_daily": "تتبّع يوميًا",
-	"habit_done_action": "أنجزتها اليوم",
+	"habit_complete_label": "أكمل {title} اليوم",
+	"habit_streak_label": "سلسلة: {days}",
+	"habit_shared_label": "عادة مشتركة",
+	"habit_shared_rule": "إكمال واحد في اليوم يُحتسب للجميع في هذه المساحة. استخدم قائمة شخصية لعاداتك الخاصة.",
+	"habit_history_range": "من {first} إلى {last}",
 	"habit_streak_days": [
 		{
 			"declarations": [
@@ -2905,6 +2909,8 @@
 	"setup_preview": "راجع محتوى البداية",
 	"setup_dashboard": "لوحة شخصية",
 	"setup_empty_preview": "لن تتم إضافة أي قوائم أو مهام.",
+	"setup_show_tasks": "عرض المهام",
+	"setup_hide_tasks": "إخفاء المهام",
 	"setup_choose_content": "اختر قائمة واحدة على الأقل أو اللوحة، أو استخدم «مخصّص».",
 	"setup_continue": "متابعة",
 	"setup_back": "رجوع",

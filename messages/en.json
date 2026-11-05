@@ -1090,7 +1090,11 @@
 	"habit_skip_action": "Skip",
 	"habit_undo_action": "Undo",
 	"habit_track_daily": "Track daily",
-	"habit_done_action": "Done today",
+	"habit_complete_label": "Complete {title} today",
+	"habit_streak_label": "Streak: {days}",
+	"habit_shared_label": "Shared habit",
+	"habit_shared_rule": "One completion per day counts for everyone in this space. Use a personal list for your own habits.",
+	"habit_history_range": "{first} to {last}",
 	"habit_streak_days": [
 		{
 			"declarations": [
@@ -2713,6 +2717,8 @@
 	"setup_preview": "Review your starting content",
 	"setup_dashboard": "Personal dashboard",
 	"setup_empty_preview": "No lists or tasks will be added.",
+	"setup_show_tasks": "Show tasks",
+	"setup_hide_tasks": "Hide tasks",
 	"setup_choose_content": "Choose at least one list or the dashboard, or use Custom.",
 	"setup_continue": "Continue",
 	"setup_back": "Back",

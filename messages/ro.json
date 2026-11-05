@@ -1110,7 +1110,11 @@
 	"habit_skip_action": "Sari",
 	"habit_undo_action": "Anulează",
 	"habit_track_daily": "Urmărește zilnic",
-	"habit_done_action": "Făcut azi",
+	"habit_complete_label": "Finalizează {title} azi",
+	"habit_streak_label": "Serie: {days}",
+	"habit_shared_label": "Obicei comun",
+	"habit_shared_rule": "O bifă pe zi contează pentru toți din acest spațiu. Folosește o listă personală pentru propriile obiceiuri.",
+	"habit_history_range": "De la {first} la {last}",
 	"habit_streak_days": [
 		{
 			"declarations": [
@@ -2761,6 +2765,8 @@
 	"setup_preview": "Verifică conținutul de pornire",
 	"setup_dashboard": "Panou personal",
 	"setup_empty_preview": "Nu va fi adăugată nicio listă sau sarcină.",
+	"setup_show_tasks": "Arată sarcinile",
+	"setup_hide_tasks": "Ascunde sarcinile",
 	"setup_choose_content": "Alege cel puțin o listă sau panoul ori folosește Personalizat.",
 	"setup_continue": "Continuă",
 	"setup_back": "Înapoi",

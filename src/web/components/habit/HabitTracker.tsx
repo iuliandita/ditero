@@ -1,4 +1,3 @@
-import { Flame } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { StreakResult } from "../../../domain/streak.ts";
 import { m } from "../../../paraglide/messages.js";
@@ -11,7 +10,7 @@ type HeatCell = StreakResult["heatmap"][number];
 // A missed day is information, not an alarm, so it stays neutral. Each cell is
 // labeled with its date + status for a11y.
 const CELL_STYLE: Record<HeatCell["status"], string> = {
-	done: "bg-success border border-success",
+	done: "bg-primary border border-primary",
 	skipped: "border border-dashed border-muted-foreground/60 bg-transparent",
 	missed: "border border-control-border bg-muted",
 	none: "border border-dotted border-muted-foreground/30 bg-transparent",
@@ -26,41 +25,62 @@ const CELL_LABEL: Record<HeatCell["status"], (date: string) => string> = {
 	none: (date) => m.habit_heatmap_upcoming({ date }),
 };
 
-// Read-only streak + adherence + heatmap presentation for one habit. Pure: no
-// mutation, no data fetching. The heatmap is never a tap target (shell doc 2).
-export function HabitTracker({ streak }: { streak: StreakResult }) {
-	const { current, adherencePct, heatmap } = streak;
+export function HabitTracker({
+	streak,
+	today,
+}: {
+	streak: StreakResult;
+	today: string;
+}) {
+	const { heatmap } = streak;
+	const first = heatmap[0];
+	const last = heatmap.at(-1);
+	if (!first || !last) return null;
 	return (
-		<div className="flex flex-col gap-2">
-			<div className="flex items-center gap-3 text-sm">
-				<span className="inline-flex items-center gap-1 font-medium">
-					<Flame className="size-4 text-success" aria-hidden />
-					<span data-testid="habit-streak">
-						{m.habit_streak_days({ count: current })}
-					</span>
-				</span>
-				{adherencePct != null && (
-					<span className="text-muted-foreground" data-testid="habit-adherence">
-						{m.habit_adherence({ pct: adherencePct })}
+		<div className="mt-1 flex max-w-sm flex-col gap-1 text-xs text-muted-foreground">
+			<span data-testid="habit-history-range">
+				{m.habit_history_range({
+					first: formatDayKey(first.date),
+					last: formatDayKey(last.date),
+				})}
+			</span>
+			<div
+				className="grid gap-x-1 gap-y-1.5"
+				style={{
+					gridTemplateColumns: `repeat(${heatmap.length}, minmax(0, 1fr))`,
+					width: `min(100%, ${heatmap.length * 12 - 4}px)`,
+				}}
+				data-testid="habit-heatmap"
+			>
+				{heatmap.map((cell) => {
+					const label = CELL_LABEL[cell.status](formatDayKey(cell.date));
+					return (
+						<span
+							key={cell.date}
+							role="img"
+							aria-label={label}
+							title={label}
+							aria-current={cell.date === today ? "date" : undefined}
+							style={{ gridRow: 1 }}
+							className={cn(
+								"aspect-square w-full max-w-2 rounded-full",
+								CELL_STYLE[cell.status],
+								cell.date === today &&
+									"ring-1 ring-foreground ring-offset-2 ring-offset-background",
+							)}
+						/>
+					);
+				})}
+				{last.date === today && (
+					<span
+						data-testid="habit-history-today"
+						className="justify-self-center whitespace-nowrap"
+						style={{ gridRow: 2, gridColumn: heatmap.length }}
+					>
+						{m.due_today()}
 					</span>
 				)}
 			</div>
-			{heatmap.length > 0 && (
-				<div className="flex flex-wrap gap-1" data-testid="habit-heatmap">
-					{heatmap.map((c) => {
-						const label = CELL_LABEL[c.status](formatDayKey(c.date));
-						return (
-							<span
-								key={c.date}
-								role="img"
-								aria-label={label}
-								title={label}
-								className={cn("size-3 rounded-sm", CELL_STYLE[c.status])}
-							/>
-						);
-					})}
-				</div>
-			)}
 		</div>
 	);
 }
