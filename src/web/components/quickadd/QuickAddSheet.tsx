@@ -152,11 +152,17 @@ export function QuickAddSheet({
 	useEffect(() => {
 		if (pickerOpen && pickerAll) pickerSearchRef.current?.focus();
 	}, [pickerOpen, pickerAll]);
+	// A not-ready pack is a quiet "keep typing" wait, so typing keeps focus;
+	// otherwise focus the first voice step so the unmounted Dictate button
+	// does not drop focus to the dialog.
 	useEffect(() => {
-		if (voiceRequested)
+		if (!voiceRequested) return;
+		const root = voiceRef.current;
+		if (root?.querySelector('[data-testid="quickadd-voice-status"]'))
+			inputRef.current?.focus();
+		else
 			(
-				voiceRef.current?.querySelector<HTMLElement>("button:not(:disabled)") ??
-				voiceRef.current
+				root?.querySelector<HTMLElement>("button:not(:disabled)") ?? root
 			)?.focus();
 	}, [voiceRequested]);
 	function selectList(list: List) {

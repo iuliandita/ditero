@@ -219,7 +219,6 @@ test("quick-add chips + drag reorder sync across clients", async ({
 	await expect(pa.getByTestId("quickadd-submit")).toBeDisabled();
 	await quickInput.fill("milk ~Shared list");
 	await expect(pa.getByTestId("chip-list")).toContainText("~Shared list");
-	await quickInput.press("Enter");
 	await quickInput.fill("milk tomorrow p2 #store");
 	const parsedBounds = await quickInput.boundingBox();
 	expect(parsedBounds?.y).toBe(emptyBounds?.y);
