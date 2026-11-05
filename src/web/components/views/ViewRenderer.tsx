@@ -223,7 +223,9 @@ export function ViewRenderer(props: {
 			const done = occurrence ? occurrence.done : (task.done ?? false);
 			const workspace = workspaceById.get(list.workspaceId);
 			const sourceContext =
-				workspace && display.workspaceScope.mode !== "one"
+				workspace &&
+				workspaceById.size > 1 &&
+				display.workspaceScope.mode !== "one"
 					? workspace.kind === "personal"
 						? m.scope_source_personal({ workspace: workspace.name })
 						: m.scope_source_shared({ workspace: workspace.name })
@@ -674,11 +676,12 @@ export function ViewRenderer(props: {
 								? workspaceById.get(list.workspaceId)
 								: undefined;
 							const title = list?.title || m.list_untitled_fallback();
-							const context = workspace
-								? workspace.kind === "personal"
-									? m.scope_source_personal({ workspace: workspace.name })
-									: m.scope_source_shared({ workspace: workspace.name })
-								: undefined;
+							const context =
+								workspace && workspaceById.size > 1
+									? workspace.kind === "personal"
+										? m.scope_source_personal({ workspace: workspace.name })
+										: m.scope_source_shared({ workspace: workspace.name })
+									: undefined;
 							return context ? `${title} · ${context}` : title;
 						})()
 					}

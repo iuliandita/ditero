@@ -1551,7 +1551,7 @@
 	"mutation_failed": "Ceva n-a mers bine.",
 	"mutation_offline_not_saved": "Ești offline, modificarea nu a fost salvată. Reconectează-te și încearcă din nou.",
 	"sync_synced_title": "Sincronizat",
-	"sync_synced_detail": "Conectat. Modificările tale se salvează imediat pe server.",
+	"sync_synced_detail": "Conectat la server. Nimic din ce ai modificat aici nu așteaptă să se sincronizeze.",
 	"sync_syncing_title": "Se sincronizează",
 	"sync_syncing_detail": "Modificările tale sunt salvate pe acest dispozitiv și sunt trimise către server.",
 	"sync_offline_title": "Offline",
@@ -1584,6 +1584,7 @@
 	"sync_reauth_title": "Autentifică-te ca să sincronizezi",
 	"sync_reauth_detail": "Autentificarea ta a expirat cât ai fost plecat. Modificările tale rămân pe acest dispozitiv și se sincronizează după ce te autentifici din nou.",
 	"sync_reauth_action": "Autentifică-te din nou",
+	"sync_details_action": "Detalii",
 	"sync_pending_count": [
 		{
 			"declarations": [

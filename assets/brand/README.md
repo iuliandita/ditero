@@ -15,9 +15,13 @@ All PNGs have transparent backgrounds. These are raster assets; editable vector
 masters are not included. Keep the symbol and lettering proportions intact. The
 horizontal wordmarks use a smaller symbol and wider gap than the palette studies.
 
-The login and native server selector use these wordmarks. Installed PWA, desktop,
-and Android artwork is generated from the standalone symbol with Python 3 and
-ImageMagick 7:
+The app shell, login and native server selector use the small derivatives in
+`web/` (432 px wordmarks and a 96 px symbol, each under 10 KB) so the PWA cache
+stays light; regenerate them from the masters above with ImageMagick resize and
+`pngquant`.
+
+Installed PWA, desktop, and Android artwork is generated from the standalone
+symbol with Python 3 and ImageMagick 7:
 
 ```sh
 python3 scripts/generate-branding.py
