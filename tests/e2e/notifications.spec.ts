@@ -534,6 +534,6 @@ test.describe("per-task reminder policy and in-app ack", () => {
 				.getByTestId("habit-card")
 				.filter({ hasText: HABIT })
 				.getByTestId("habit-done"),
-		).toHaveAttribute("aria-pressed", "true", { timeout: 20_000 });
+		).toHaveAttribute("aria-checked", "true", { timeout: 20_000 });
 	});
 });
