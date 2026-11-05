@@ -22,6 +22,7 @@ export type AccountSetupWizardLabels = {
 	customDescription: string;
 	preview: string;
 	showTasks: string;
+	hideTasks: string;
 	dashboard: string;
 	emptyPreview: string;
 	chooseContent: string;
@@ -313,9 +314,14 @@ export function AccountSetupWizard({
 													{labels.taskCount(pack.content.tasks.length)}
 												</span>
 											</h5>
-											<details open={review || undefined}>
+											<details className="group">
 												<summary className="min-h-11 cursor-pointer text-sm">
-													{labels.showTasks}
+													<span className="group-open:hidden">
+														{labels.showTasks}
+													</span>
+													<span className="hidden group-open:inline">
+														{labels.hideTasks}
+													</span>
 												</summary>
 												<ul className="space-y-1 text-sm">
 													{pack.content.tasks.map((task) => (

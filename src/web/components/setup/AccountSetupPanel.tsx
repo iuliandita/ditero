@@ -32,6 +32,7 @@ export function AccountSetupWizardHost({
 		customDescription: m.setup_custom_description(),
 		preview: m.setup_preview(),
 		showTasks: m.setup_show_tasks(),
+		hideTasks: m.setup_hide_tasks(),
 		dashboard: m.setup_dashboard(),
 		emptyPreview: m.setup_empty_preview(),
 		chooseContent: m.setup_choose_content(),

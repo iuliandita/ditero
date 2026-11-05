@@ -57,6 +57,25 @@ export function AccountSetupDialog({
 		onDone,
 	]);
 
+	// Neither surface has a Trigger, so Radix has nowhere to return focus: put it
+	// back on the control that opened the setup, if that control is still there.
+	const opener = useRef<HTMLElement | null>(null);
+	const focusProps = {
+		onOpenAutoFocus: () => {
+			opener.current =
+				document.activeElement instanceof HTMLElement
+					? document.activeElement
+					: null;
+		},
+		onCloseAutoFocus: (event: Event) => {
+			const target = opener.current;
+			opener.current = null;
+			if (target?.isConnected) {
+				event.preventDefault();
+				target.focus();
+			}
+		},
+	};
 	const body = (
 		<AccountSetupWizardHost setup={setup} hideHeader onLeave={onClose} />
 	);
@@ -66,7 +85,10 @@ export function AccountSetupDialog({
 	if (isDesktop)
 		return (
 			<Dialog open={open} onOpenChange={change}>
-				<DialogContent className="max-h-[85dvh] gap-0 overflow-y-auto p-0 sm:max-w-2xl">
+				<DialogContent
+					{...focusProps}
+					className="max-h-[85dvh] gap-0 overflow-y-auto p-0 sm:max-w-2xl"
+				>
 					<DialogHeader className="p-6 pe-12 pb-0">
 						<DialogTitle>{m.setup_title()}</DialogTitle>
 						<DialogDescription>{m.setup_description()}</DialogDescription>
@@ -78,6 +100,7 @@ export function AccountSetupDialog({
 	return (
 		<Sheet open={open} onOpenChange={change}>
 			<SheetContent
+				{...focusProps}
 				side="bottom"
 				className="max-h-[92dvh] gap-0 overflow-y-auto"
 			>

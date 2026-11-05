@@ -37,6 +37,8 @@ import {
 	loadSetupWelcomeDismissed,
 	offersSetupWelcome,
 	saveSetupWelcomeDismissed,
+	setupArrivalReducer,
+	syncedSetupArrival,
 } from "../components/setup/welcome.ts";
 import { AppShell } from "../components/shell/AppShell.tsx";
 import {
@@ -179,10 +181,10 @@ function NormalWorkspace({
 	});
 	const [setupExpanded, setSetupExpanded] = useState(initialSetup);
 	const [setupDialogOpen, setSetupDialogOpen] = useState(false);
-	const [setupArrival, setSetupArrival] = useState<{
-		workspaceId: string;
-		listId: string;
-	} | null>(null);
+	const [setupArrival, dispatchSetupArrival] = useReducer(
+		setupArrivalReducer,
+		null,
+	);
 	const isDesktop = useIsDesktop();
 	const zero = useZero<typeof schema>();
 	const activation = useTaskImportActivationMap();
@@ -282,6 +284,7 @@ function NormalWorkspace({
 	const cancelNavigationRestore = useCallback(() => {
 		navigationRequested.current = true;
 		setHomeApplied(true);
+		dispatchSetupArrival({ kind: "cancel" });
 	}, []);
 	const navigateContent = useCallback(
 		(action: WorkspaceContentAction) => {
@@ -668,11 +671,11 @@ function NormalWorkspace({
 	};
 	// The created list opens once it has synced in; setup itself is server-side.
 	useEffect(() => {
-		if (!setupArrival || !lists.some((l) => l.id === setupArrival.listId))
-			return;
-		setActiveId(setupArrival.workspaceId);
-		arriveAt(setupArrival.listId, false);
-		setSetupArrival(null);
+		const ready = syncedSetupArrival(setupArrival, lists);
+		if (!ready) return;
+		setActiveId(ready.workspaceId);
+		arriveAt(ready.listId, false);
+		dispatchSetupArrival({ kind: "cancel" });
 	}, [setupArrival, lists, arriveAt]);
 	// Flat drag-reorder within a folder group / ungrouped bucket writes only the
 	// dragged list's sortKey (design 2.8). Cross-folder + folder ordering are out
@@ -1345,6 +1348,7 @@ function NormalWorkspace({
 							listCount: activeLists.length,
 							outcome: setup.outcome,
 							authoritative: setup.authoritative,
+							listsReady: navigationRowsReady,
 							managed: setup.managed,
 							dismissed: setupDismissed,
 						}) &&
@@ -1384,7 +1388,7 @@ function NormalWorkspace({
 					onClose={() => setSetupDialogOpen(false)}
 					onDone={(done) => {
 						setSetupDialogOpen(false);
-						if (done) setSetupArrival(done);
+						if (done) dispatchSetupArrival({ kind: "arrive", arrival: done });
 					}}
 				/>
 				<WorkspaceOverlays

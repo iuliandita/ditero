@@ -41,13 +41,15 @@ function safeStorage(): Storage | null {
 }
 
 // The welcome belongs to the user's own, still-empty personal space. A shared
-// workspace, or a shared list elsewhere, never counts as "their" content.
+// workspace, or a shared list elsewhere, never counts as "their" content. Zero
+// lists only counts once the list query is complete, not while it still loads.
 export function offersSetupWelcome({
 	workspaceKind,
 	role,
 	listCount,
 	outcome,
 	authoritative,
+	listsReady,
 	managed,
 	dismissed,
 }: {
@@ -56,16 +58,38 @@ export function offersSetupWelcome({
 	listCount: number;
 	outcome: AccountSetupOutcome | undefined;
 	authoritative: boolean;
+	listsReady: boolean;
 	managed: boolean;
 	dismissed: boolean;
 }): boolean {
 	return (
 		!dismissed &&
 		authoritative &&
+		listsReady &&
 		!managed &&
 		outcome === "pending" &&
 		workspaceKind === "personal" &&
 		role === "owner" &&
 		listCount === 0
 	);
+}
+
+export type SetupArrival = { workspaceId: string; listId: string };
+
+// The created list syncs in after setup completes. Any navigation the user makes
+// in the meantime cancels the pending arrival so it cannot pull them back.
+export function setupArrivalReducer(
+	_state: SetupArrival | null,
+	action: { kind: "arrive"; arrival: SetupArrival } | { kind: "cancel" },
+): SetupArrival | null {
+	return action.kind === "arrive" ? action.arrival : null;
+}
+
+export function syncedSetupArrival(
+	arrival: SetupArrival | null,
+	lists: readonly { id: string }[],
+): SetupArrival | null {
+	return arrival && lists.some((list) => list.id === arrival.listId)
+		? arrival
+		: null;
 }

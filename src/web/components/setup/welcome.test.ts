@@ -3,6 +3,8 @@ import {
 	loadSetupWelcomeDismissed,
 	offersSetupWelcome,
 	saveSetupWelcomeDismissed,
+	setupArrivalReducer,
+	syncedSetupArrival,
 } from "./welcome.ts";
 
 const eligible = {
@@ -11,6 +13,7 @@ const eligible = {
 	listCount: 0,
 	outcome: "pending" as const,
 	authoritative: true,
+	listsReady: true,
 	managed: false,
 	dismissed: false,
 };
@@ -26,6 +29,7 @@ describe("offersSetupWelcome", () => {
 		["personal space already has a list", { listCount: 1 }],
 		["decided outcome", { outcome: "skipped" as const }],
 		["unsynced setup state", { authoritative: false }],
+		["lists still loading", { listsReady: false }],
 		["managed account", { managed: true }],
 		["dismissed once", { dismissed: true }],
 	])("stays quiet for %s", (_name, patch) => {
@@ -58,5 +62,22 @@ describe("setup welcome dismissal", () => {
 		expect(loadSetupWelcomeDismissed("a", broken)).toBe(false);
 		expect(() => saveSetupWelcomeDismissed("a", broken)).not.toThrow();
 		expect(loadSetupWelcomeDismissed("", broken)).toBe(false);
+	});
+});
+
+describe("setup arrival", () => {
+	const arrival = { workspaceId: "w1", listId: "l1" };
+
+	test("waits until the created list has synced", () => {
+		expect(syncedSetupArrival(arrival, [{ id: "other" }])).toBeNull();
+		expect(syncedSetupArrival(arrival, [{ id: "l1" }])).toEqual(arrival);
+	});
+
+	test("navigation cancels it, so a late sync does not pull the user back", () => {
+		const pending = setupArrivalReducer(null, { kind: "arrive", arrival });
+		expect(pending).toEqual(arrival);
+		const cancelled = setupArrivalReducer(pending, { kind: "cancel" });
+		expect(cancelled).toBeNull();
+		expect(syncedSetupArrival(cancelled, [{ id: "l1" }])).toBeNull();
 	});
 });

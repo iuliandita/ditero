@@ -2715,6 +2715,7 @@
 	"setup_dashboard": "Persönliches Dashboard",
 	"setup_empty_preview": "Es werden keine Listen oder Aufgaben hinzugefügt.",
 	"setup_show_tasks": "Aufgaben anzeigen",
+	"setup_hide_tasks": "Aufgaben ausblenden",
 	"setup_choose_content": "Wähle mindestens eine Liste oder das Dashboard aus, oder nimm Individuell.",
 	"setup_continue": "Weiter",
 	"setup_back": "Zurück",

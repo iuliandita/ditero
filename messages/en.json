@@ -2715,6 +2715,7 @@
 	"setup_dashboard": "Personal dashboard",
 	"setup_empty_preview": "No lists or tasks will be added.",
 	"setup_show_tasks": "Show tasks",
+	"setup_hide_tasks": "Hide tasks",
 	"setup_choose_content": "Choose at least one list or the dashboard, or use Custom.",
 	"setup_continue": "Continue",
 	"setup_back": "Back",

@@ -2,8 +2,8 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "7eae8f8f273efd9ca574d54644f7ce94eb5a97371e2c5156e8bd80de7cf9b939",
-			"noImpact": "The starter offer on the home screen now appears once, only in the user's own empty personal workspace, and opens a sheet or dialog instead of Settings. The setup request, outcomes and server contract, the /setup link used by the CLI and TUI, and the Settings entry are unchanged, and no guide describes the in-app offer layout."
+			"sourceDigest": "59e35a4309b7d5f33d9dd47e10b06b53b97a14d3d7200b595fa7aa651c1e2dc5",
+			"noImpact": "The starter offer on the home screen now appears once, only in the user's own empty personal workspace, and opens a sheet or dialog instead of Settings, with each pack's task list collapsed behind a Show/Hide tasks toggle. The setup request, outcomes and server contract, the /setup link used by the CLI and TUI, and the Settings entry are unchanged, and no guide describes the in-app offer layout."
 		},
 		"release": {
 			"sourceDigest": "98d834f1f7c042ae33a1984d6ae39401f5df31377c4f9faab00a1513827ba24e",
