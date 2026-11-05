@@ -2,9 +2,8 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "e85ff3363c2b1c8acce2c222c8652c2ab2f3868ba2acfa36b4da5f0ff37520a9",
-			"docs": ["docs/runbooks/voice-capture.md"],
-			"note": "Document voice availability after Dictate, list name parsing and disambiguation, Enter submission, the due control and local acceptance feedback in quick add."
+			"sourceDigest": "0413339127c892ea2b2b6a46c03ce977f129f77e6309094eaedca5b42698df2f",
+			"noImpact": "The in-list add field for tasks, projects and checklists now reads quick-add syntax into removable chips, shopping reads a leading amount as a quantity, and the permanent literal-saving hint is gone; quick add keeps its own sheet and shortcut, and no documented behavior changes."
 		},
 		"release": {
 			"sourceDigest": "98d834f1f7c042ae33a1984d6ae39401f5df31377c4f9faab00a1513827ba24e",
