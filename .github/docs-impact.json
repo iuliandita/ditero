@@ -2,8 +2,8 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "f4826b94edf9c4428008ea92f5080b5c889b632e45f4cf980a0b2c87fc989e3e",
-			"noImpact": "Habit titles and metadata share one detail control, with shared-completion help in a separate 44px action. The dated strip anchors Today below its occurrence. Existing task detail, themes, reading presets and access rules remain unchanged. No new setup or user-facing configuration needs documentation."
+			"sourceDigest": "28035e131744c2c12e1f3eb8c5a2bffeae56b05fd14155e44e96dc5a8c357363",
+			"noImpact": "The starter offer on the home screen now appears once, only in the user's own empty personal workspace, and opens a sheet or dialog instead of Settings, with each pack's task list collapsed behind a Show/Hide tasks toggle. The setup request, outcomes and server contract, the /setup link used by the CLI and TUI, and the Settings entry are unchanged, and no guide describes the in-app offer layout."
 		},
 		"release": {
 			"sourceDigest": "98d834f1f7c042ae33a1984d6ae39401f5df31377c4f9faab00a1513827ba24e",
