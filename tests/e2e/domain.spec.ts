@@ -1330,7 +1330,11 @@ test("quick add resolves and disambiguates destinations without moving the deskt
 		sidebarLists(page).getByRole("button", { name: "Groceries", exact: true }),
 	).toHaveCount(2);
 	await openListDesktop(page, "Current tasks");
-	await page.getByRole("button", { name: "Quick add", exact: true }).click();
+	// Desktop lists have no quick add button; the c shortcut opens the dialog.
+	await page.evaluate(() =>
+		(document.activeElement as HTMLElement | null)?.blur(),
+	);
+	await page.keyboard.press("c");
 	const input = page.getByTestId("quickadd-input");
 	await expect(page.getByTestId("quickadd-dialog")).toHaveCSS("opacity", "1");
 	const initial = await input.boundingBox();
