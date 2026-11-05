@@ -180,6 +180,27 @@ test("known destinations use the longest full name and leave unresolved text vis
 		"cafe list",
 	);
 	expect(parseQuickAdd("Buy ~Unknown plans", NOW, "en", names).listName).toBe(
-		"Unknown plans",
+		"Unknown",
 	);
+});
+
+test.each([
+	["bake ~ 20 cookies", ["Home"], "bake ~ 20 cookies", null],
+	[
+		"Read https://x.org/~bob/notes",
+		["Home"],
+		"Read https://x.org/~bob/notes",
+		null,
+	],
+	["eggs ~Home ~Work", ["Home", "Work"], "eggs", "Home"],
+	["buy ~Unknown milk tomorrow", ["Home"], "buy milk tomorrow", "Unknown"],
+	["buy ~Home, please", ["Home"], "buy , please", "Home"],
+	["buy ~Home plans later", ["Home", "Home plans"], "buy later", "Home plans"],
+	["buy ~Cafe\u0301 list now", ["Café list"], "buy now", "Cafe\u0301 list"],
+	["شراء ~مَنْزِل كبير", ["منزل"], "شراء كبير", "مَنْزِل"],
+	["buy ~Home", ["Home", "Home"], "buy", "Home"],
+] as const)("preserves capture around list tokens: %s", (input, names, title, name) => {
+	const result = parseQuickAdd(input, NOW, "ro", names);
+	expect(result.title).toBe(title);
+	expect(result.listName).toBe(name);
 });

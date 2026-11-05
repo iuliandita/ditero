@@ -6,6 +6,7 @@ import {
 } from "../../../domain/quick-add.ts";
 import { m } from "../../../paraglide/messages.js";
 import { priorityLabel } from "../../lib/task-display.ts";
+import { cn } from "../../lib/utils.ts";
 
 const ICONS = {
 	date: CalendarClock,
@@ -28,7 +29,7 @@ export function TokenChips({
 }) {
 	if (tokens.length === 0) return null;
 	return (
-		<div className="flex flex-wrap gap-1.5" data-testid="quickadd-chips">
+		<div className="flex shrink-0 gap-1.5" data-testid="quickadd-chips">
 			{tokens.map((tk) => {
 				const Icon = ICONS[tk.type];
 				const unknown =
@@ -43,7 +44,10 @@ export function TokenChips({
 						key={`${tk.type}-${tk.start}`}
 						variant={unknown ? "outline" : "secondary"}
 						data-testid={`chip-${tk.type}`}
-						className={unknown ? "border-dashed" : undefined}
+						className={cn(
+							"h-11 shrink-0 overflow-visible",
+							unknown && "border-dashed",
+						)}
 					>
 						{unknown ? <Plus /> : <Icon />}
 						{level != null ? priorityLabel(level) : tk.text}

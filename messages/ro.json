@@ -451,6 +451,7 @@
 	"quickadd_no_list": "Nicio listă disponibilă",
 	"quickadd_list_not_found": "Nu există nicio listă numită {list}",
 	"quickadd_choose_list": "Alege o listă",
+	"quickadd_list_search": "Caută liste",
 	"quickadd_added_to": "Adăugat în {list}",
 	"quickadd_shortcuts": "Scurtături",
 	"quickadd_failed": "Nu am putut adăuga sarcina.",

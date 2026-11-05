@@ -448,6 +448,7 @@
 	"quickadd_no_list": "Keine Liste verfügbar",
 	"quickadd_list_not_found": "Keine Liste namens {list}",
 	"quickadd_choose_list": "Wähle eine Liste",
+	"quickadd_list_search": "Listen suchen",
 	"quickadd_added_to": "Zu {list} hinzugefügt",
 	"quickadd_shortcuts": "Kurzbefehle",
 	"quickadd_failed": "Die Aufgabe konnte nicht hinzugefügt werden.",

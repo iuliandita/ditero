@@ -71,6 +71,9 @@ export function QuickAddSheet({
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const inputRef = useRef<HTMLInputElement>(null);
+	const pickerSearchRef = useRef<HTMLInputElement>(null);
+	const voiceRef = useRef<HTMLDivElement>(null);
+	const [listNotice, setListNotice] = useState(0);
 	const { recordUse } = useHints();
 	const [allLists] = useQuery(queries.lists.mine());
 	const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -91,6 +94,7 @@ export function QuickAddSheet({
 			setSelectedId(null);
 			setPickerOpen(false);
 			setDue(null);
+			setDueOpen(false);
 			setVoiceRequested(false);
 			setAdded(null);
 		}
@@ -133,18 +137,40 @@ export function QuickAddSheet({
 			? (lists.find((l) => l.id === currentListId) ?? lists[0])
 			: null) ??
 		null;
-	const pickerLists = availableLists.filter((l) =>
-		normalizeListName(l.title).includes(
-			normalizeListName(pickerAll ? pickerSearch : (parse.listName ?? "")),
-		),
+	const pickerQuery = normalizeListName(
+		pickerAll ? pickerSearch : (parse.listName ?? ""),
 	);
+	const pickerLists = availableLists
+		.filter((l) => normalizeListName(l.title).includes(pickerQuery))
+		.toSorted((a, b) => {
+			const rank = (name: string) =>
+				name === pickerQuery ? 0 : name.startsWith(pickerQuery) ? 1 : 2;
+			return (
+				rank(normalizeListName(a.title)) - rank(normalizeListName(b.title))
+			);
+		});
+	useEffect(() => {
+		if (pickerOpen && pickerAll) pickerSearchRef.current?.focus();
+	}, [pickerOpen, pickerAll]);
+	useEffect(() => {
+		if (voiceRequested)
+			(
+				voiceRef.current?.querySelector<HTMLElement>("button:not(:disabled)") ??
+				voiceRef.current
+			)?.focus();
+	}, [voiceRequested]);
 	function selectList(list: List) {
 		if (listToken)
 			setRaw(
 				(value) =>
 					`${value.slice(0, listToken.start)}~${list.title}${value.slice(listToken.end)}`,
 			);
-		else setRaw((value) => `${value.trimEnd()} ~${list.title}`.trimStart());
+		else
+			setRaw((value) =>
+				/(?:^|\s)~$/.test(value)
+					? `${value}${list.title}`
+					: `${value.trimEnd()} ~${list.title}`.trimStart(),
+			);
 		setSelectedId(list.id);
 		setPickerOpen(false);
 		inputRef.current?.focus();
@@ -248,7 +274,11 @@ export function QuickAddSheet({
 
 	async function submit() {
 		const t = title.trim();
-		if (busy || !canCreate || !targetList || !t || listUnresolved) return;
+		if (listUnresolved) {
+			setListNotice((n) => n + 1);
+			return;
+		}
+		if (busy || !canCreate || !targetList || !t) return;
 		// Read fresh at event time: this still fences every write.
 		if (voice.blockedNow()) {
 			blockedSeq.current += 1;
@@ -302,6 +332,7 @@ export function QuickAddSheet({
 			setAdded({ list: targetName, id: randomId() });
 			setSelectedId(null);
 			setDue(null);
+			setPickerOpen(false);
 			// Serial entry: clear and keep the sheet open (Enter = add another).
 			setRaw("");
 			inputRef.current?.focus();
@@ -323,7 +354,25 @@ export function QuickAddSheet({
 			<input
 				ref={inputRef}
 				data-testid="quickadd-input"
-				aria-describedby={!canCreate ? "quickadd-read-only" : undefined}
+				role="combobox"
+				aria-expanded={pickerOpen && !pickerAll}
+				aria-controls={
+					pickerOpen && !pickerAll ? "quickadd-listbox" : undefined
+				}
+				aria-activedescendant={
+					pickerOpen && !pickerAll && pickerLists.length
+						? `quickadd-option-${pickerLists[Math.min(pickerIndex, pickerLists.length - 1)].id}`
+						: undefined
+				}
+				aria-autocomplete="list"
+				aria-describedby={
+					[
+						!canCreate && "quickadd-read-only",
+						listUnresolved && "quickadd-list-reason",
+					]
+						.filter(Boolean)
+						.join(" ") || undefined
+				}
 				aria-label={m.quickadd_input_label()}
 				className="h-10 w-full rounded-lg border bg-transparent px-3 text-base md:text-sm [@media(pointer:coarse)]:min-h-11"
 				// The `#`/`~`/`pN` sigils are literal parser grammar and stay
@@ -349,18 +398,35 @@ export function QuickAddSheet({
 				onChange={(e) => {
 					const value = e.target.value;
 					setRaw(value);
-					const nextList = parseQuickAdd(
+					const next = parseQuickAdd(
 						value,
 						undefined,
 						locale,
 						availableLists.map((l) => l.title),
-					).listName;
-					if (nextList !== parse.listName) {
-						setSelectedId(null);
-						setPickerOpen(value.includes("~"));
-						setPickerAll(false);
-						setPickerIndex(0);
-					}
+					);
+					const nextToken = next.tokens.find((t) => t.type === "list");
+					const nextMatches = availableLists.filter(
+						(l) =>
+							normalizeListName(l.title) ===
+							normalizeListName(next.listName ?? ""),
+					);
+					if (next.listName !== parse.listName) setSelectedId(null);
+					const atToken =
+						nextToken && e.target.selectionStart === nextToken.end;
+					const bare = /(?:^|\s)~$/.test(value);
+					setPickerOpen(Boolean((atToken && nextMatches.length !== 1) || bare));
+					setPickerAll(false);
+					setPickerIndex(0);
+					if (
+						due &&
+						next.tokens.some((t) => t.type === "date") &&
+						!parse.tokens.some(
+							(t) =>
+								t.type === "date" &&
+								t.text === next.tokens.find((n) => n.type === "date")?.text,
+						)
+					)
+						setDue(null);
 				}}
 				onKeyDown={(e) => {
 					if (
@@ -392,7 +458,7 @@ export function QuickAddSheet({
 				</p>
 			)}
 			<div
-				className="flex h-11 flex-wrap items-center gap-1.5 overflow-y-auto"
+				className="flex h-11 items-center gap-1.5 overflow-x-auto overflow-y-hidden"
 				data-testid="quickadd-metadata"
 			>
 				<TokenChips
@@ -419,13 +485,15 @@ export function QuickAddSheet({
 				<button
 					type="button"
 					className="min-h-11 rounded-md px-2 text-xs hover:bg-muted"
+					aria-expanded={dueOpen}
+					aria-controls="quickadd-due-options"
 					onClick={() => setDueOpen(!dueOpen)}
 				>
 					{m.task_due_date_aria()}
 				</button>
 			</div>
 			{dueOpen && (
-				<div className="flex gap-2">
+				<div id="quickadd-due-options" className="flex gap-2">
 					{[0, 1].map((offset) => (
 						<Button
 							key={offset}
@@ -434,6 +502,7 @@ export function QuickAddSheet({
 							onClick={() => {
 								const date = new Date();
 								date.setDate(date.getDate() + offset);
+								date.setHours(12, 0, 0, 0);
 								const dateToken = parse.tokens.find(
 									(token) => token.type === "date",
 								);
@@ -451,8 +520,17 @@ export function QuickAddSheet({
 				<div>
 					{pickerAll && (
 						<input
-							ref={(node) => node?.focus()}
-							aria-label={m.palette_search_label()}
+							ref={pickerSearchRef}
+							role="combobox"
+							aria-expanded={pickerOpen}
+							aria-controls="quickadd-listbox"
+							aria-activedescendant={
+								pickerLists.length
+									? `quickadd-option-${pickerLists[Math.min(pickerIndex, pickerLists.length - 1)].id}`
+									: undefined
+							}
+							aria-autocomplete="list"
+							aria-label={m.quickadd_list_search()}
 							value={pickerSearch}
 							onChange={(e) => {
 								setPickerSearch(e.target.value);
@@ -480,6 +558,7 @@ export function QuickAddSheet({
 						/>
 					)}
 					<div
+						id="quickadd-listbox"
 						role="listbox"
 						aria-label={m.field_list()}
 						className="max-h-32 overflow-y-auto rounded-md border p-1"
@@ -489,6 +568,9 @@ export function QuickAddSheet({
 								key={list.id}
 								type="button"
 								role="option"
+								id={`quickadd-option-${list.id}`}
+								tabIndex={-1}
+								onMouseDown={(e) => e.preventDefault()}
 								aria-selected={index === pickerIndex}
 								className="flex min-h-11 w-full justify-between gap-2 rounded px-2 text-start text-sm aria-selected:bg-muted"
 								onClick={() => selectList(list)}
@@ -503,12 +585,21 @@ export function QuickAddSheet({
 				</div>
 			)}
 			{listUnresolved && (
-				<p className="text-sm text-muted-foreground">
+				<p id="quickadd-list-reason" className="text-sm text-muted-foreground">
 					{matches.length > 1
 						? m.quickadd_choose_list()
 						: m.quickadd_list_not_found({ list: parse.listName ?? "" })}
 				</p>
 			)}
+			<div role="status" aria-live="polite" className="sr-only">
+				{listNotice > 0 && listUnresolved && (
+					<span key={listNotice}>
+						{matches.length > 1
+							? m.quickadd_choose_list()
+							: m.quickadd_list_not_found({ list: parse.listName ?? "" })}
+					</span>
+				)}
+			</div>
 			{error && (
 				<p role="alert" className="text-sm text-destructive">
 					{error}
@@ -536,6 +627,9 @@ export function QuickAddSheet({
 			<div className="flex items-center justify-between gap-2">
 				<button
 					type="button"
+					aria-label={m.quickadd_choose_list()}
+					aria-haspopup="listbox"
+					aria-expanded={pickerOpen}
 					className="min-h-11 min-w-0 truncate text-start text-xs text-muted-foreground"
 					onClick={() => {
 						setPickerAll(true);
@@ -545,18 +639,31 @@ export function QuickAddSheet({
 						inputRef.current?.focus();
 					}}
 				>
-					<span role="status" aria-live="polite">
+					<span>
 						{added ? (
 							<span key={added.id}>
 								{m.quickadd_added_to({ list: added.list })}
 							</span>
 						) : targetList ? (
 							m.quickadd_adding_to({ list: targetName })
+						) : listUnresolved ? (
+							matches.length > 1 ? (
+								m.quickadd_choose_list()
+							) : (
+								m.quickadd_list_not_found({ list: parse.listName ?? "" })
+							)
 						) : (
 							m.quickadd_no_list()
 						)}
 					</span>
 				</button>
+				<span role="status" aria-live="polite" className="sr-only">
+					{added && (
+						<span key={added.id}>
+							{m.quickadd_added_to({ list: added.list })}
+						</span>
+					)}
+				</span>
 				<Button
 					data-testid="quickadd-submit"
 					type="button"
@@ -571,7 +678,12 @@ export function QuickAddSheet({
 						listUnresolved
 					}
 					aria-describedby={
-						voice.blocking ? "quickadd-voice-blocked" : undefined
+						[
+							voice.blocking && "quickadd-voice-blocked",
+							listUnresolved && "quickadd-list-reason",
+						]
+							.filter(Boolean)
+							.join(" ") || undefined
 					}
 				>
 					{addCopyFor(targetList?.kind as ListKind | null | undefined).action()}
@@ -579,12 +691,14 @@ export function QuickAddSheet({
 			</div>
 			{canCreate &&
 				(voiceRequested ? (
-					<VoiceCapture
-						key={voiceScope}
-						voice={voice}
-						onUse={acceptVoiceText}
-						onFocusInput={() => inputRef.current?.focus()}
-					/>
+					<div ref={voiceRef} tabIndex={-1}>
+						<VoiceCapture
+							key={voiceScope}
+							voice={voice}
+							onUse={acceptVoiceText}
+							onFocusInput={() => inputRef.current?.focus()}
+						/>
+					</div>
 				) : (
 					<Button
 						type="button"
@@ -621,7 +735,7 @@ export function QuickAddSheet({
 			<Dialog open={open} onOpenChange={onOpenChange}>
 				<DialogContent
 					data-testid="quickadd-dialog"
-					className="sm:max-w-lg"
+					className="top-[15vh] max-h-[80dvh] translate-y-0 overflow-y-auto sm:max-w-lg"
 					onEscapeKeyDown={onEscapeKeyDown}
 				>
 					<DialogHeader>

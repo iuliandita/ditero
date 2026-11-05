@@ -111,6 +111,19 @@ test("quick add's automatic probe reaches a real native availability result", as
 	});
 	watch.assertAlive();
 
+	await page.evaluate(() => {
+		const ctor = Reflect.get(window, "SpeechRecognition");
+		const original = ctor.prototype.start;
+		Reflect.set(window, "__voiceStarts", 0);
+		ctor.prototype.start = function (...args: unknown[]) {
+			Reflect.set(
+				window,
+				"__voiceStarts",
+				Reflect.get(window, "__voiceStarts") + 1,
+			);
+			return original.apply(this, args);
+		};
+	});
 	await page.getByTestId("syntax-hint-open-quickadd").click();
 	await expect(input).toBeVisible();
 	const draft = `Native probe ${[...randomUUID().replaceAll("-", "")]
@@ -120,6 +133,10 @@ test("quick add's automatic probe reaches a real native availability result", as
 	await input.fill(draft);
 
 	await expect(page.getByTestId("quickadd-voice-status")).toHaveCount(0);
+	await input.click();
+	expect(await page.evaluate(() => Reflect.get(window, "__voiceStarts"))).toBe(
+		0,
+	);
 	await page.getByTestId("quickadd-voice-start").click();
 
 	// One status or error surface is on screen at a time; it must leave the

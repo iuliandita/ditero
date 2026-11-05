@@ -4,7 +4,9 @@ Quick add can take dictation in the browser, on-device where the browser support
 and reaches the task field only after **Use this text**. It is never submitted
 automatically, and the normal quick-add parser then handles dates, `#labels` and `~lists`.
 Choose a destination with `~` or the destination button. The picker shows the workspace
-for each list; an unknown or ambiguous name must be resolved before adding. The Due
+for each list; an unknown or ambiguous name must be resolved before adding. A known
+name can contain spaces; an unknown name ends at the first word, leaving later words
+in the task. Press Enter to add when the destination is resolved. The Due
 control offers Today and Tomorrow. After local acceptance, quick add briefly shows the
 destination; this does not confirm server persistence.
 

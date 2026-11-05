@@ -460,6 +460,7 @@
 	"quickadd_no_list": "لا توجد قائمة متاحة",
 	"quickadd_list_not_found": "لا توجد قائمة باسم {list}",
 	"quickadd_choose_list": "اختر قائمة",
+	"quickadd_list_search": "البحث عن القوائم",
 	"quickadd_added_to": "أُضيف إلى {list}",
 	"quickadd_shortcuts": "اختصارات",
 	"quickadd_failed": "تعذّرت إضافة المهمة.",

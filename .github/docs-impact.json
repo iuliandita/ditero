@@ -2,9 +2,9 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "1b5b589d066481b4d81b4d480475bf428cc638484a69bc1567980f9f2c2f64bc",
+			"sourceDigest": "dd618d1314bc4c2d51dddb99bd3f41efcd6f1680cddcaa503771a1971ea1baa7",
 			"docs": ["docs/runbooks/voice-capture.md"],
-			"note": "Document voice availability after Dictate, explicit list selection and ambiguity handling, the due control and local acceptance feedback in quick add."
+			"note": "Document voice availability after Dictate, list name parsing and disambiguation, Enter submission, the due control and local acceptance feedback in quick add."
 		},
 		"release": {
 			"sourceDigest": "98d834f1f7c042ae33a1984d6ae39401f5df31377c4f9faab00a1513827ba24e",
