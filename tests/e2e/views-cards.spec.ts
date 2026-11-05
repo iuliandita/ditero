@@ -181,7 +181,7 @@ test("board: default grouping is by priority, cards are one surface with row cue
 }) => {
 	const email = uniqueEmail("vc1");
 	await signUp(page, email);
-	await seed(email, BOARD_TASKS);
+	const workspaceName = await seed(email, BOARD_TASKS);
 	await page.reload();
 	await waitWorkspaceReady(page);
 
@@ -212,8 +212,16 @@ test("board: default grouping is by priority, cards are one surface with row cue
 	// One card surface: a single border, no inner fill of another colour.
 	const card = high.getByTestId("board-card").filter({ hasText: LONG_TITLE });
 	await expect(card).toBeVisible();
-	// This account has one workspace, so the card does not repeat it.
-	await expect(card.getByTestId("task-source-context")).toHaveCount(0);
+	// The seed adds a shared workspace, so the view spans two and names the source.
+	const source = card.getByTestId("task-source-context");
+	await expect(source).toHaveAttribute("title", `${workspaceName} · Personal`);
+	await expect(source.locator(':scope > span[aria-hidden="true"]')).toHaveText(
+		workspaceName,
+	);
+	await expect(source.locator(".sr-only")).toHaveText(
+		`${workspaceName} · Personal`,
+	);
+	await expect(source.locator("svg.lucide-user-round")).toBeVisible();
 	await page.mouse.move(0, 0);
 	expect(await surfaceReport(card)).toEqual({ bordered: 1, innerFills: 0 });
 
