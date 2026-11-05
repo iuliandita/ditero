@@ -290,7 +290,9 @@ runs in memory for the session, and `io-error` or `full` after opening, after
 which it stops persisting. The package patch also classifies native IndexedDB
 quota and transaction DOMExceptions after a successful open. The sync indicator
 then shows that changes are not saved on this device and are kept only once they
-reach the server. Storage warnings take precedence over rejection and expired
+reach the server, and a notice above the page content repeats that instruction
+with a Details button for the indicator's popover. The notice is display only:
+it never offers a reload. Storage warnings take precedence over rejection and expired
 session messages; none promises device saving in this state. While the client is
 offline in that state, new edits are refused rather than accepted into memory.
 

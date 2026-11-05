@@ -55,6 +55,7 @@ import { PageFrame } from "../components/shell/PageFrame.tsx";
 import { RestrictedShell } from "../components/shell/RestrictedShell.tsx";
 import { Sidebar } from "../components/shell/Sidebar.tsx";
 import { SyncIndicator } from "../components/shell/SyncIndicator.tsx";
+import { SyncNotice } from "../components/shell/SyncNotice.tsx";
 import { WorkspaceSwitcherSheet } from "../components/shell/WorkspaceSwitcher.tsx";
 import { BackButton } from "../components/ui/back-button.tsx";
 import { Button } from "../components/ui/button.tsx";
@@ -112,6 +113,7 @@ import { viewIcon } from "../lib/nav-icon.tsx";
 import { useNavSections } from "../lib/nav-sections.ts";
 import { recordRecent } from "../lib/recents.ts";
 import { useIsDesktop, useMediaQuery } from "../lib/use-media-query.ts";
+import { cn } from "../lib/utils.ts";
 import { BUILTIN_VIEWS, DEFAULT_HOME } from "../views/builtins.ts";
 import { dashboardHomeRef, resolveHomeRef } from "../views/home-ref.ts";
 import { ListView } from "./ListView.tsx";
@@ -1026,6 +1028,18 @@ function NormalWorkspace({
 	} else if (!isDesktop && contentState.kind === "index") {
 		content = (
 			<MobileListIndex
+				switcher={
+					<WorkspaceSwitcherSheet
+						workspaces={workspaces}
+						activeId={activeId}
+						onSelect={selectWorkspace}
+						onManageMembers={openMembers}
+						onCreateWorkspace={openCreateWorkspace}
+						canManageMembers={canManageMembers}
+						onOpenSettings={openSettings}
+						onOpenAppearance={openAppearance}
+					/>
+				}
 				createList={createListForm}
 				groups={groups}
 				progressByList={progressByList}
@@ -1117,7 +1131,14 @@ function NormalWorkspace({
 				{isLanding && isDesktop && newListFolder && createListForm}
 				{activeView ? (
 					<section aria-label={activeView.name} data-testid="view-surface">
-						<div className="mb-3 flex items-center gap-2">
+						<div
+							className={cn(
+								"mb-3 flex items-center gap-2",
+								// The phone header already shows the title; the heading stays
+								// for screen readers.
+								!isDesktop && isTabRoot && "sr-only",
+							)}
+						>
 							{!isDesktop && !isTabRoot && (
 								<BackButton size="compact" onClick={openIndex} />
 							)}
@@ -1329,24 +1350,25 @@ function NormalWorkspace({
 					}
 				>
 					{!isDesktop && isTabRoot && (
-						// Phones: where you are and where to switch, above the tab's
-						// content. The end of the bar stays free for status.
-						<header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b bg-background px-2">
-							<WorkspaceSwitcherSheet
-								workspaces={workspaces}
-								activeId={activeId}
-								onSelect={selectWorkspace}
-								onManageMembers={openMembers}
-								onCreateWorkspace={openCreateWorkspace}
-								canManageMembers={canManageMembers}
-								onOpenSettings={openSettings}
-								onOpenAppearance={openAppearance}
-							/>
-							<div className="ms-auto">
-								<SyncIndicator placement="header" />
-							</div>
+						// Phones: the page title and, at the end, status. The workspace
+						// switcher belongs to the Lists block, not to account-wide Today.
+						<header
+							data-testid="phone-header"
+							data-workspace-id={activeId ?? undefined}
+							className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b bg-background ps-4 pe-2"
+						>
+							<span
+								aria-hidden
+								className="min-w-0 flex-1 truncate text-lg font-semibold"
+							>
+								{contentState.kind === "index"
+									? m.nav_lists()
+									: (activeView?.name ?? "")}
+							</span>
+							<SyncIndicator placement="header" />
 						</header>
 					)}
+					<SyncNotice />
 					{workspaceActionError && (
 						<p
 							role="alert"

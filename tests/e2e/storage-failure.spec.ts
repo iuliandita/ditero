@@ -73,6 +73,17 @@ test("desktop: a local storage failure is shown and offline edits are refused", 
 	await page.keyboard.press("Escape");
 	await expect(page.getByTestId("sync-popover")).toHaveCount(0);
 
+	// The same instruction is visible without opening the icon, and Details
+	// opens that popover rather than a second diagnostics surface.
+	const notice = page.getByTestId("sync-notice");
+	await expect(notice).toContainText(
+		"An edit is kept only once it reaches the server",
+	);
+	await notice.getByTestId("sync-notice-details").click();
+	await expect(page.getByTestId("sync-popover")).toBeVisible();
+	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("sync-popover")).toHaveCount(0);
+
 	const online = `Reaches server ${crypto.randomUUID()}`;
 	await addTask(page, online);
 	await expect.poll(() => serverHasTask(online)).toBe(true);

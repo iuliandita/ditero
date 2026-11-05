@@ -21,8 +21,10 @@ const ROW =
 const CREATE_ROW = cn(ROW, "text-muted-foreground");
 
 // The mobile Lists tab: the same order and grouping as the desktop sidebar,
-// minus Today, which has its own tab.
+// minus Today, which has its own tab. The workspace switcher heads only the
+// Lists block, below the account-wide destinations.
 export function MobileListIndex({
+	switcher,
 	createList,
 	groups,
 	progressByList,
@@ -41,6 +43,7 @@ export function MobileListIndex({
 	isSectionOpen,
 	onToggleSection,
 }: {
+	switcher: ReactNode;
 	createList: ReactNode;
 	groups: ListGroup[];
 	progressByList: Map<string, { done: number; total: number }>;
@@ -128,64 +131,6 @@ export function MobileListIndex({
 				{views.map(viewRow)}
 			</ul>
 
-			<NavGroup title={m.sidebar_ungrouped_lists()} section="lists">
-				<div className="mb-2 flex items-center gap-2">
-					<div className="min-w-0 flex-1">{createList}</div>
-					{canReorder && !reorderActive && (
-						<Button
-							variant="ghost"
-							data-testid="list-reorder-mode"
-							className="min-h-11 text-muted-foreground"
-							onClick={() => setReordering(true)}
-						>
-							{m.list_reorder_mode()}
-						</Button>
-					)}
-				</div>
-				{reorderActive && (
-					<div
-						data-testid="list-reorder-bar"
-						className="mb-2 flex items-center justify-between gap-2 rounded-lg bg-muted ps-3 text-sm text-muted-foreground"
-					>
-						<span>{m.list_reorder_hint()}</span>
-						<Button
-							variant="ghost"
-							className="min-h-11"
-							onClick={() => setReordering(false)}
-						>
-							{m.list_reorder_done()}
-						</Button>
-					</div>
-				)}
-				<div data-testid="list-index" className="flex flex-col gap-2">
-					{groups.map((group) =>
-						group.folder ? (
-							<div key={group.folder.id} data-folder-id={group.folder.id}>
-								<div className="flex min-h-11 items-center gap-3 px-3 text-sm text-muted-foreground">
-									<FolderIcon aria-hidden className="size-4 shrink-0" />
-									<span className="truncate">{group.folder.name}</span>
-								</div>
-								<div className="ps-4">
-									{group.lists.length > 0 ? (
-										listItems(group.lists)
-									) : (
-										<EmptyFolder
-											canCreate={canCreateList}
-											onCreate={() => {
-												if (group.folder) onNewListInFolder(group.folder.id);
-											}}
-											className="min-h-11 px-3 text-sm hover:bg-muted"
-										/>
-									)}
-								</div>
-							</div>
-						) : (
-							<div key="__ungrouped__">{listItems(group.lists)}</div>
-						),
-					)}
-				</div>
-			</NavGroup>
-
 			<NavGroup
 				title={m.sidebar_views_heading()}
 				section="views"
@@ -248,6 +193,67 @@ export function MobileListIndex({
 						</button>
 					</li>
 				</ul>
+			</NavGroup>
+			<NavGroup
+				title={m.sidebar_ungrouped_lists()}
+				section="lists"
+				heading={switcher}
+			>
+				<div className="mb-2 flex items-center gap-2">
+					<div className="min-w-0 flex-1">{createList}</div>
+					{canReorder && !reorderActive && (
+						<Button
+							variant="ghost"
+							data-testid="list-reorder-mode"
+							className="min-h-11 text-muted-foreground"
+							onClick={() => setReordering(true)}
+						>
+							{m.list_reorder_mode()}
+						</Button>
+					)}
+				</div>
+				{reorderActive && (
+					<div
+						data-testid="list-reorder-bar"
+						className="mb-2 flex items-center justify-between gap-2 rounded-lg bg-muted ps-3 text-sm text-muted-foreground"
+					>
+						<span>{m.list_reorder_hint()}</span>
+						<Button
+							variant="ghost"
+							className="min-h-11"
+							onClick={() => setReordering(false)}
+						>
+							{m.list_reorder_done()}
+						</Button>
+					</div>
+				)}
+				<div data-testid="list-index" className="flex flex-col gap-2">
+					{groups.map((group) =>
+						group.folder ? (
+							<div key={group.folder.id} data-folder-id={group.folder.id}>
+								<div className="flex min-h-11 items-center gap-3 px-3 text-sm text-muted-foreground">
+									<FolderIcon aria-hidden className="size-4 shrink-0" />
+									<span className="truncate">{group.folder.name}</span>
+								</div>
+								<div className="ps-4">
+									{group.lists.length > 0 ? (
+										listItems(group.lists)
+									) : (
+										<EmptyFolder
+											canCreate={canCreateList}
+											onCreate={() => {
+												if (group.folder) onNewListInFolder(group.folder.id);
+											}}
+											className="min-h-11 px-3 text-sm hover:bg-muted"
+										/>
+									)}
+								</div>
+							</div>
+						) : (
+							<div key="__ungrouped__">{listItems(group.lists)}</div>
+						),
+					)}
+				</div>
 			</NavGroup>
 		</div>
 	);
