@@ -2773,6 +2773,8 @@
 	"setup_preview": "Verifică conținutul de pornire",
 	"setup_dashboard": "Panou personal",
 	"setup_empty_preview": "Nu va fi adăugată nicio listă sau sarcină.",
+	"setup_show_tasks": "Arată sarcinile",
+	"setup_hide_tasks": "Ascunde sarcinile",
 	"setup_choose_content": "Alege cel puțin o listă sau panoul ori folosește Personalizat.",
 	"setup_continue": "Continuă",
 	"setup_back": "Înapoi",

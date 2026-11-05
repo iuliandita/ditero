@@ -2773,6 +2773,8 @@
 	"setup_preview": "Vérifie ton contenu de départ",
 	"setup_dashboard": "Tableau de bord personnel",
 	"setup_empty_preview": "Aucune liste ni tâche ne sera ajoutée.",
+	"setup_show_tasks": "Afficher les tâches",
+	"setup_hide_tasks": "Masquer les tâches",
 	"setup_choose_content": "Choisis au moins une liste ou le tableau de bord, ou passe par Personnalisé.",
 	"setup_continue": "Continuer",
 	"setup_back": "Retour",
