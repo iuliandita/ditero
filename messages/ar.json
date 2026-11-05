@@ -2911,6 +2911,8 @@
 	"setup_preview": "راجع محتوى البداية",
 	"setup_dashboard": "لوحة شخصية",
 	"setup_empty_preview": "لن تتم إضافة أي قوائم أو مهام.",
+	"setup_show_tasks": "عرض المهام",
+	"setup_hide_tasks": "إخفاء المهام",
 	"setup_choose_content": "اختر قائمة واحدة على الأقل أو اللوحة، أو استخدم «مخصّص».",
 	"setup_continue": "متابعة",
 	"setup_back": "رجوع",
