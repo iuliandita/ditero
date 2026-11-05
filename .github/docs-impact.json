@@ -7,19 +7,19 @@
 			"note": "Text people type keeps its own direction in Arabic: input and textarea fields use dir=auto, rendered notes and comments take their own direction, and titles, list and people names and label chips inside translated text are isolated so punctuation and list separators stay in place. Arabic link underlines use a larger offset. Behavior, permissions, data and keyboard shortcuts are unchanged."
 		},
 		"release": {
-			"sourceDigest": "07fe2e4f47a830327a84aaff3b713fc8705a00e57e58e45cbfb04477f0b30199",
+			"sourceDigest": "c8b47e2394f6be9f9db7ebe715b8292d9e3fb5f9d57fbc39004bf60b8988bd3a",
 			"docs": ["RELEASING.md", "README.md"],
-			"note": "Hold the Debian app variant out of the release matrix and expected assets while Debian 13 zlib CVE-2026-76844 fails the image gate (#1267). RELEASING.md and README.md describe Alpine-only releases and the reason; release notes say why the -debian image is missing. The Dockerfile Debian stage, smoke test and stable promotion are unchanged."
+			"note": "Prepare fourth beta 0.1.0-beta.4/Android code 16 after the v0.1.0-beta.3 tag failed the Debian image gate and never published (its run built code 15). Releases stay Alpine and Zero only (#1267); the changelog says why the -debian image is missing. Retain signing certificate, documentation epoch, remaining prerelease/native limits and prerelease publication wording; release steps are unchanged."
 		},
 		"configuration": {
-			"sourceDigest": "394feec706ba7f5a348b39cfc238c0c713223a1628f5cbd338b0ff2f38640074",
+			"sourceDigest": "aff942ac8873c5ce6bd962be7363eb553beaae10a211e20c7219cd8a978b15da",
 			"docs": ["deploy/helm/ditero/README.md", "deploy/kustomize/README.md"],
-			"note": "Helm chart/appVersion, default app/Zero tags and Kustomize labels/images/overrides move to 0.1.0-beta.3 with no value or format changes. The experimental bundle package lock re-pins musl 1.2.6-r3 and tzdata 2026f-r0 because Alpine removed the previous builds; configuration is otherwise unchanged."
+			"note": "Helm chart/appVersion, default app/Zero tags and Kustomize labels/images/overrides move to 0.1.0-beta.4 with no value or format changes; configuration is otherwise unchanged."
 		},
 		"deployment": {
-			"sourceDigest": "481e1dc63ba19a48fe433a6354e5cec6ec1ffd645d7ab98380357d2f2135d3f5",
+			"sourceDigest": "78627dbb09129ed7e2f5f764dcb8d45db57bf26b4f6a68c85cdd828745e1d9c6",
 			"docs": ["deploy/helm/ditero/README.md", "deploy/kustomize/README.md"],
-			"note": "Published defaults move to 0.1.0-beta.3; upgrades from beta.2 need no cache rebuild and apply one additive database migration for the habit completer column. The experimental bundle package lock re-pins musl 1.2.6-r3 and tzdata 2026f-r0 because Alpine removed the previous builds; deployment steps are otherwise unchanged."
+			"note": "Published defaults move to 0.1.0-beta.4, which carries the unpublished beta.3 changes; upgrades from beta.2 need no cache rebuild and apply one additive database migration for the habit completer column. Deployment steps are otherwise unchanged."
 		},
 		"native": {
 			"sourceDigest": "b455ef5963764bd40788e6427fa951e73c1ae830399a24e62cc398f55970fa15",
