@@ -299,7 +299,7 @@ export function TaskRow({
 	list?: { title: string; icon: string | null } | null;
 	sourceContext?: string;
 	sourceWorkspace?: TaskSourceWorkspace;
-	parentContext?: string;
+	parentContext?: ReactNode;
 	occurrence?: HabitOccurrence;
 	// The Today view already names the day, so a row leaves it out.
 	omitToday?: boolean;

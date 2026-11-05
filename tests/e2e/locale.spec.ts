@@ -271,7 +271,16 @@ test("isolates mixed Latin and Arabic user text in the Arabic UI", async ({
 		const row = page.getByTestId("list").locator("bdi", { hasText: taskTitle });
 		await expect(row).toBeVisible();
 
-		await openDetails(page, taskTitle);
+		await page
+			.getByTestId("list")
+			.locator("[data-kbd-row], li")
+			.filter({
+				has: page.getByRole("checkbox", { name: taskTitle, exact: true }),
+			})
+			.last()
+			.getByRole("button", { name: m.task_open_details({}, { locale: "ar" }) })
+			.first()
+			.click();
 		const arDetail = page.getByRole("dialog");
 		await expect(arDetail).toBeVisible();
 		await revealDetails(arDetail);
@@ -293,6 +302,11 @@ test("isolates mixed Latin and Arabic user text in the Arabic UI", async ({
 		expect((await assignees.locator("bdi").allTextContents()).sort()).toEqual(
 			[ownerName, memberName].sort(),
 		);
+		const [first, second] = await Promise.all(
+			[0, 1].map((i) => assignees.locator("bdi").nth(i).boundingBox()),
+		);
+		if (!first || !second) throw new Error("assignee names not laid out");
+		expect(first.x).toBeGreaterThan(second.x);
 		await page.screenshot({
 			path: testInfo.outputPath("ar-mixed-user-text.png"),
 		});

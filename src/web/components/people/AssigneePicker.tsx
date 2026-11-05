@@ -12,12 +12,14 @@ import { runMutation } from "@/lib/run-mutation";
 import { deriveConnections } from "../../../domain/connections.ts";
 import type { InviteMailStatus } from "../../../domain/invite.ts";
 import { m } from "../../../paraglide/messages.js";
+import { getLocale } from "../../../paraglide/runtime.js";
 import { mutators } from "../../../zero/mutators.ts";
 import { queries } from "../../../zero/queries.ts";
 import type { schema, Task } from "../../../zero/schema.gen.ts";
 import { NameList } from "../../lib/bidi.tsx";
 import { copyText } from "../../lib/clipboard.ts";
 import { formatList } from "../../lib/intl-format.ts";
+import { isRtl } from "../../lib/locale.ts";
 import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
 import { MemberAvatar } from "./avatar.tsx";
 import { InviteMailNotice } from "./InviteMailNotice";
@@ -218,7 +220,10 @@ export function AssigneePicker({
 						data-testid="assignee-open"
 					>
 						<UserPlus />
-						<span className="min-w-0 wrap-anywhere">
+						<span
+							dir={isRtl(getLocale()) ? "rtl" : "ltr"}
+							className="min-w-0 wrap-anywhere"
+						>
 							{assignedCount > 0 ? (
 								<NameList names={assignedNameItems} />
 							) : (

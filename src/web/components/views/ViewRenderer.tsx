@@ -32,6 +32,7 @@ import { useRowSelection } from "../../hooks/useRowSelection.ts";
 import { useTaskImportActivationMap } from "../../hooks/useTaskImportActivation.ts";
 import { useTaskToggle } from "../../hooks/useTaskToggle.ts";
 import { useUserPref } from "../../hooks/useUserPref.ts";
+import { isolated } from "../../lib/bidi.tsx";
 import { formatList } from "../../lib/intl-format.ts";
 import { getBuiltin } from "../../views/builtins.ts";
 import type { GroupCtx, GroupTask } from "../../views/group.ts";
@@ -68,7 +69,7 @@ export type ViewEntry = {
 	listIcon: string | null;
 	sourceContext?: string;
 	sourceWorkspace?: TaskSourceWorkspace;
-	parentContext?: string;
+	parentContext?: ReactNode;
 	occurrence?: HabitOccurrence;
 };
 export type ViewEntryGroup = {
@@ -233,7 +234,7 @@ export function ViewRenderer(props: {
 			const parent = task.parentId ? taskById.get(task.parentId) : undefined;
 			const parentContext =
 				parent && parent.listId === task.listId
-					? m.task_part_of({ title: `\u2068${parent.title}\u2069` })
+					? isolated((title) => m.task_part_of({ title }), parent.title)
 					: undefined;
 			const filterTask: FilterTask = {
 				id: task.id,
