@@ -2762,6 +2762,7 @@
 	"setup_preview": "Revisa tu contenido inicial",
 	"setup_dashboard": "Panel personal",
 	"setup_empty_preview": "No se añadirá ninguna lista ni tarea.",
+	"setup_show_tasks": "Mostrar tareas",
 	"setup_choose_content": "Elige al menos una lista o el panel, o usa Personalizado.",
 	"setup_continue": "Continuar",
 	"setup_back": "Atrás",

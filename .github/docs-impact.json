@@ -2,9 +2,8 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "4d7ae697cc7da523a33fa6207f5ca6a49cab1a0cab860bac12fed3f24f69bd58",
-			"docs": ["docs/security.md"],
-			"note": "An open, visible, unlocked key holder fulfills pending workspace file-grant requests on the 15-second state cadence with backoff on failure and a bounded pass, never alongside a reconcile, skips requests another holder already won, pauses while hidden and stops on lock, sign-out and unmount. A member selection waiting for its grant checks its own request for up to ten minutes and uploads once the key arrives, only to the workspace and task or comment where it was picked, with the comment text captured at Send; a resume the user triggers, such as after key rotation, posts the draft as it stands, and a task change clears the composer's picked files. Moving elsewhere or the time limit stops the wait with a visible message in all six locales. Grant checks, sealing and server authorization are unchanged; no theme change."
+			"sourceDigest": "7eae8f8f273efd9ca574d54644f7ce94eb5a97371e2c5156e8bd80de7cf9b939",
+			"noImpact": "The starter offer on the home screen now appears once, only in the user's own empty personal workspace, and opens a sheet or dialog instead of Settings. The setup request, outcomes and server contract, the /setup link used by the CLI and TUI, and the Settings entry are unchanged, and no guide describes the in-app offer layout."
 		},
 		"release": {
 			"sourceDigest": "98d834f1f7c042ae33a1984d6ae39401f5df31377c4f9faab00a1513827ba24e",

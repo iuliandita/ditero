@@ -31,7 +31,13 @@ import type { Folder, List, schema } from "../../zero/schema.gen.ts";
 import { DashboardView } from "../components/dashboard/DashboardView.tsx";
 import { ErrorBoundary } from "../components/ErrorBoundary.tsx";
 import { FocusTimer } from "../components/focus/FocusTimer.tsx";
+import { AccountSetupDialog } from "../components/setup/AccountSetupDialog.tsx";
 import { AccountSetupPanel } from "../components/setup/AccountSetupPanel.tsx";
+import {
+	loadSetupWelcomeDismissed,
+	offersSetupWelcome,
+	saveSetupWelcomeDismissed,
+} from "../components/setup/welcome.ts";
 import { AppShell } from "../components/shell/AppShell.tsx";
 import {
 	BottomNav,
@@ -163,13 +169,20 @@ function NormalWorkspace({
 	profileEmail?: string;
 }) {
 	const storageScope = useAccountStorageScope();
+	const [setupDismissed, setSetupDismissed] = useState(() =>
+		loadSetupWelcomeDismissed(storageScope),
+	);
 	const nativeAccount = useNativeAccount();
 	const setup = useAccountSetup({
 		currentLocale: getLocale(),
 		profileEmail: nativeAccount?.profile.email ?? profileEmail,
 	});
 	const [setupExpanded, setSetupExpanded] = useState(initialSetup);
-	const [setupDismissed, setSetupDismissed] = useState(false);
+	const [setupDialogOpen, setSetupDialogOpen] = useState(false);
+	const [setupArrival, setSetupArrival] = useState<{
+		workspaceId: string;
+		listId: string;
+	} | null>(null);
 	const isDesktop = useIsDesktop();
 	const zero = useZero<typeof schema>();
 	const activation = useTaskImportActivationMap();
@@ -649,10 +662,18 @@ function NormalWorkspace({
 		openSettings();
 		setSettingsSection("appearance");
 	}, [openSettings]);
-	const openSetup = () => {
-		setSetupExpanded(true);
-		openSettings();
+	const dismissSetupWelcome = () => {
+		saveSetupWelcomeDismissed(storageScope);
+		setSetupDismissed(true);
 	};
+	// The created list opens once it has synced in; setup itself is server-side.
+	useEffect(() => {
+		if (!setupArrival || !lists.some((l) => l.id === setupArrival.listId))
+			return;
+		setActiveId(setupArrival.workspaceId);
+		arriveAt(setupArrival.listId, false);
+		setSetupArrival(null);
+	}, [setupArrival, lists, arriveAt]);
 	// Flat drag-reorder within a folder group / ungrouped bucket writes only the
 	// dragged list's sortKey (design 2.8). Cross-folder + folder ordering are out
 	// of M1a scope: each group is its own DndContext, so a list can't leave it.
@@ -1318,14 +1339,19 @@ function NormalWorkspace({
 						</p>
 					)}
 					{showsHome &&
+						offersSetupWelcome({
+							workspaceKind: workspaces.find((w) => w.id === activeId)?.kind,
+							role: activeId ? roleByWorkspace.get(activeId) : undefined,
+							listCount: activeLists.length,
+							outcome: setup.outcome,
+							authoritative: setup.authoritative,
+							managed: setup.managed,
+							dismissed: setupDismissed,
+						}) &&
 						!detailTaskId &&
 						!searchOpen &&
 						!newListFolder &&
-						!createWorkspaceOpen &&
-						!setupDismissed &&
-						setup.authoritative &&
-						!setup.managed &&
-						setup.outcome === "pending" && (
+						!createWorkspaceOpen && (
 							<aside
 								aria-label={m.setup_title()}
 								className="mx-4 mt-4 flex flex-wrap items-center gap-3 rounded-lg border p-4 text-sm"
@@ -1336,14 +1362,14 @@ function NormalWorkspace({
 								<Button
 									variant="outline"
 									className="min-h-11"
-									onClick={openSetup}
+									onClick={() => setSetupDialogOpen(true)}
 								>
 									{m.setup_open()}
 								</Button>
 								<Button
 									variant="ghost"
 									className="min-h-11"
-									onClick={() => setSetupDismissed(true)}
+									onClick={dismissSetupWelcome}
 								>
 									{m.sync_rejected_dismiss()}
 								</Button>
@@ -1352,6 +1378,15 @@ function NormalWorkspace({
 					{content}
 				</AppShell>
 
+				<AccountSetupDialog
+					setup={setup}
+					open={setupDialogOpen}
+					onClose={() => setSetupDialogOpen(false)}
+					onDone={(done) => {
+						setSetupDialogOpen(false);
+						if (done) setSetupArrival(done);
+					}}
+				/>
 				<WorkspaceOverlays
 					isDesktop={isDesktop}
 					activeId={activeId}
