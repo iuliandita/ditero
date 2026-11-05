@@ -123,10 +123,20 @@ async function savedList(page: Page, name: string) {
 		{ timeout: 15000 },
 	);
 	// Read the real saved snapshot before holding any push, proving setup persisted.
-	const response = await page.request.get("/api/portability/export?version=2");
-	expect(response.ok()).toBe(true);
-	const saved: PortableExportV2 = await response.json();
-	expect(saved.data.lists.some((list) => list.title === name)).toBe(true);
+	// The indicator can read synced before the list's push starts, so poll the server.
+	await expect
+		.poll(
+			async () => {
+				const response = await page.request.get(
+					"/api/portability/export?version=2",
+				);
+				if (!response.ok()) return `HTTP ${response.status()}`;
+				const saved: PortableExportV2 = await response.json();
+				return saved.data.lists.some((list) => list.title === name);
+			},
+			{ timeout: 15000 },
+		)
+		.toBe(true);
 }
 
 async function optimisticTask(page: Page, title: string) {
