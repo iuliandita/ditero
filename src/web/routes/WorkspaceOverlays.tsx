@@ -68,6 +68,7 @@ export function WorkspaceOverlays({
 	onCreateWorkspaceClose,
 	onWorkspaceCreated,
 	membersOpen,
+	membersWorkspaceId,
 	onMembersOpenChange,
 	quickAddOpen,
 	onQuickAddOpenChange,
@@ -114,6 +115,7 @@ export function WorkspaceOverlays({
 	onCreateWorkspaceClose: () => void;
 	onWorkspaceCreated: (id: string) => void;
 	membersOpen: boolean;
+	membersWorkspaceId: string | null;
 	onMembersOpenChange: (open: boolean) => void;
 	quickAddOpen: boolean;
 	onQuickAddOpenChange: (open: boolean) => void;
@@ -142,6 +144,7 @@ export function WorkspaceOverlays({
 	onOpenDashboard: (id: string) => void;
 	onOpenTask: (taskId: string, listId: string) => void;
 }) {
+	const membersFor = membersWorkspaceId ?? activeId;
 	return (
 		<>
 			{createWorkspaceOpen && (
@@ -150,11 +153,11 @@ export function WorkspaceOverlays({
 					onCreated={onWorkspaceCreated}
 				/>
 			)}
-			{activeId && (
+			{membersFor && (
 				<MembersPanel
-					workspaceId={activeId}
+					workspaceId={membersFor}
 					workspaceName={
-						workspaces.find((w) => w.id === activeId)?.name ??
+						workspaces.find((w) => w.id === membersFor)?.name ??
 						m.workspace_name_fallback()
 					}
 					open={membersOpen}

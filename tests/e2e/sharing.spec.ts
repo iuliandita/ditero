@@ -6,6 +6,7 @@ import {
 	openMembers,
 	openShared,
 	openWorkspaceSwitcher,
+	revealDetails,
 	signUp,
 	uniqueEmail,
 } from "./helpers.ts";
@@ -56,6 +57,7 @@ test("personal workspace hides admission controls and lets its owner remove a le
 			.click();
 		await addTask(owner, "Still assignable");
 		await openTaskDetail(owner, "Still assignable");
+		await revealDetails(owner);
 		await owner.getByTestId("assignee-open").click();
 		const picker = owner.getByTestId("assignee-picker");
 		await expect(picker.getByTestId("assignee-email")).toHaveCount(0);
@@ -349,6 +351,7 @@ test("assign: owner assigns member -> assignee chip syncs to the member", async 
 	).toBeVisible({ timeout: 15000 });
 
 	await openTaskDetail(pa, "Assign me");
+	await revealDetails(pa);
 	await pa.getByTestId("assignee-open").click();
 	await expect(pa.getByTestId("assignee-picker")).toBeVisible();
 	await pa
@@ -357,7 +360,7 @@ test("assign: owner assigns member -> assignee chip syncs to the member", async 
 		.filter({ hasText: memberName })
 		.click();
 	// Owner side reflects the assignment immediately.
-	await expect(pa.getByTestId("assignee-open")).toContainText("Assignees (1)");
+	await expect(pa.getByTestId("assignee-open")).toContainText(memberName);
 
 	// Member's client: the row's assignee chip appears within the sync window.
 	const chip = taskRowChips(pb, "Assign me");
@@ -392,6 +395,7 @@ test("invite-on-assign: pick a non-member by email -> accept resolves the assign
 	await openSharedDesktop(pa);
 	await addTask(pa, "Invite assign");
 	await openTaskDetail(pa, "Invite assign");
+	await revealDetails(pa);
 	await pa.getByTestId("assignee-open").click();
 	await expect(pa.getByTestId("assignee-picker")).toBeVisible();
 
@@ -525,6 +529,7 @@ test("kid: guardian adds a managed account -> restricted shell shows the assigne
 	// Assign a shared task to the kid (now a member of the shared workspace).
 	await addTask(pg, "Walk the dog");
 	await openTaskDetail(pg, "Walk the dog");
+	await revealDetails(pg);
 	await pg.getByTestId("assignee-open").click();
 	await expect(pg.getByTestId("assignee-picker")).toBeVisible();
 	await pg
@@ -532,7 +537,7 @@ test("kid: guardian adds a managed account -> restricted shell shows the assigne
 		.locator('[data-testid="assignee-option"]')
 		.filter({ hasText: kidName })
 		.click();
-	await expect(pg.getByTestId("assignee-open")).toContainText("Assignees (1)");
+	await expect(pg.getByTestId("assignee-open")).toContainText(kidName);
 
 	// Kid signs in with the handle + guardian-set password -> restricted shell.
 	await pk.goto("/");
@@ -590,6 +595,7 @@ test("isolation: an outsider sees no shared invites, assignees, comments, or man
 	await addTask(pa, secretTask);
 	await openTaskDetail(pa, secretTask);
 	// assignee
+	await revealDetails(pa);
 	await pa.getByTestId("assignee-open").click();
 	await expect(pa.getByTestId("assignee-picker")).toBeVisible();
 	await pa
@@ -788,6 +794,7 @@ test("a11y: no serious/critical violations on the sharing surfaces", async ({
 	// Task detail carrying an assignee + a comment.
 	await addTask(pg, "Axe task");
 	await openTaskDetail(pg, "Axe task");
+	await revealDetails(pg);
 	await pg.getByTestId("assignee-open").click();
 	await expect(pg.getByTestId("assignee-picker")).toBeVisible();
 	await pg
