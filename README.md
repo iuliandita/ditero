@@ -371,8 +371,9 @@ remain unfinished. See each app's guide for the precise qualification limits.
 ### Container distribution
 
 Nightly app and Zero images publish to GHCR for amd64 and arm64. The release workflows
-provide GHCR and Docker Hub images, an Alpine app default, and a Debian app variant
-when a release is cut. `:latest` and `:stable` are release channels, not current nightly
+provide GHCR and Docker Hub images and an Alpine app default when a release is cut.
+The Debian app variant is held out of releases until Debian 13 fixes zlib
+CVE-2026-76844 ([#1267](https://github.com/iuliandita/ditero/issues/1267)). `:latest` and `:stable` are release channels, not current nightly
 tags. Prereleases use explicit version tags and never move `latest` or `stable`.
 A [Helm chart](deploy/helm/ditero/README.md) packages app and Zero with an external
 PostgreSQL database. [Kustomize packages](deploy/kustomize/README.md) also support

@@ -138,8 +138,8 @@ def expected_assets(version: str) -> set[str]:
         "windows-x64-unsigned.exe", "windows-arm64-unsigned.exe",
         "macos-arm64-adhoc.dmg", "macos-x64-adhoc.dmg",
         "android-independent-universal-signed.apk", "android-independent-universal-signed.aab",
-        "compose.tar.gz", "kustomize.tar.gz", "clients.tar.gz", "sbom-alpine.spdx.json", "sbom-debian.spdx.json", "sbom-zero.spdx.json",
-        "image-alpine.txt", "image-debian.txt", "image-zero.txt",
+        "compose.tar.gz", "kustomize.tar.gz", "clients.tar.gz", "sbom-alpine.spdx.json", "sbom-zero.spdx.json",
+        "image-alpine.txt", "image-zero.txt",
     )
     return {f"ditero-{version}-{suffix}" for suffix in suffixes} | {f"ditero-{version}.tgz"}
 
@@ -467,7 +467,9 @@ def publish(output: Path) -> None:
     prerelease = version.startswith("0.") or "-" in version
     notes = f"""Ditero {version} is an experimental prerelease for self-hosted testing. Back up your database and attachments before upgrading.
 
-Server: multi-architecture amd64/arm64 Alpine app, Debian app, and Zero images at `ghcr.io/{repo}:{version}`, `:{version}-debian`, and `:{version}-zero`. See the image digest files and SPDX SBOMs. Images are signed with keyless cosign; verify the release workflow identity before deployment.
+Server: multi-architecture amd64/arm64 Alpine app and Zero images at `ghcr.io/{repo}:{version}` and `:{version}-zero`. See the image digest files and SPDX SBOMs. Images are signed with keyless cosign; verify the release workflow identity before deployment.
+
+There is no Debian app image (`:{version}-debian`) in this release. Its distroless Debian 13 base carries zlib CVE-2026-76844 (HIGH), which Debian has not fixed for trixie yet, and the image security gate does not allow exceptions. Use the Alpine image; the Debian image returns once a fixed zlib is available (https://github.com/{repo}/issues/1267).
 
 Deployment: the Helm chart uses external PostgreSQL with logical replication and an existing Secret; see the README inside the chart. The Kustomize archive provides app and Zero manifests for external PostgreSQL; its guide describes local rendering and the remaining cluster qualification. The Compose archive includes the bundled database initialization files. Set `DITERO_IMAGE_TAG={version}` when running Compose.
 

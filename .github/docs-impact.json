@@ -7,9 +7,9 @@
 			"note": "Text people type keeps its own direction in Arabic: input and textarea fields use dir=auto, rendered notes and comments take their own direction, and titles, list and people names and label chips inside translated text are isolated so punctuation and list separators stay in place. Arabic link underlines use a larger offset. Behavior, permissions, data and keyboard shortcuts are unchanged."
 		},
 		"release": {
-			"sourceDigest": "12d21095b8fc7668bd9a88b77ca720f25255353dff506d997b31bd4cba3fdde8",
-			"docs": ["RELEASING.md"],
-			"note": "Prepare third beta 0.1.0-beta.3/Android code 15 after published 0.1.0-beta.2; retain signing certificate, documentation epoch, remaining prerelease/native limits and prerelease publication wording. The pinned checkout action and the security scanner and cosign tool versions receive compatible updates; release steps and published artifacts are unchanged."
+			"sourceDigest": "07fe2e4f47a830327a84aaff3b713fc8705a00e57e58e45cbfb04477f0b30199",
+			"docs": ["RELEASING.md", "README.md"],
+			"note": "Hold the Debian app variant out of the release matrix and expected assets while Debian 13 zlib CVE-2026-76844 fails the image gate (#1267). RELEASING.md and README.md describe Alpine-only releases and the reason; release notes say why the -debian image is missing. The Dockerfile Debian stage, smoke test and stable promotion are unchanged."
 		},
 		"configuration": {
 			"sourceDigest": "394feec706ba7f5a348b39cfc238c0c713223a1628f5cbd338b0ff2f38640074",
