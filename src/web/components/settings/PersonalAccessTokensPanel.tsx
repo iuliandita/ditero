@@ -95,6 +95,10 @@ export function tokenErrorMessage(failure: unknown): string {
 	return m.pat_error_failed();
 }
 
+const CURL_EXAMPLE =
+	'curl -H "Authorization: Bearer $DITERO_TOKEN" "$DITERO_URL/api/v1/tasks"';
+const CLI_EXAMPLE = "./ditero-cli.js profile --json";
+
 export function PersonalAccessTokensPanel() {
 	const { data: session } = authClient.useSession();
 	return session?.user.id ? (
@@ -330,31 +334,16 @@ function TokenAccountPanel() {
 							<p className="text-sm text-muted-foreground">
 								{m.pat_example_help()}
 							</p>
-							<pre
-								dir="ltr"
-								className="overflow-x-auto whitespace-pre-wrap break-all text-sm"
-							>
-								{
-									'curl -H "Authorization: Bearer $DITERO_TOKEN" "$DITERO_URL/api/v1/tasks"'
-								}
+							<pre dir="ltr" className="overflow-x-auto text-sm">
+								{CURL_EXAMPLE}
 							</pre>
-							<Button
-								variant="outline"
-								onClick={() =>
-									void copy(
-										'curl -H "Authorization: Bearer $DITERO_TOKEN" "$DITERO_URL/api/v1/tasks"',
-									)
-								}
-							>
+							<Button variant="outline" onClick={() => void copy(CURL_EXAMPLE)}>
 								{m.pat_copy_example()}
 							</Button>
 							<pre dir="ltr" className="overflow-x-auto text-sm">
-								./ditero-cli.js profile --json
+								{CLI_EXAMPLE}
 							</pre>
-							<Button
-								variant="outline"
-								onClick={() => void copy("./ditero-cli.js profile --json")}
-							>
+							<Button variant="outline" onClick={() => void copy(CLI_EXAMPLE)}>
 								{m.pat_copy_example()}
 							</Button>
 							<DialogFooter>
