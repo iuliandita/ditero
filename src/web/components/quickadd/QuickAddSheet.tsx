@@ -152,19 +152,6 @@ export function QuickAddSheet({
 	useEffect(() => {
 		if (pickerOpen && pickerAll) pickerSearchRef.current?.focus();
 	}, [pickerOpen, pickerAll]);
-	// A not-ready pack is a quiet "keep typing" wait, so typing keeps focus;
-	// otherwise focus the first voice step so the unmounted Dictate button
-	// does not drop focus to the dialog.
-	useEffect(() => {
-		if (!voiceRequested) return;
-		const root = voiceRef.current;
-		if (root?.querySelector('[data-testid="quickadd-voice-status"]'))
-			inputRef.current?.focus();
-		else
-			(
-				root?.querySelector<HTMLElement>("button:not(:disabled)") ?? root
-			)?.focus();
-	}, [voiceRequested]);
 	function selectList(list: List) {
 		if (listToken)
 			setRaw(
@@ -205,6 +192,26 @@ export function QuickAddSheet({
 		workspaceId: targetWs,
 		locale,
 	});
+
+	// A not-ready pack is a quiet "keep typing" wait, so typing keeps focus;
+	// otherwise focus the first voice step so the unmounted Dictate button
+	// does not drop focus to the dialog. A phase that already placed focus
+	// inside voice (Stop once listening starts) wins.
+	const voicePackWait = useRef(false);
+	voicePackWait.current =
+		voice.state?.phase === "error" &&
+		(voice.state.reason === "language-pack-downloadable" ||
+			voice.state.reason === "language-pack-downloading");
+	useEffect(() => {
+		if (!voiceRequested) return;
+		const root = voiceRef.current;
+		if (root?.contains(document.activeElement)) return;
+		if (voicePackWait.current) inputRef.current?.focus();
+		else
+			(
+				root?.querySelector<HTMLElement>("button:not(:disabled)") ?? root
+			)?.focus();
+	}, [voiceRequested]);
 
 	// Everything a voice result or a recovery announcement is only valid for.
 	const voiceScope = JSON.stringify([
