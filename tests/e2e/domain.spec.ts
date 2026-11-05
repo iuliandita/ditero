@@ -209,12 +209,25 @@ test("quick-add chips + drag reorder sync across clients", async ({
 	// --- NLP quick-add through the visible mobile capture entry ---
 	await pa.setViewportSize({ width: 375, height: 812 });
 	await pa.getByRole("button", { name: "Quick add", exact: true }).click();
-	await pa.getByTestId("quickadd-input").fill("milk tomorrow p2 #store");
+	const quickInput = pa.getByTestId("quickadd-input");
+	const emptyBounds = await quickInput.boundingBox();
+	await quickInput.fill("milk ~Missing list");
+	await expect(pa.getByText("No list named Missing list")).toBeVisible();
+	await expect(pa.getByTestId("quickadd-submit")).toBeDisabled();
+	await quickInput.fill("milk ~Shared list");
+	await expect(pa.getByTestId("chip-list")).toContainText("~Shared list");
+	await quickInput.press("Enter");
+	await quickInput.fill("milk tomorrow p2 #store");
+	const parsedBounds = await quickInput.boundingBox();
+	expect(parsedBounds?.y).toBe(emptyBounds?.y);
 	await expect(pa.getByTestId("chip-date")).toBeVisible();
 	await expect(pa.getByTestId("chip-priority")).toHaveText("P2 Medium");
 	await expect(pa.getByTestId("chip-label")).toBeVisible();
 
 	await pa.getByTestId("quickadd-submit").click();
+	await expect(
+		pa.getByRole("status").filter({ hasText: "Added to Shared list" }),
+	).toBeVisible();
 	await pa.keyboard.press("Escape"); // sheet stays open for serial entry
 
 	await expect(pa.getByText("milk", { exact: true })).toBeVisible({

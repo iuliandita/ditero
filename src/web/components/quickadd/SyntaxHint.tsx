@@ -22,6 +22,7 @@ export function SyntaxHint({
 	example = false,
 	onDismiss,
 	className,
+	quickAdd = false,
 }: {
 	lead?: ReactNode;
 	introduction?: string;
@@ -29,6 +30,7 @@ export function SyntaxHint({
 	example?: boolean;
 	onDismiss: () => void;
 	className?: string;
+	quickAdd?: boolean;
 }) {
 	const dates = dateParserFor(getLocale()) != null;
 	const tokens = syntaxTokens(
@@ -82,7 +84,7 @@ export function SyntaxHint({
 								data-testid="syntax-hint-details"
 								className="min-h-11 cursor-pointer content-center rounded-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:min-h-7"
 							>
-								{m.syntax_hint_details()}
+								{quickAdd ? m.quickadd_shortcuts() : m.syntax_hint_details()}
 							</summary>
 							<div className="pt-1">{legend}</div>
 						</details>
@@ -94,15 +96,17 @@ export function SyntaxHint({
 					</>
 				)}
 			</div>
-			<button
-				type="button"
-				data-testid="syntax-hint-dismiss"
-				aria-label={m.syntax_hint_dismiss()}
-				onClick={onDismiss}
-				className="flex size-11 shrink-0 items-center justify-center rounded-md transition-colors duration-(--motion-fast) ease-(--motion-ease) hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none md:size-7"
-			>
-				<X className="size-3.5" />
-			</button>
+			{!quickAdd && (
+				<button
+					type="button"
+					data-testid="syntax-hint-dismiss"
+					aria-label={m.syntax_hint_dismiss()}
+					onClick={onDismiss}
+					className="flex size-11 shrink-0 items-center justify-center rounded-md transition-colors duration-(--motion-fast) ease-(--motion-ease) hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none md:size-7"
+				>
+					<X className="size-3.5" />
+				</button>
+			)}
 		</div>
 	);
 }

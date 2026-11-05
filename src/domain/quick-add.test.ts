@@ -167,3 +167,19 @@ describe("parseQuickAdd", () => {
 		expect(r.tokens.map((t) => t.text)).toEqual(["~home", "~work"]);
 	});
 });
+
+test("known destinations use the longest full name and leave unresolved text visible", () => {
+	const names = ["Home", "Home plans", "Café list"];
+	const parsed = parseQuickAdd("Buy stamps ~home plans p1", NOW, "en", names);
+	expect(parsed.title).toBe("Buy stamps");
+	expect(parsed.listName).toBe("home plans");
+	expect(parsed.tokens.find((token) => token.type === "list")?.text).toBe(
+		"~home plans",
+	);
+	expect(parseQuickAdd("Buy ~cafe list", NOW, "en", names).listName).toBe(
+		"cafe list",
+	);
+	expect(parseQuickAdd("Buy ~Unknown plans", NOW, "en", names).listName).toBe(
+		"Unknown plans",
+	);
+});

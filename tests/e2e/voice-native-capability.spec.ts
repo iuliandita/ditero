@@ -11,9 +11,8 @@ import {
 // SpeechRecognition, and quick add's automatic open-time probe calls its native
 // static available({ langs: ["en-US"], processLocally: true }). Whatever that
 // reports (available, downloadable, unavailable) the UI must reach a meaningful
-// terminal state without crashing the renderer. The microphone is never started
-// and nothing is uploaded; voice-capture.spec.ts covers the controller with a
-// fake engine.
+// terminal state without crashing the renderer. Voice is requested explicitly;
+// voice-capture.spec.ts covers the controller with a fake engine.
 
 // The English catalog strings the native completion can land on. A pack that is
 // not installed or not ready is a valid outcome here; the generic failure, the
@@ -21,6 +20,9 @@ import {
 const CHECKING = "Checking on-device speech...";
 const PRIVACY =
 	"Audio is processed on this device and never uploaded. Your browser controls microphone access.";
+const LISTENING = "Listening. Say your task.";
+const PERMISSION =
+	"Microphone access is blocked. Allow the microphone for this site in your browser settings, then choose “Check again”, then “Dictate”.";
 const PACK_MISSING =
 	"The on-device speech pack for this language is not installed, so voice input stays off. Keep typing.";
 const PACK_PENDING =
@@ -37,7 +39,7 @@ function escapeRegExp(text: string): string {
 }
 
 const TERMINAL = new RegExp(
-	`^(?:${[PRIVACY, PACK_MISSING, PACK_PENDING].map(escapeRegExp).join("|")})$`,
+	`^(?:${[PRIVACY, PACK_MISSING, PACK_PENDING, LISTENING, PERMISSION].map(escapeRegExp).join("|")})$`,
 );
 
 // The same locale pattern as voice-capture.spec.ts: cookie plus stored value, so
@@ -117,6 +119,9 @@ test("quick add's automatic probe reaches a real native availability result", as
 		.slice(0, 16)}`;
 	await input.fill(draft);
 
+	await expect(page.getByTestId("quickadd-voice-status")).toHaveCount(0);
+	await page.getByTestId("quickadd-voice-start").click();
+
 	// One status or error surface is on screen at a time; it must leave the
 	// checking spinner for a native-derived state within the window.
 	const surface = page.locator(
@@ -147,14 +152,16 @@ test("quick add's automatic probe reaches a real native availability result", as
 			.filter({ hasText: GENERIC_FAILURE }),
 	).toHaveCount(0);
 	const dictate = page.getByTestId("quickadd-voice-start");
-	if (outcome === PRIVACY) {
+	if (outcome === LISTENING) {
+		await page.getByTestId("quickadd-voice-cancel").click();
+	} else if (outcome === PRIVACY) {
 		await expect(dictate).toBeEnabled();
 		await expect(dictate).toHaveText("Dictate");
 	} else {
 		await expect(dictate.and(page.locator(":enabled"))).toHaveCount(0);
 	}
 
-	// The probe never touched the typed draft, and typed Enter still saves
+	// Voice never touched the typed draft, and typed Enter still saves
 	// exactly one task whatever the pack state is.
 	await expect(input).toHaveValue(draft);
 	await input.press("Enter");

@@ -72,10 +72,15 @@ const emptyParse = (): QuickAddParse => ({
 	tokens: [],
 });
 
+export function normalizeListName(value: string): string {
+	return value.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+}
+
 export function parseQuickAdd(
 	input: string,
 	now: Date = new Date(),
 	locale = "en",
+	listNames?: readonly string[],
 ): QuickAddParse {
 	// Task 10 feeds an onChange value; guard the never-throws contract.
 	if (typeof input !== "string") return emptyParse();
@@ -98,13 +103,35 @@ export function parseQuickAdd(
 		mask(start, end);
 	}
 
-	for (const m of chars.join("").matchAll(LIST_RE)) {
-		const start = m.index;
-		const end = start + m[0].length;
-		// First list wins; later dupes still consumed+tokenized so they don't leak into title.
-		if (listName === null) listName = m[1];
-		tokens.push({ type: "list", text: m[0], start, end });
-		mask(start, end);
+	if (listNames) {
+		const start = chars.join("").indexOf("~");
+		if (start >= 0) {
+			const rest = chars.join("").slice(start + 1);
+			const matched = [...listNames]
+				.sort((a, b) => b.length - a.length)
+				.find((name) => {
+					const candidate = rest.slice(0, name.length);
+					return (
+						normalizeListName(candidate) === normalizeListName(name) &&
+						(!rest[name.length] || /[\s#~]/u.test(rest[name.length]))
+					);
+				});
+			const text = matched
+				? rest.slice(0, matched.length)
+				: rest.split(/\s+(?=[#~]|p[1-4]\b)/u)[0].trimEnd();
+			const end = start + 1 + text.length;
+			listName = text;
+			tokens.push({ type: "list", text: input.slice(start, end), start, end });
+			mask(start, end);
+		}
+	} else {
+		for (const m of chars.join("").matchAll(LIST_RE)) {
+			const start = m.index;
+			const end = start + m[0].length;
+			if (listName === null) listName = m[1];
+			tokens.push({ type: "list", text: m[0], start, end });
+			mask(start, end);
+		}
 	}
 
 	for (const m of chars.join("").matchAll(PRIORITY_RE)) {
