@@ -2,7 +2,7 @@ import { useZero } from "@rocicorp/zero/react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test, vi } from "vitest";
-import { createHintStore, dismissSyntaxHint, FRESH_HINTS } from "./hints.ts";
+import { createHintStore, FRESH_HINTS, markShortcutsSeen } from "./hints.ts";
 import {
 	type NativeAccount,
 	NativeAccountContext,
@@ -102,10 +102,8 @@ describe("recents", () => {
 			JSON.stringify([{ kind: "list", id: "browser-list" }]),
 		);
 		const hints = createHintStore(() => storage);
-		hints.update(first, dismissSyntaxHint);
-		expect(createHintStore(() => storage).get(first).syntaxDismissed).toBe(
-			true,
-		);
+		hints.update(first, markShortcutsSeen);
+		expect(createHintStore(() => storage).get(first).shortcutsSeen).toBe(true);
 		expect(hints.get(second)).toEqual(FRESH_HINTS);
 		expect(hints.get(browser)).toEqual(FRESH_HINTS);
 		writeNavSections(first, { views: false }, storage);
