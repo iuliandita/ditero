@@ -9,3 +9,10 @@ export const ROLE_LABELS: Record<Role, () => string> = {
 	member: m.role_label_member,
 	viewer: m.role_label_viewer,
 };
+
+export const ROLE_DESCRIPTIONS: Record<Role, () => string> = {
+	owner: m.role_description_owner,
+	admin: m.role_description_admin,
+	member: m.role_description_member,
+	viewer: m.role_description_viewer,
+};
