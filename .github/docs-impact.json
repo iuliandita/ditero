@@ -2,7 +2,7 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "8666254118bcbb2e76934a3512a313171abf1115352c08d2405d5bb0b00a45c2",
+			"sourceDigest": "d8840fcb62e1b64340ef5ebd99aa5bae96db1255e5a41bef25b0f1e7dcd56a0b",
 			"docs": ["docs/runbooks/database-roles.md"],
 			"note": "The sidebar and phone Lists tab put account-wide destinations first and the workspace switcher above only the lists, a notice above content shows the existing storage-failure and storage-offline instructions with a Details button and no reload (the storage runbook now says so), the connected status wording no longer claims saved edits, source crumbs drop when there is one workspace, and the desktop footer wordmark, brand images and loading silhouette change. No storage, sync, sharing or theme behavior changes."
 		},
