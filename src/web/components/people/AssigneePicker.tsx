@@ -185,22 +185,14 @@ export function AssigneePicker({
 	}
 
 	const assignedCount = assignedIds.size;
+	const assignedNames = formatList(
+		[...assignedIds].map(
+			(id) => userMap.get(id)?.name ?? m.group_unknown_user(),
+		),
+	);
 
 	return (
-		<div className="flex flex-col gap-1.5 text-sm">
-			<span className="text-muted-foreground">{m.field_assignees()}</span>
-			{assignedCount > 0 && (
-				<p
-					data-testid="assignee-names"
-					className="min-w-0 wrap-anywhere text-sm"
-				>
-					{formatList(
-						[...assignedIds].map(
-							(id) => userMap.get(id)?.name ?? m.group_unknown_user(),
-						),
-					)}
-				</p>
-			)}
+		<div className="min-w-0 max-w-full text-sm">
 			<Popover
 				onOpenChange={(o) => {
 					if (!o) {
@@ -217,13 +209,18 @@ export function AssigneePicker({
 						disabled={disabled}
 						variant="outline"
 						size="sm"
-						className="self-start pointer-coarse:h-11"
+						aria-label={
+							assignedCount > 0
+								? m.assignee_chips_aria({ names: assignedNames })
+								: undefined
+						}
+						className="h-auto min-h-8 max-w-full justify-start gap-1.5 py-1 text-start whitespace-normal pointer-coarse:min-h-11"
 						data-testid="assignee-open"
 					>
 						<UserPlus />
-						{assignedCount > 0
-							? m.assignee_open_count({ count: assignedCount })
-							: m.assignee_open()}
+						<span className="min-w-0 wrap-anywhere">
+							{assignedCount > 0 ? assignedNames : m.assignee_open()}
+						</span>
 					</Button>
 				</PopoverTrigger>
 				<PopoverContent

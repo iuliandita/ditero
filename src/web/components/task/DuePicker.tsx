@@ -5,7 +5,6 @@ import {
 	ChevronLeft,
 	ChevronRight,
 	Sunrise,
-	X,
 } from "lucide-react";
 import {
 	type KeyboardEvent,
@@ -46,11 +45,12 @@ function browserLanguages(): readonly string[] {
 }
 
 /**
- * Due date + time for the task detail. The date is a popover (typed date,
- * quick picks, month grid); the time is a typed field beside it that only
- * exists once there is a date. Both write through `onSet(date, time)` with the
- * same `YYYY-MM-DD` / `HH:MM` pair `inputsToDue` has always taken, so storage
- * is unchanged: no time means all-day at local midnight.
+ * Due date + time for the task detail: one trigger showing both, a popover
+ * holding the typed date, quick picks (including "No date"), the time and the
+ * month grid. Everything writes through `onSet(date, time)` with the same
+ * `YYYY-MM-DD` / `HH:MM` pair `inputsToDue` has always taken, so storage is
+ * unchanged: no time means all-day at local midnight. Renders a fragment so
+ * the caller's wrapping row owns the layout.
  */
 export function DuePicker({
 	dueAt,
@@ -67,7 +67,7 @@ export function DuePicker({
 	disabled?: boolean;
 	onSet: (date: string, time: string) => void;
 	onClear: () => void;
-	/** Rendered at the end of the row (the reminder chip). */
+	/** Rendered after the trigger (the reminder chip). */
 	children?: React.ReactNode;
 }) {
 	const [open, setOpen] = useState(false);
@@ -84,7 +84,7 @@ export function DuePicker({
 	}
 
 	return (
-		<div className="flex flex-wrap items-center gap-2">
+		<>
 			<Popover open={open} onOpenChange={setOpen}>
 				<PopoverTrigger asChild>
 					<Button
@@ -94,7 +94,7 @@ export function DuePicker({
 						data-testid="due-picker"
 						aria-label={m.task_due_trigger_aria({ value: shown })}
 						className={cn(
-							"pointer-coarse:h-11",
+							"h-auto min-h-8 max-w-full justify-start gap-1.5 py-1 text-start whitespace-normal pointer-coarse:min-h-11",
 							dueAt == null && "text-muted-foreground",
 							overdue && "text-destructive",
 						)}
@@ -106,6 +106,15 @@ export function DuePicker({
 				<DuePickerContent
 					selected={parseDayKey(due.date)}
 					hasDue={dueAt != null}
+					time={
+						dueAt != null
+							? {
+									value: time,
+									disabled,
+									onCommit: (next) => onSet(due.date, next),
+								}
+							: undefined
+					}
 					onPick={pick}
 					onClear={() => {
 						onClear();
@@ -113,29 +122,8 @@ export function DuePicker({
 					}}
 				/>
 			</Popover>
-			{dueAt != null && (
-				<>
-					<TimeField
-						disabled={disabled}
-						value={time}
-						label={m.task_due_time_aria()}
-						data-testid="due-time"
-						onCommit={(next) => onSet(due.date, next)}
-					/>
-					<Button
-						disabled={disabled}
-						variant="ghost"
-						size="icon-sm"
-						className="pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px]"
-						aria-label={m.task_due_clear()}
-						onClick={onClear}
-					>
-						<X />
-					</Button>
-				</>
-			)}
 			{children}
-		</div>
+		</>
 	);
 }
 
@@ -147,11 +135,14 @@ export function DuePicker({
 export function DuePickerContent({
 	selected,
 	hasDue,
+	time,
 	onPick,
 	onClear,
 }: {
 	selected: Date | null;
 	hasDue: boolean;
+	/** Offered only once there is a date to put a time on. */
+	time?: { value: string; disabled: boolean; onCommit: (next: string) => void };
 	onPick: (date: string, time: string | null) => void;
 	onClear: () => void;
 }) {
@@ -173,6 +164,23 @@ export function DuePickerContent({
 				onPick={(date) => onPick(date, null)}
 				onClear={onClear}
 			/>
+			{time && (
+				<div className="flex items-center gap-2 px-1">
+					<span className="shrink-0 text-sm text-muted-foreground">
+						{m.task_due_time_aria()}
+					</span>
+					<div className="min-w-0 flex-1">
+						<TimeField
+							disabled={time.disabled}
+							value={time.value}
+							label={m.task_due_time_aria()}
+							data-testid="due-time"
+							className="w-full"
+							onCommit={time.onCommit}
+						/>
+					</div>
+				</div>
+			)}
 			<MonthGrid selected={selected} onPick={(d) => onPick(dayKey(d), null)} />
 		</PopoverContent>
 	);

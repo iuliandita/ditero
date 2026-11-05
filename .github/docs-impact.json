@@ -2,9 +2,8 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "4d7ae697cc7da523a33fa6207f5ca6a49cab1a0cab860bac12fed3f24f69bd58",
-			"docs": ["docs/security.md"],
-			"note": "An open, visible, unlocked key holder fulfills pending workspace file-grant requests on the 15-second state cadence with backoff on failure and a bounded pass, never alongside a reconcile, skips requests another holder already won, pauses while hidden and stops on lock, sign-out and unmount. A member selection waiting for its grant checks its own request for up to ten minutes and uploads once the key arrives, only to the workspace and task or comment where it was picked, with the comment text captured at Send; a resume the user triggers, such as after key rotation, posts the draft as it stands, and a task change clears the composer's picked files. Moving elsewhere or the time limit stops the wait with a visible message in all six locales. Grant checks, sealing and server authorization are unchanged; no theme change."
+			"sourceDigest": "6801cfb53fe796459cbf4db117ba65ce72bdce6604e3064e14589b1b7648fdc3",
+			"noImpact": "Task detail now leads with the title and completion, a sharing line that opens the Members sheet, one wrapping summary of the properties a task has, then notes and subtasks. Empty properties appear under Add details, and time entry and clearing sit inside the date editor. No setting, storage, permission, sync or API behavior changes; three strings are added in all six locales."
 		},
 		"release": {
 			"sourceDigest": "98d834f1f7c042ae33a1984d6ae39401f5df31377c4f9faab00a1513827ba24e",
