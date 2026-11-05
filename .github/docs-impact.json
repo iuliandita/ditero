@@ -2,7 +2,7 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "0fe5359692f11dab16771ce59c943cd30e064b3d68c0862529b476e768a1333a",
+			"sourceDigest": "af5074a7f2de290f63c3a8a3d0eb039210a3384133757eeb83f3feb47724a17d",
 			"docs": ["docs/typography.md"],
 			"note": "Text people type keeps its own direction in Arabic: input and textarea fields use dir=auto, rendered notes and comments take their own direction, and titles, list and people names and label chips inside translated text are isolated so punctuation and list separators stay in place. Arabic link underlines use a larger offset. Behavior, permissions, data and keyboard shortcuts are unchanged."
 		},
