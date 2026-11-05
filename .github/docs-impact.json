@@ -2,7 +2,7 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "6a8c0a3eb9108fc8dfc15402a8769409eb2e30bcde6cd08373d5d36767cc0e72",
+			"sourceDigest": "212a7f617f35e7b13366adc302974e43b4bc9c19b541d0ebb5c9f9ba18b53076",
 			"noImpact": "Copy-only change: clearer child-account, invite-role, members-audience and access-token example text in all six locales. No behavior, permission or documented flow changes, and no docs describe these strings."
 		},
 		"release": {
