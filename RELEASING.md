@@ -22,8 +22,10 @@ private-looking host or address, environment-file content or a common secret sha
 
 Tagged releases include:
 
-- Alpine and Debian app containers and the Zero container, for amd64 and arm64,
-  at `ghcr.io/iuliandita/ditero` and `docker.io/iuliandita/ditero`.
+- Alpine app containers and the Zero container, for amd64 and arm64,
+  at `ghcr.io/iuliandita/ditero` and `docker.io/iuliandita/ditero`. The Debian app
+  variant is held out until Debian 13 ships a fix for zlib CVE-2026-76844, which
+  fails the image security gate (#1267).
 - Container signatures, provenance and SPDX SBOMs, plus immutable image digest files.
 - Helm and Kustomize packages for app and Zero with external PostgreSQL, and a
   Compose archive containing the bundled PostgreSQL initialization scripts.
