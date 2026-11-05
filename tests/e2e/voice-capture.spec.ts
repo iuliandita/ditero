@@ -446,7 +446,8 @@ test("a probe still pending when the sheet closes never starts listening", async
 	page,
 }) => {
 	const input = await openQuickAdd(page, "voice7", true);
-	await expect(start(page)).toBeDisabled();
+	await expect(start(page)).toBeEnabled();
+	await start(page).click();
 	await page.keyboard.press("Escape");
 	await expect(input).toBeVisible();
 	await page.keyboard.press("Escape");
@@ -479,14 +480,15 @@ for (const via of ["Enter", "Add"] as const) {
 	}) => {
 		const input = await openQuickAdd(page, `voice9-${via}`, true);
 		await input.fill("Pay rent");
-		await expect(start(page)).toBeDisabled();
+		await expect(start(page)).toBeEnabled();
 		await expect(submit(page)).toBeEnabled();
 		if (via === "Enter") await input.press("Enter");
 		else await submit(page).click();
 		await expect(input).toHaveValue("");
 		expect(await startedCount(page)).toBe(0);
 
-		// The first Escape cancels the passive probe, the second closes.
+		// Open voice controls, then cancel the passive probe.
+		await start(page).click();
 		await page.keyboard.press("Escape");
 		await expect(input).toBeVisible();
 		await expect(retry(page)).toBeVisible();
@@ -520,6 +522,8 @@ test("a cancelled probe offers Retry; a user check blocks submit until it resolv
 }) => {
 	const input = await openQuickAdd(page, "voice10", true);
 	await input.fill("Draft stays");
+	await expect(start(page)).toBeEnabled();
+	await start(page).click();
 	await expect(start(page)).toBeDisabled();
 
 	// Cancel the passive probe: idle and not ready, with an explicit Retry.
@@ -606,7 +610,7 @@ test("keyboard only: focus follows each voice phase and nothing saves before Add
 	// Passive readiness lands while the user is typing and must not steal focus.
 	await input.fill("Call");
 	await expect(input).toBeFocused();
-	await expect(start(page)).toBeDisabled();
+	await expect(start(page)).toBeEnabled();
 	await page.evaluate(() => {
 		window.__voiceFake.holdAvailability = false;
 		window.__voiceFake.releaseAvailability();
@@ -616,7 +620,7 @@ test("keyboard only: focus follows each voice phase and nothing saves before Add
 	expect(await startedCount(page)).toBe(0);
 
 	// Dictate by keyboard: Stop takes focus.
-	await page.keyboard.press("Tab");
+	for (let i = 0; i < 4; i++) await page.keyboard.press("Tab");
 	await expect(start(page)).toBeFocused();
 	await page.keyboard.press("Enter");
 	await expect(stop).toBeFocused();
@@ -644,7 +648,7 @@ test("keyboard only: focus follows each voice phase and nothing saves before Add
 	await expect(taskList(page)).not.toContainText("Call Anne");
 
 	// Stopping hands focus to Cancel; Cancel returns it to the field.
-	await page.keyboard.press("Tab");
+	for (let i = 0; i < 4; i++) await page.keyboard.press("Tab");
 	await expect(start(page)).toBeFocused();
 	await page.keyboard.press("Enter");
 	await expect(stop).toBeFocused();
@@ -655,7 +659,7 @@ test("keyboard only: focus follows each voice phase and nothing saves before Add
 	await expect(start(page)).toBeEnabled();
 
 	// Escape while listening cancels voice only and restores the field.
-	await page.keyboard.press("Tab");
+	for (let i = 0; i < 4; i++) await page.keyboard.press("Tab");
 	await page.keyboard.press("Enter");
 	await expect(stop).toBeFocused();
 	await page.keyboard.press("Escape");
@@ -664,7 +668,7 @@ test("keyboard only: focus follows each voice phase and nothing saves before Add
 
 	// A listening-time error focuses Check again, which re-checks without
 	// listening and then hands focus back to Dictate.
-	await page.keyboard.press("Tab");
+	for (let i = 0; i < 4; i++) await page.keyboard.press("Tab");
 	await page.keyboard.press("Enter");
 	await expect(stop).toBeFocused();
 	await page.evaluate(() => window.__voiceFake.error("no-speech"));
@@ -715,13 +719,16 @@ for (const availability of ["downloadable", "downloading"] as const) {
 		const status = page.getByTestId("quickadd-voice-status");
 		await input.fill(draft);
 		await expect(input).toBeFocused();
-		await expect(start(page)).toBeDisabled();
+		await expect(start(page)).toBeEnabled();
+		await expect(status).toHaveCount(0);
 
 		// The passive probe resolves while the user is typing: no focus change.
 		await page.evaluate(() => {
 			window.__voiceFake.holdAvailability = false;
 			window.__voiceFake.releaseAvailability();
 		});
+		await expect(status).toHaveCount(0);
+		await start(page).click();
 		await expect(status).toHaveText(packText);
 		await expect(status).toHaveAttribute("role", "status");
 		await expect(status).toHaveAttribute("aria-live", "polite");

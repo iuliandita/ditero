@@ -47,7 +47,6 @@ export type QuickAddParse = {
 // label -- "#casă" captured "cas", "#Küche" captured "K", "#уборка" matched
 // nothing at all (#90). \p{L}\p{N} is a strict superset of the old behaviour.
 const LABEL_RE = /#([\p{L}\p{N}_-]+)/gu;
-const LIST_RE = /~([\p{L}\p{N}_-]+)/gu;
 const PRIORITY_RE = /\bp([1-4])\b(?!@)/g;
 const PRIORITY_RANK: Record<string, 0 | 1 | 2 | 3> = {
 	"1": 3,
@@ -72,10 +71,15 @@ const emptyParse = (): QuickAddParse => ({
 	tokens: [],
 });
 
+export function normalizeListName(value: string): string {
+	return value.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+}
+
 export function parseQuickAdd(
 	input: string,
 	now: Date = new Date(),
 	locale = "en",
+	listNames?: readonly string[],
 ): QuickAddParse {
 	// Task 10 feeds an onChange value; guard the never-throws contract.
 	if (typeof input !== "string") return emptyParse();
@@ -98,12 +102,26 @@ export function parseQuickAdd(
 		mask(start, end);
 	}
 
-	for (const m of chars.join("").matchAll(LIST_RE)) {
-		const start = m.index;
-		const end = start + m[0].length;
-		// First list wins; later dupes still consumed+tokenized so they don't leak into title.
-		if (listName === null) listName = m[1];
-		tokens.push({ type: "list", text: m[0], start, end });
+	// A destination starts at a word boundary; punctuation and URLs remain prose.
+	const listStarts = [
+		...chars.join("").matchAll(/(?:^|(?<=\s))~(?=[\p{L}\p{N}_-])/gu),
+	];
+	for (const match of listStarts) {
+		const start = match.index;
+		const rest = chars.join("").slice(start + 1);
+		let length = 0;
+		if (listNames) {
+			for (let end = 1; end <= rest.length; end++) {
+				if (end < rest.length && !/[\s#~.,!?;:]/u.test(rest[end])) continue;
+				const candidate = normalizeListName(rest.slice(0, end));
+				if (listNames.some((name) => normalizeListName(name) === candidate))
+					length = end;
+			}
+		}
+		if (!length) length = /^[\p{L}\p{M}\p{N}_-]+/u.exec(rest)?.[0].length ?? 0;
+		const end = start + 1 + length;
+		if (listName === null) listName = input.slice(start + 1, end);
+		tokens.push({ type: "list", text: input.slice(start, end), start, end });
 		mask(start, end);
 	}
 
