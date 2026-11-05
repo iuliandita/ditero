@@ -304,13 +304,15 @@ export const queries = defineQueries({
 	// Mirrors tasks.mine, one relation deeper (habit -> list).
 	habitLogs: {
 		mine: defineQuery(({ ctx }) =>
-			zql.habitLog.where(({ exists }) =>
-				exists("habit", (t) =>
-					t.where(({ exists: e }) =>
-						e("list", (l) => l.where(workspaceVisible(ctx))),
+			zql.habitLog
+				.related("completer")
+				.where(({ exists }) =>
+					exists("habit", (t) =>
+						t.where(({ exists: e }) =>
+							e("list", (l) => l.where(workspaceVisible(ctx))),
+						),
 					),
 				),
-			),
 		),
 	},
 	// Per-user karma aggregate; caller reads only their own row (id === userId).

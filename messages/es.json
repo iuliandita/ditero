@@ -1113,7 +1113,11 @@
 	"habit_skip_action": "Saltar",
 	"habit_undo_action": "Deshacer",
 	"habit_track_daily": "Seguir a diario",
-	"habit_done_action": "Hecho hoy",
+	"habit_complete_label": "Completar {title} hoy",
+	"habit_streak_label": "Racha: {days}",
+	"habit_shared_label": "Hábito compartido",
+	"habit_shared_rule": "Una vez al día cuenta para todos en este espacio. Usa una lista personal para tus propios hábitos.",
+	"habit_history_range": "Del {first} al {last}",
 	"habit_streak_days": [
 		{
 			"declarations": [

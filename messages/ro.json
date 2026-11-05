@@ -1113,7 +1113,11 @@
 	"habit_skip_action": "Sari",
 	"habit_undo_action": "Anulează",
 	"habit_track_daily": "Urmărește zilnic",
-	"habit_done_action": "Făcut azi",
+	"habit_complete_label": "Finalizează {title} azi",
+	"habit_streak_label": "Serie: {days}",
+	"habit_shared_label": "Obicei comun",
+	"habit_shared_rule": "O bifă pe zi contează pentru toți din acest spațiu. Folosește o listă personală pentru propriile obiceiuri.",
+	"habit_history_range": "De la {first} la {last}",
 	"habit_streak_days": [
 		{
 			"declarations": [

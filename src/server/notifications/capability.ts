@@ -318,7 +318,12 @@ function drizzleAckStore(tx: DbTransaction): AckStore {
 			if (row.existingId) {
 				await tx
 					.update(tables.habitLog)
-					.set({ status: "done", karmaDelta: row.karmaDelta, completedAt })
+					.set({
+						status: "done",
+						karmaDelta: row.karmaDelta,
+						completedAt,
+						completedBy: row.completedBy,
+					})
 					.where(eq(tables.habitLog.id, row.existingId));
 				return;
 			}
@@ -329,6 +334,7 @@ function drizzleAckStore(tx: DbTransaction): AckStore {
 				status: "done",
 				karmaDelta: row.karmaDelta,
 				completedAt,
+				completedBy: row.completedBy,
 			});
 		},
 		async awardKarma(userId, delta, reason, date) {

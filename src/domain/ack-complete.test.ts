@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { type AckStore, type AckTask, completeForAck } from "./ack-complete.ts";
 import type { CompletionEventInput } from "./completion-history.ts";
 
@@ -81,6 +81,30 @@ describe("completeForAck karma day", () => {
 		expect(s.awards).toEqual([
 			{ delta: 3, reason: "habit_done", date: "2026-07-14" },
 		]);
+	});
+
+	it("records the authenticated ack actor and leaves an already-done habit untouched", async () => {
+		const s = store({ ...PLAIN_TASK, listKind: "habits" }, "UTC");
+		s.putHabitLog = vi.fn();
+		const reminder = {
+			taskId: "t1",
+			occurrenceAt: EVENING_NY,
+			recipientUserId: "recipient",
+		};
+		await completeForAck(s, reminder, "actor", "member_mutation", EVENING_NY);
+		expect(s.putHabitLog).toHaveBeenCalledWith(
+			expect.objectContaining({ completedBy: "actor", date: "2026-07-15" }),
+		);
+		s.habitLog = async () => ({ id: "log", status: "done", karmaDelta: 3 });
+		await completeForAck(
+			s,
+			reminder,
+			"other",
+			"member_mutation",
+			EVENING_NY + 1000,
+		);
+		expect(s.putHabitLog).toHaveBeenCalledOnce();
+		expect(s.awards).toHaveLength(1);
 	});
 
 	it("keeps the UTC day for a UTC user", async () => {
