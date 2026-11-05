@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { Pool } from "pg";
-import { signUp, uniqueEmail } from "./helpers.ts";
+import { signUp, uniqueEmail, waitWorkspaceReady } from "./helpers.ts";
 
 // #355: board cards, calendar chips and dashboard task panels carry the same
 // cues a list row does, a board saved with the form's default grouping still
@@ -10,15 +10,8 @@ import { signUp, uniqueEmail } from "./helpers.ts";
 // frozen-frame axe.
 test.describe.configure({ timeout: 90_000 });
 
-const SIGNUP_TIMEOUT = 30_000;
 const LONG_TITLE =
 	"Replace the hallway light bulb and check the fuse box while the power is off";
-
-async function waitWorkspaceReady(page: Page): Promise<void> {
-	await expect(page.getByRole("button", { name: /'s space/ })).toBeVisible({
-		timeout: SIGNUP_TIMEOUT,
-	});
-}
 
 async function pickSelect(
 	page: Page,
@@ -60,6 +53,18 @@ async function seed(email: string, tasks: SeedTask[]): Promise<string> {
 		);
 		const row = rows.rows[0];
 		if (!row) throw new Error("personal workspace not found");
+		// Source crumbs show only with two or more workspaces.
+		const sharedId = crypto.randomUUID();
+		await pool.query(
+			`insert into workspace (id, name, owner_id, kind)
+			 values ($1, 'Household', $2, 'shared')`,
+			[sharedId, row.ownerId],
+		);
+		await pool.query(
+			`insert into membership (id, workspace_id, user_id, role)
+			 values ($1, $2, $3, 'owner')`,
+			[crypto.randomUUID(), sharedId, row.ownerId],
+		);
 		const lists = { home: crypto.randomUUID(), shop: crypto.randomUUID() };
 		await pool.query(
 			`insert into list (id, workspace_id, owner_id, title, kind, sort_key)

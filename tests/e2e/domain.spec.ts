@@ -8,6 +8,7 @@ import {
 	openShared,
 	signUp,
 	uniqueEmail,
+	waitWorkspaceReady,
 } from "./helpers.ts";
 
 // Task 10 cluster: NLP quick-add and drag reorder. Task 11 extends this file
@@ -63,12 +64,6 @@ function sidebarLists(page: Page): Locator {
 // The personal workspace is provisioned in a post-signup hook and reaches the
 // client via sync, so its name button appears a beat after the app shell. Wait
 // for it before writing: an empty active workspace id makes list.create reject.
-async function waitWorkspaceReady(page: Page): Promise<void> {
-	await expect(page.getByRole("button", { name: /'s space/ })).toBeVisible({
-		timeout: 15000,
-	});
-}
-
 async function createListDesktop(
 	page: Page,
 	name: string,

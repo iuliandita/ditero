@@ -1,7 +1,12 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { Pool } from "pg";
-import { openAdvancedSection, signUp, uniqueEmail } from "./helpers.ts";
+import {
+	openAdvancedSection,
+	signUp,
+	uniqueEmail,
+	waitWorkspaceReady,
+} from "./helpers.ts";
 
 // M2 calendar-layout e2e. Builds a calendar view, asserts a recurring task's
 // occurrences render on many dates (light chips) and a one-off dued task renders
@@ -9,14 +14,6 @@ import { openAdvancedSection, signUp, uniqueEmail } from "./helpers.ts";
 // reopen), and asserts the < md agenda collapse. Axe on month + agenda + mobile.
 // Conventions (signUp/uniqueEmail/Pool seed/frozen-frame axe) mirror views.spec.
 test.describe.configure({ timeout: 90_000 });
-
-const SIGNUP_TIMEOUT = 30_000;
-
-async function waitWorkspaceReady(page: Page): Promise<void> {
-	await expect(page.getByRole("button", { name: /'s space/ })).toBeVisible({
-		timeout: SIGNUP_TIMEOUT,
-	});
-}
 
 async function pickSelect(
 	page: Page,
