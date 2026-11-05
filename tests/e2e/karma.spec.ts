@@ -99,7 +99,7 @@ test("karma: complete a habit, Progress panel shows level + points + ledger; set
 	await expect(card).toBeVisible();
 	await card.getByTestId("habit-done").click();
 	await expect(card.getByTestId("habit-done")).toHaveAttribute(
-		"aria-pressed",
+		"aria-checked",
 		"true",
 		{ timeout: 15000 },
 	);

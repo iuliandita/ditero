@@ -305,9 +305,11 @@ test("habits: track a habit — set recurrence, done/skip/undo, streak + heatmap
 	await closeDetail(page);
 
 	// Tracker now renders; today unlogged -> streak 0, primary not pressed.
-	await expect(card.getByTestId("habit-streak")).toHaveText("0 days");
+	await expect(card.getByTestId("habit-streak")).toHaveText("Streak: 0 days");
+	await expect(card.getByTestId("habit-history-today")).toHaveText("Today");
+	await expect(card.getByTestId("habit-history-range")).toBeVisible();
 	await expect(card.getByTestId("habit-done")).toHaveAttribute(
-		"aria-pressed",
+		"aria-checked",
 		"false",
 	);
 
@@ -325,9 +327,9 @@ test("habits: track a habit — set recurrence, done/skip/undo, streak + heatmap
 
 	// Mark done for today -> streak advances, primary reflects done, heatmap cell.
 	await card.getByTestId("habit-done").click();
-	await expect(card.getByTestId("habit-streak")).toHaveText("1 day");
+	await expect(card.getByTestId("habit-streak")).toHaveText("Streak: 1 day");
 	await expect(card.getByTestId("habit-done")).toHaveAttribute(
-		"aria-pressed",
+		"aria-checked",
 		"true",
 	);
 	await expect(
@@ -336,9 +338,9 @@ test("habits: track a habit — set recurrence, done/skip/undo, streak + heatmap
 
 	// Undo -> back to unlogged (streak 0, primary not pressed).
 	await card.getByTestId("habit-undo").click();
-	await expect(card.getByTestId("habit-streak")).toHaveText("0 days");
+	await expect(card.getByTestId("habit-streak")).toHaveText("Streak: 0 days");
 	await expect(card.getByTestId("habit-done")).toHaveAttribute(
-		"aria-pressed",
+		"aria-checked",
 		"false",
 	);
 
@@ -382,7 +384,7 @@ test("habits: a blank habits list is creatable from the kind picker", async ({
 
 	const card = habitCard(page, "Walk the dog");
 	await expect(card).toBeVisible({ timeout: 15000 });
-	await expect(card.getByTestId("habit-streak")).toHaveText("0 days");
+	await expect(card.getByTestId("habit-streak")).toHaveText("Streak: 0 days");
 	await expect(card.getByTestId("habit-track-daily")).toHaveCount(0);
 });
 
@@ -398,7 +400,7 @@ test("habits: a habit without a recurrence starts tracking in one tap", async ({
 	await expect(track).toHaveText("Track daily");
 	await expect(card.getByTestId("habit-streak")).toHaveCount(0);
 	await track.click();
-	await expect(card.getByTestId("habit-streak")).toHaveText("0 days");
+	await expect(card.getByTestId("habit-streak")).toHaveText("Streak: 0 days");
 	await expect(track).toHaveCount(0);
 	await expect(card.getByTestId("habit-done")).toBeFocused();
 });
@@ -419,14 +421,14 @@ test("habits: the detail's done box logs today like the card", async ({
 	await detail.getByTestId("recurrence-enable").click();
 	await expect(detail.getByTestId("recurrence-editor")).toBeVisible();
 	await expect(card.getByTestId("habit-done")).toHaveAttribute(
-		"aria-pressed",
+		"aria-checked",
 		"false",
 	);
 
 	const box = detail.getByTestId("task-detail-done");
 	await box.click();
 	await expect(card.getByTestId("habit-done")).toHaveAttribute(
-		"aria-pressed",
+		"aria-checked",
 		"true",
 		{ timeout: 15000 },
 	);
@@ -436,7 +438,7 @@ test("habits: the detail's done box logs today like the card", async ({
 
 	await box.click();
 	await expect(card.getByTestId("habit-done")).toHaveAttribute(
-		"aria-pressed",
+		"aria-checked",
 		"false",
 		{ timeout: 15000 },
 	);
