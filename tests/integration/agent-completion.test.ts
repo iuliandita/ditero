@@ -201,7 +201,7 @@ async function cli(body: unknown, key = randomUUID(), secret = token) {
 		}
 	}
 }
-async function mcp(secret = token) {
+async function mcp(secret = token, allowWrites = false) {
 	const transport = new StdioClientTransport({
 		command: "bun",
 		args: [
@@ -209,7 +209,11 @@ async function mcp(secret = token) {
 			fileURLToPath(new URL("../../src/mcp/index.ts", import.meta.url)),
 			"--allow-loopback-http",
 		],
-		env: { DITERO_URL: origin, DITERO_TOKEN: secret },
+		env: {
+			DITERO_URL: origin,
+			DITERO_TOKEN: secret,
+			...(allowWrites ? { DITERO_MCP_ALLOW_WRITES: "1" } : {}),
+		},
 		stderr: "pipe",
 	});
 	transport.stderr?.on("data", () => {});
@@ -222,6 +226,25 @@ async function mcp(secret = token) {
 	return client;
 }
 const once = { history: 1, karma: 1, receipts: 1 };
+test("actual MCP defaults to read-only and refuses direct completion before HTTP", async () => {
+	const client = await mcp();
+	const { tools } = await client.listTools();
+	expect(tools.every((tool) => tool.annotations?.readOnlyHint === true)).toBe(
+		true,
+	);
+	await expect(
+		client.callTool({
+			name: "complete_task",
+			arguments: {
+				taskId: task,
+				requestId: randomUUID(),
+				completion: { listId: list, expectedDueAt: null },
+			},
+		}),
+	).rejects.toThrow("Tool complete_task disabled");
+	expect(wires).toHaveLength(0);
+	expect(await counts()).toEqual({ history: 0, karma: 0, receipts: 0 });
+}, 15_000);
 test("actual CLI completes undated task and replays without duplicate effects", async () => {
 	const body = { listId: list, expectedDueAt: null },
 		key = randomUUID();
@@ -298,7 +321,7 @@ test("actual MCP stdio uses inspected due, commits once after lost response, and
 		"update task set due_at=$1,rrule='FREQ=DAILY' where id=$2",
 		[due, task],
 	);
-	const client = await mcp();
+	const client = await mcp(token, true);
 	const observed = await client.callTool({
 		name: "list_tasks",
 		arguments: { listId: list },
@@ -340,7 +363,7 @@ test("actual MCP stdio uses inspected due, commits once after lost response, and
 	expect(wires[0]).toEqual(wires[1]);
 }, 15_000);
 test("actual MCP stdio rejects strict inputs before HTTP and rechecks revoked authority", async () => {
-	const client = await mcp();
+	const client = await mcp(token, true);
 	const args = {
 		taskId: task,
 		requestId: randomUUID(),

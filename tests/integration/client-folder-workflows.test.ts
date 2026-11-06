@@ -121,7 +121,11 @@ async function sdk(secret = token) {
 	const [ct, st] = InMemoryTransport.createLinkedPair();
 	const handle = serveStdio(
 		() =>
-			createDiteroMcp(mcpConfiguration(env(secret), ["--allow-loopback-http"])),
+			createDiteroMcp(
+				mcpConfiguration({ ...env(secret), DITERO_MCP_ALLOW_WRITES: "1" }, [
+					"--allow-loopback-http",
+				]),
+			),
 		{ transport: st },
 	);
 	closers.push(

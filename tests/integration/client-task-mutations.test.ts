@@ -220,7 +220,11 @@ async function mcp(secret = token) {
 			fileURLToPath(new URL("../../src/mcp/index.ts", import.meta.url)),
 			"--allow-loopback-http",
 		],
-		env: { DITERO_URL: origin, DITERO_TOKEN: secret },
+		env: {
+			DITERO_URL: origin,
+			DITERO_TOKEN: secret,
+			DITERO_MCP_ALLOW_WRITES: "1",
+		},
 		stderr: "pipe",
 	});
 	transport.stderr?.on("data", () => {});
