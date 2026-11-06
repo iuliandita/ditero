@@ -1,4 +1,5 @@
 {
+	"mutator_error_guardian_has_managed_members": "Remove these managed accounts from this workspace first: {names}. Then remove their guardian or leave.",
 	"startup_connection_retry": "Retry",
 	"startup_connection_heading": "Ditero needs a connection to open",
 	"startup_connection_body": "It will retry automatically when your connection returns. You can also try again now.",

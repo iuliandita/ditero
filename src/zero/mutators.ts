@@ -349,6 +349,26 @@ async function removeOptimisticMembership(
 	tx: Transaction<Schema>,
 	target: Membership,
 ): Promise<void> {
+	const dependents = await tx.run(
+		zql.managedAccount.where("guardianId", target.userId),
+	);
+	const names: string[] = [];
+	for (const dependent of dependents) {
+		const member = await tx.run(
+			zql.membership
+				.where("userId", dependent.userId)
+				.where("workspaceId", target.workspaceId)
+				.related("user")
+				.one(),
+		);
+		if (member) names.push(member.user?.name ?? dependent.userId);
+	}
+	if (names.length)
+		throw new MutatorError(
+			"guardian_has_managed_members",
+			"remove managed accounts from this workspace before removing their guardian",
+			names,
+		);
 	// Assignment implies membership everywhere in this codebase (that is
 	// the premise of invite-on-assign), so an assignee row for a
 	// non-member is a row no query syncs and no UI can clear.

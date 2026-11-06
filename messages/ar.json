@@ -1,4 +1,5 @@
 {
+	"mutator_error_guardian_has_managed_members": "أزل هذه الحسابات المُدارة من مساحة العمل أولًا: {names}. ثم أزل الوصي عليها أو غادر مساحة العمل.",
 	"startup_connection_retry": "حاول مرة أخرى",
 	"startup_connection_heading": "يحتاج Ditero إلى اتصال ليفتح",
 	"startup_connection_body": "ستتم إعادة المحاولة تلقائيًا عند عودة الاتصال. يمكنك أيضًا إعادة المحاولة الآن.",

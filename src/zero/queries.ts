@@ -242,13 +242,32 @@ export const queries = defineQueries({
 				.related("author"),
 		),
 	},
-	// The kid reads their own row (drives the restricted shell); the guardian reads
-	// rows they own (drives the members-panel kid list). OR over userId/guardianId
-	// via the ExpressionBuilder's `or`/`cmp`.
+	// Guardians and their managed users read their own rows; workspace admins
+	// also need the markers to reject guardian removal optimistically.
 	managedAccounts: {
 		mine: defineQuery(({ ctx }) =>
-			zql.managedAccount.where(({ or, cmp }) =>
-				or(cmp("userId", ctx.id), cmp("guardianId", ctx.id)),
+			zql.managedAccount.where(({ or, cmp, exists }) =>
+				or(
+					cmp("userId", ctx.id),
+					cmp("guardianId", ctx.id),
+					exists("account", (account) =>
+						account.where(({ exists }) =>
+							exists("memberships", (member) =>
+								member.where(({ exists }) =>
+									exists("workspace", (workspace) =>
+										workspace.where(({ exists }) =>
+											exists("memberships", (actor) =>
+												actor
+													.where("userId", ctx.id)
+													.where("role", "IN", ["owner", "admin"]),
+											),
+										),
+									),
+								),
+							),
+						),
+					),
+				),
 			),
 		),
 	},

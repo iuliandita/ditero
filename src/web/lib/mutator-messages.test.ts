@@ -1,4 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
+import { MutatorError } from "../../domain/mutator-error.ts";
 import { m } from "../../paraglide/messages.js";
 import { mutationErrorMessage } from "./mutator-messages.ts";
 
@@ -21,4 +22,15 @@ describe("mutationErrorMessage", () => {
 		expect(spy).toHaveBeenCalledWith(raw);
 		spy.mockRestore();
 	});
+});
+
+test("guardian rejection names the managed accounts in a translated action", () => {
+	const error = new MutatorError(
+		"guardian_has_managed_members",
+		"remove managed accounts first",
+		["Maya", "Alex"],
+	);
+	expect(mutationErrorMessage(error.message, m.mutation_failed)).toBe(
+		"Remove these managed accounts from this workspace first: Maya and Alex. Then remove their guardian or leave.",
+	);
 });

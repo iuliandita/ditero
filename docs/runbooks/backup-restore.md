@@ -286,8 +286,10 @@ database-plus-blob backup when restoring earlier state, accepting loss of later 
 ## Membership cleanup policy upgrade
 
 Migration 0092 adds read and revoke policies for workspace administrators during
-membership cleanup. Existing webhook bindings remain immutable. No stored data
-or credential format changes.
+membership cleanup. Migration 0093 binds those policies to the transaction-local
+departing user. Migration 0094 permanently revokes existing webhooks whose users
+have no membership in the hook workspace. Existing webhook bindings remain
+immutable; credential formats do not change.
 
 Upgrade: back up PostgreSQL, stop app and Zero writers, and apply migrations with
 the migration role before starting the updated server. Keep schema ownership and
@@ -296,8 +298,8 @@ runtime grants as described in [database roles](database-roles.md).
 Backup: include webhook revocation times and notification state in the coordinated
 database backup. No additional secrets or export steps are needed.
 
-Rollback: retain the additive policies when running the preceding server. Previous
-server versions do not perform this membership cleanup. Restoring an earlier
+Rollback: retain the policies and backfilled revocations when running the preceding
+server. Previous server versions do not perform this membership cleanup. Restoring an earlier
 backup also restores its earlier notification and webhook state; review pending
 work and revoke departed members' webhooks before accepting traffic.
 

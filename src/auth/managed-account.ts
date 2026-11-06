@@ -4,7 +4,7 @@
 // even in closed/bootstrap mode. The kid is added to the guardian's workspace.
 import { and, eq } from "drizzle-orm";
 import { db as defaultDb } from "../db/client.ts";
-import { managedAccount, membership, workspace } from "../db/schema.ts";
+import { managedAccount, membership, user, workspace } from "../db/schema.ts";
 import { ADMIN_ROLES, type Role, WRITE_ROLES } from "../domain/role.ts";
 import { auth as defaultAuth } from "./auth.ts";
 import { normalizeDisplayName } from "./display-name.ts";
@@ -86,46 +86,49 @@ export async function createManagedAccount(
 		throw new ManagedAccountError(400, "password must be 8-200 chars");
 	}
 
-	// A restricted account cannot provision sub-accounts (server backstop).
-	if (await isRestrictedAccount(input.guardianId, database)) {
-		throw new ManagedAccountError(
-			403,
-			"restricted accounts cannot create accounts",
-		);
-	}
+	async function requireGuardian(guardianDb: RestrictedDb): Promise<void> {
+		// A restricted account cannot provision sub-accounts (server backstop).
+		if (await isRestrictedAccount(input.guardianId, guardianDb)) {
+			throw new ManagedAccountError(
+				403,
+				"restricted accounts cannot create accounts",
+			);
+		}
 
-	const guardianRole = await roleInWorkspace(
-		database,
-		input.guardianId,
-		input.workspaceId,
-	);
-	if (!guardianRole) {
-		throw new ManagedAccountError(403, "guardian is not a workspace member");
-	}
-	const [targetWorkspace] = await database
-		.select({ kind: workspace.kind })
-		.from(workspace)
-		.where(eq(workspace.id, input.workspaceId))
-		.limit(1);
-	if (targetWorkspace?.kind !== "shared") {
-		throw new ManagedAccountError(
-			403,
-			"managed accounts require a shared workspace",
+		const guardianRole = await roleInWorkspace(
+			guardianDb,
+			input.guardianId,
+			input.workspaceId,
 		);
+		if (!guardianRole) {
+			throw new ManagedAccountError(403, "guardian is not a workspace member");
+		}
+		const [targetWorkspace] = await guardianDb
+			.select({ kind: workspace.kind })
+			.from(workspace)
+			.where(eq(workspace.id, input.workspaceId))
+			.limit(1);
+		if (targetWorkspace?.kind !== "shared") {
+			throw new ManagedAccountError(
+				403,
+				"managed accounts require a shared workspace",
+			);
+		}
+		// Honor the same member-invite lever as createInvite: provisioning a kid drops a
+		// new account into the shared workspace, so a strict ("admin") instance must not
+		// let a plain member do it. Default policy allows member+.
+		const allowed =
+			memberInvitePolicy(env) === "admin"
+				? ADMIN_ROLES.has(guardianRole)
+				: WRITE_ROLES.has(guardianRole);
+		if (!allowed) {
+			throw new ManagedAccountError(
+				403,
+				"insufficient role to create a managed account",
+			);
+		}
 	}
-	// Honor the same member-invite lever as createInvite: provisioning a kid drops a
-	// new account into the shared workspace, so a strict ("admin") instance must not
-	// let a plain member do it. Default policy allows member+.
-	const allowed =
-		memberInvitePolicy(env) === "admin"
-			? ADMIN_ROLES.has(guardianRole)
-			: WRITE_ROLES.has(guardianRole);
-	if (!allowed) {
-		throw new ManagedAccountError(
-			403,
-			"insufficient role to create a managed account",
-		);
-	}
+	await requireGuardian(database);
 
 	// RFC 6761 `.invalid` TLD: guaranteed non-resolvable, never deliverable.
 	const email = `kid.${crypto.randomUUID()}@managed.invalid`;
@@ -139,6 +142,33 @@ export async function createManagedAccount(
 	// The auth `after` hook already gave the kid a personal workspace; here we add
 	// the managed marker and the shared-workspace membership.
 	await database.transaction(async (tx) => {
+		// Match membership administration's user -> workspace -> membership order.
+		const [guardian] = await tx
+			.select({ deletedAt: user.deletedAt })
+			.from(user)
+			.where(eq(user.id, input.guardianId))
+			.for("share");
+		if (!guardian || guardian.deletedAt !== null)
+			throw new ManagedAccountError(
+				403,
+				"guardian is not a live workspace member",
+			);
+		await tx
+			.select({ id: workspace.id })
+			.from(workspace)
+			.where(eq(workspace.id, input.workspaceId))
+			.for("share");
+		await tx
+			.select({ id: membership.id })
+			.from(membership)
+			.where(
+				and(
+					eq(membership.userId, input.guardianId),
+					eq(membership.workspaceId, input.workspaceId),
+				),
+			)
+			.for("share");
+		await requireGuardian(tx);
 		await tx.insert(managedAccount).values({
 			id: crypto.randomUUID(),
 			userId,

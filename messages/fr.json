@@ -1,4 +1,5 @@
 {
+	"mutator_error_guardian_has_managed_members": "Retire d’abord ces comptes gérés de cet espace de travail : {names}. Tu pourras ensuite retirer leur responsable ou quitter cet espace.",
 	"startup_connection_retry": "Réessayer",
 	"startup_connection_heading": "Ditero a besoin d’une connexion pour s’ouvrir",
 	"startup_connection_body": "Ditero réessaiera automatiquement quand ta connexion sera rétablie. Tu peux aussi réessayer maintenant.",

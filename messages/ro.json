@@ -1,4 +1,5 @@
 {
+	"mutator_error_guardian_has_managed_members": "Elimină mai întâi aceste conturi gestionate din acest spațiu de lucru: {names}. Apoi poți elimina tutorele lor sau părăsi spațiul.",
 	"startup_connection_retry": "Reîncearcă",
 	"startup_connection_heading": "Ditero are nevoie de conexiune pentru a se deschide",
 	"startup_connection_body": "Va încerca din nou automat când revine conexiunea. Poți încerca din nou și acum.",

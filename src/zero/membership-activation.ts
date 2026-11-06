@@ -247,13 +247,16 @@ export async function removeMembershipWithActivation(
 	const { workspaceId, targetUserId, replacementUserId } = authority;
 	const dependents = await query(
 		tx,
-		`select m.id from managed_account a join membership m on m.user_id=a.user_id
-		where a.guardian_id=$1 and m.workspace_id=$2 limit 1`,
+		`select u.name from managed_account a join membership m on m.user_id=a.user_id
+		join "user" u on u.id=a.user_id
+		where a.guardian_id=$1 and m.workspace_id=$2 order by a.user_id`,
 		[targetUserId, workspaceId],
 	);
 	if (dependents.length)
-		throw new Error(
+		throw new MutatorError(
+			"guardian_has_managed_members",
 			"remove managed accounts from this workspace before removing their guardian",
+			dependents.map((row) => id(row, "name")),
 		);
 	await lockPaged(
 		tx,
@@ -299,7 +302,8 @@ export async function removeMembershipWithActivation(
 	}
 	await query(
 		tx,
-		"select set_config('ditero.activation_scope','membership-remove',true)",
+		"select set_config('ditero.activation_scope','membership-remove',true), set_config('ditero.removal_target',$1,true)",
+		[targetUserId],
 	);
 	await lockPaged(
 		tx,
@@ -338,7 +342,8 @@ export async function removeMembershipWithActivation(
 		tx,
 		`update notification_outbox o set status='abandoned',claimed_at=null,claimed_by=null
 		where o.recipient_user_id=$2 and o.status in ('queued','sending')
-		and (exists (select 1 from task t join list l on l.id=t.list_id
+		and ((o.payload->>'taskId' is null and o.payload->>'workspaceId'=$1)
+		or exists (select 1 from task t join list l on l.id=t.list_id
 		where t.id=o.payload->>'taskId' and l.workspace_id=$1)
 		or exists (select 1 from reminder_state s join task t on t.id=s.task_id
 		join list l on l.id=t.list_id where s.id=o.reminder_state_id and l.workspace_id=$1))`,
@@ -348,7 +353,7 @@ export async function removeMembershipWithActivation(
 		tx,
 		`update reminder_state s set status='expired',next_attempt_at=null,deferred_until=null
 		from task t,list l where s.task_id=t.id and t.list_id=l.id
-		and l.workspace_id=$1 and s.recipient_user_id=$2 and s.status in ('pending','deferred')`,
+		and l.workspace_id=$1 and s.recipient_user_id=$2 and s.status in ('pending','deferred','escalated')`,
 		[workspaceId, targetUserId],
 	);
 	await query(
@@ -357,7 +362,10 @@ export async function removeMembershipWithActivation(
 		where workspace_id=$1 and user_id=$2 and revoked_at is null`,
 		[workspaceId, targetUserId],
 	);
-	await query(tx, "select set_config('ditero.activation_scope','',true)");
+	await query(
+		tx,
+		"select set_config('ditero.activation_scope','',true), set_config('ditero.removal_target','',true)",
+	);
 	await query(
 		tx,
 		`delete from task_assignee a using task t,list l
