@@ -37,6 +37,13 @@ are included, with no subscriptions or paid feature unlocks.
 > [release instructions](RELEASING.md) and
 > [published downloads](https://github.com/iuliandita/ditero/releases).
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/board-dark.png">
+    <img src="assets/screenshots/board-light.png" alt="Ditero's Weekly priorities board with household and garden club tasks grouped by priority" width="840">
+  </picture>
+</p>
+
 The capabilities below describe `develop`; unreleased additions are available
 from source or nightly images, and published prereleases contain a subset.
 
