@@ -10,6 +10,7 @@ import {
 	uniqueEmail,
 	waitWorkspaceReady,
 } from "./helpers.ts";
+import { fetchPortabilityRead } from "./portability-reads.ts";
 
 const ACCOUNT_SECRET = "correct horse battery staple";
 const ARCHIVE_SECRET = "separate fictional migration secret";
@@ -35,7 +36,10 @@ async function captureResponseBody(page: Page, path: string, method: string) {
 		async (route) => {
 			try {
 				expect(route.request().method()).toBe(method);
-				const actual = await route.fetch({ timeout: 15_000, maxRetries: 0 });
+				const actual =
+					method === "GET"
+						? await fetchPortabilityRead(route)
+						: await route.fetch({ timeout: 15_000, maxRetries: 0 });
 				expect(actual.status()).toBe(200);
 				const body = await actual.text();
 				await route.fulfill({ response: actual });
@@ -260,7 +264,7 @@ test("archive import retires prepared file metadata after real keyring expiry", 
 			try {
 				expect(route.request().method()).toBe("GET");
 				observeSources();
-				const actual = await route.fetch({ timeout: 15_000, maxRetries: 0 });
+				const actual = await fetchPortabilityRead(route);
 				expect(actual.status()).toBe(200);
 				await heldSources;
 				await route.fulfill({ response: actual });

@@ -18,6 +18,7 @@ import {
 	uniqueEmail,
 	waitWorkspaceReady,
 } from "./helpers.ts";
+import { fetchPortabilityRead } from "./portability-reads.ts";
 
 const ACCOUNT_SECRET = "correct horse battery staple";
 const ARCHIVE_SECRET = "separate fictional migration secret";
@@ -108,7 +109,7 @@ test("archive import: exact exported v2 pair commits to its applied parent after
 		async (route: Route) => {
 			try {
 				expect(route.request().method()).toBe("GET");
-				const actual = await route.fetch({ timeout: 15_000, maxRetries: 0 });
+				const actual = await fetchPortabilityRead(route);
 				expect(actual.status()).toBe(200);
 				const body = await actual.text();
 				await route.fulfill({ response: actual });
@@ -249,7 +250,7 @@ test("archive import: exact exported v2 pair commits to its applied parent after
 		async (route: Route) => {
 			try {
 				expect(route.request().method()).toBe("GET");
-				const actual = await route.fetch({ timeout: 15_000, maxRetries: 0 });
+				const actual = await fetchPortabilityRead(route);
 				expect(actual.status()).toBe(200);
 				const body = await actual.text();
 				await route.fulfill({ response: actual });
@@ -500,7 +501,7 @@ test("archive import: exact exported v2 pair commits to its applied parent after
 		}
 		try {
 			statusCalls++;
-			const actual = await route.fetch();
+			const actual = await fetchPortabilityRead(route);
 			expect(actual.status()).toBe(200);
 			const confirmed = await actual.json();
 			expect(confirmed).toMatchObject({

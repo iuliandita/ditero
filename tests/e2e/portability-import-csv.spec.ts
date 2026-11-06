@@ -10,7 +10,10 @@ import {
 	uniqueEmail,
 	waitWorkspaceReady,
 } from "./helpers.ts";
-import { readPortabilityExport } from "./portability-reads.ts";
+import {
+	fetchPortabilityRead,
+	readPortabilityExport,
+} from "./portability-reads.ts";
 
 const fixture = readFileSync(
 	new URL("../fixtures/portability/providers/csv-v1.csv", import.meta.url),
@@ -412,7 +415,7 @@ test("CSV original-file workflow requires policy acknowledgment, applies and rep
 	await page.route(
 		runPath,
 		async (route) => {
-			const response = await route.fetch();
+			const response = await fetchPortabilityRead(route);
 			expect(response.ok()).toBe(true);
 			expect((await response.json()).run.state).toBe("completed");
 			await heldRun;
