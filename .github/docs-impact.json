@@ -16,14 +16,14 @@
 			"note": "Document environment secrets, the Compose release default and the version synchronization command."
 		},
 		"configuration": {
-			"sourceDigest": "56bad79dfe82e31fee71c20c45477590860e15e05563fdf3200c4ffe4f7aa9c6",
+			"sourceDigest": "dcc5178952a023f21a8e8588401bf3bd0454941c8d5174c01a88bc78c9335fea",
 			"docs": [
 				"docs/runbooks/deployment-settings.md"
 			],
 			"note": "Document the released Compose image default and the explicit nightly selection."
 		},
 		"deployment": {
-			"sourceDigest": "6e959cf1060355d3f3250bfbf89435b897a4484915799f4ce341c375fdb4060f",
+			"sourceDigest": "b96b29bbe3c6d0338ed437cfd53e73f7d2127f2215bf615e94a7999666cc7b57",
 			"docs": [
 				"docs/runbooks/backup-restore.md"
 			],

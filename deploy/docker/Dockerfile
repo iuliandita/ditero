@@ -104,6 +104,8 @@ ENV DITERO_GIT_SHA=${DITERO_GIT_SHA}
 
 # --- runtime bases ----------------------------------------------------------
 FROM ${RUNTIME_IMAGE} AS runtime-alpine
+# Bump these pins when Alpine rolls a revision; missing versions fail the build.
+RUN apk add --no-cache 'libcrypto3=3.5.9-r0' 'libssl3=3.5.9-r0' 'zlib=1.3.2-r1'
 RUN mkdir -p /data/attachments && chown bun:bun /data/attachments
 
 # Debian fallback: distroless is the only Debian base whose packages scan clean
