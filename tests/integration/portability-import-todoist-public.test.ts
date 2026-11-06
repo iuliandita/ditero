@@ -2,7 +2,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { Elysia } from "elysia";
 import { escapeLiteral, Pool } from "pg";
-import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
+import { afterAll, beforeAll, beforeEach, expect, test, vi } from "vitest";
 import {
 	CSV_V1_EXCLUSIONS,
 	TODOIST_V1_EXCLUSIONS,
@@ -10,6 +10,22 @@ import {
 import { parseTodoistProjectCsv } from "../../src/domain/portability/providers/todoist.ts";
 import { makeGuards, type Session } from "../../src/server/guards.ts";
 import { importPlanRoutes } from "../../src/server/portability/import-routes.ts";
+
+// Import semantics run with requests spaced beyond the per-account refill interval.
+vi.mock("../../src/server/portability/admission.ts", async (importOriginal) => {
+	const actual =
+		await importOriginal<
+			typeof import("../../src/server/portability/admission.ts")
+		>();
+	let now = 0;
+	return {
+		...actual,
+		takePlanCreationToken: (admission: Set<string>, userId: string) => {
+			now += 15_000;
+			return actual.takePlanCreationToken(admission, userId, now);
+		},
+	};
+});
 
 const url = process.env.DATABASE_URL;
 if (!url) throw new Error("DATABASE_URL is required");

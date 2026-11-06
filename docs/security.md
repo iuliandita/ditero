@@ -7,6 +7,19 @@
 - Backend-owned secret tables are excluded from Zero, use a non-owner database role, and force row-level security.
 - User-configured outbound URLs must use `safeFetch`; it validates every DNS answer and pins the socket to an approved address. See [Notification Egress](#notification-egress-and-ntfy-topics).
 
+Unhandled HTTP failures return a generic message and correlation identifier. Server
+logs retain that identifier, the error class and PostgreSQL SQLSTATE when available;
+they exclude exception messages, SQL, parameters and row details. The invitation,
+managed-account, assignment-invitation and mention-invitation dialogs show a localized
+failure message for server errors. Expected client error codes remain available.
+
+Authentication bodies are capped at 64 KiB before dispatch, with a 1 MiB allowance
+for SAML assertion callbacks. Ordinary JSON has a 1 MiB cap and a five-second idle
+read timeout. Authenticated Zero pushes retain the transport's larger limit so an
+offline queue can drain. Uploads, imports and signed notification callbacks use
+their dedicated readers and admission rules. Early body refusals retain the
+deployment's security headers and CORS policy.
+
 ## Authentication
 
 Email/password, passkeys, TOTP, and recovery codes are supported. Cookie-authenticated mutations require an exact configured origin. Sensitive auth routes use PostgreSQL-backed rate limits. Proxy headers are ignored unless the direct peer is within `DITERO_TRUSTED_PROXIES`.

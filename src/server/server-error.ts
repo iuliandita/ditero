@@ -5,7 +5,34 @@ export function serverErrorResponse(
 	code = "internal-error",
 ): Response {
 	const correlationId = randomUUID();
-	console.error("HTTP request failed", { correlationId, error });
+	const metadata: {
+		correlationId: string;
+		errorClass: string;
+		sqlState?: string;
+	} = {
+		correlationId,
+		errorClass:
+			error instanceof Error && /^[\w]{1,64}$/.test(error.constructor.name)
+				? error.constructor.name
+				: "UnknownError",
+	};
+	let cause = error;
+	for (
+		let depth = 0;
+		depth < 5 && cause && typeof cause === "object";
+		depth++
+	) {
+		if (
+			"code" in cause &&
+			typeof cause.code === "string" &&
+			/^[0-9A-Z]{5}$/.test(cause.code)
+		) {
+			metadata.sqlState = cause.code;
+			break;
+		}
+		cause = "cause" in cause ? cause.cause : undefined;
+	}
+	console.error("HTTP request failed", metadata);
 	return Response.json(
 		{ code, message: "An unexpected error occurred", correlationId },
 		{

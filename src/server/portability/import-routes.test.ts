@@ -331,37 +331,40 @@ describe("native import plan transport", () => {
 		const api = app();
 		const first = api.handle(request());
 		await vi.waitFor(() => expect(store.save).toHaveBeenCalledTimes(1));
-		const second = await api.handle(request());
-		expect(second.status).toBe(429);
-		expect(second.headers.get("retry-after")).toBe("5");
+		for (let attempt = 0; attempt < 4; attempt++) {
+			const second = await api.handle(request());
+			expect(second.status).toBe(429);
+			expect(second.headers.get("retry-after")).toBe("5");
+		}
 		finish?.({ id: "saved" });
 		expect((await first).status).toBe(200);
 		expect((await api.handle(request())).status).toBe(200);
 	});
-	test("admits eight distinct accounts, including a third, while bounding the global cap", async () => {
+	test("admits three distinct accounts, including a third, while bounding the global cap", async () => {
 		const finish: ((value: unknown) => void)[] = [];
 		store.save.mockImplementation(
 			() => new Promise((resolve) => finish.push(resolve)),
 		);
 		const api = app();
-		const pending = Array.from({ length: 8 }, (_, index) =>
+		const pending = Array.from({ length: 3 }, (_, index) =>
 			api.handle(
 				request(JSON.stringify(payload()), { "x-user": `user-${index}` }),
 			),
 		);
 		try {
-			await vi.waitFor(() => expect(store.save).toHaveBeenCalledTimes(8));
+			await vi.waitFor(() => expect(store.save).toHaveBeenCalledTimes(3));
+			store.save.mockResolvedValueOnce({ id: "saved" });
 			expect(
 				(
 					await api.handle(
-						request(JSON.stringify(payload()), { "x-user": "ninth" }),
+						request(JSON.stringify(payload()), { "x-user": "fourth" }),
 					)
 				).status,
 			).toBe(429);
 		} finally {
 			for (const resolve of finish) resolve({ id: "saved" });
 			expect((await Promise.all(pending)).map((reply) => reply.status)).toEqual(
-				Array(8).fill(200),
+				Array(3).fill(200),
 			);
 		}
 	});
@@ -937,25 +940,25 @@ describe("attachment reservation transport", () => {
 	});
 });
 
-test("reservation admits a third distinct owner and bounds eight owners", async () => {
+test("reservation admits a third distinct owner and bounds three owners", async () => {
 	const releases: ((v: unknown) => void)[] = [];
 	reservations.reserve.mockImplementation(
 		() => new Promise((resolve) => releases.push(resolve)),
 	);
 	const api = app();
-	const pending = Array.from({ length: 8 }, (_, index) =>
+	const pending = Array.from({ length: 3 }, (_, index) =>
 		api.handle(reserveRequest(undefined, { "x-user": `user-${index}` })),
 	);
 	try {
-		await vi.waitFor(() => expect(releases).toHaveLength(8));
+		await vi.waitFor(() => expect(releases).toHaveLength(3));
 		expect(
-			(await api.handle(reserveRequest(undefined, { "x-user": "ninth" })))
+			(await api.handle(reserveRequest(undefined, { "x-user": "fourth" })))
 				.status,
 		).toBe(429);
 	} finally {
 		for (const release of releases) release({ revision: 1 });
 		expect((await Promise.all(pending)).map((reply) => reply.status)).toEqual(
-			Array(8).fill(200),
+			Array(3).fill(200),
 		);
 	}
 });
@@ -1025,8 +1028,9 @@ test("status transports handled error and fails loud without leaked exception", 
 		});
 		expect(log).toHaveBeenCalledWith("HTTP request failed", {
 			correlationId: body.correlationId,
-			error: expect.objectContaining({ message: "private-details" }),
+			errorClass: "Error",
 		});
+		expect(JSON.stringify(log.mock.calls)).not.toContain("private-details");
 	} finally {
 		log.mockRestore();
 	}

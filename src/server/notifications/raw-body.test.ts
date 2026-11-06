@@ -423,6 +423,34 @@ describe("raw-body seam under Bun", () => {
 				body: RAW,
 			});
 			expect(await response.text()).toBe(Buffer.from(RAW).toString("hex"));
+			for (const path of [
+				"slack/interactions",
+				"discord/interactions",
+				"telegram/webhook",
+			]) {
+				for (const chunked of [false, true]) {
+					const body = chunked
+						? new ReadableStream<Uint8Array>({
+								start(controller) {
+									controller.enqueue(RAW.slice(0, 7));
+									controller.enqueue(RAW.slice(7));
+									controller.close();
+								},
+							})
+						: RAW;
+					const signed = await fetch(
+						`http://localhost:${port}/api/notifications/${path}`,
+						{
+							method: "POST",
+							headers: signedHeaders(RAW),
+							body,
+							duplex: "half",
+						} as RequestInit,
+					);
+					expect(signed.status, `${path}, chunked=${chunked}`).toBe(200);
+					expect(await signed.text()).toBe(Buffer.from(RAW).toString("hex"));
+				}
+			}
 		} finally {
 			child.kill("SIGKILL");
 		}

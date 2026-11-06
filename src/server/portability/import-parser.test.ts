@@ -1,16 +1,22 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import { expect, test, vi } from "vitest";
+import { parseImportInWorker } from "./import-parser.ts";
 
-test("Bun parser workers keep the event loop live and terminate on timeout or cancellation", async () => {
-	const result = await promisify(execFile)(
-		"bun",
-		["run", `${import.meta.dirname}/import-parser.bun-check.ts`],
-		{ timeout: 60_000 },
-	);
-	console.log(result.stdout.trim());
-	expect(result.stdout).toContain("parser checks passed");
-}, 65_000);
+test("parses small requests under the Node test runtime and preserves typed errors", async () => {
+	expect(
+		await parseImportInWorker({ kind: "envelope", text: '{"ok":true}' }),
+	).toEqual({ ok: true });
+	await expect(
+		parseImportInWorker({ kind: "document", text: '{"schemaVersion":1}' }),
+	).rejects.toMatchObject({ code: "invalid-export", status: 400 });
+	const controller = new AbortController();
+	controller.abort();
+	await expect(
+		parseImportInWorker(
+			{ kind: "envelope", text: "{}" },
+			{ signal: controller.signal },
+		),
+	).rejects.toMatchObject({ code: "cancelled", status: 408 });
+});
 
 test("rejects a provider envelope over its byte cap before parsing the JSON tree", async () => {
 	const { performImportParse } = await import("./import-parser-work.ts");

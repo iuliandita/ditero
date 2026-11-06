@@ -1035,6 +1035,55 @@ describe("portable export", () => {
 		expect(validateImportGraphV2(document).errors).toEqual([]);
 	});
 
+	test.each([
+		"conditions",
+		"panels",
+	])("rejects aggregate %s that would prevent re-import in both versions", async (kind) => {
+		if (kind === "conditions") {
+			const filter = {
+				op: "and",
+				conditions: Array.from({ length: 50 }, () => ({
+					field: "done",
+					operator: "is",
+					value: false,
+				})),
+			};
+			await pool.query(
+				`insert into view (id, owner_id, scope, name, filter, display, sort_key)
+				select 'budget-view-' || n, 'alice', 'personal', 'Budget', $1::jsonb, display, 'a' from view cross join generate_series(1,201) n where id = 'own'`,
+				[JSON.stringify(filter)],
+			);
+		} else {
+			const panels = Array.from({ length: 20 }, (_, index) => ({
+				id: `panel-${index}`,
+				type: "tasks",
+				title: "Tasks",
+				size: "m",
+				source: {
+					kind: "inline",
+					filter: { op: "and", conditions: [] },
+					sort: { field: "sortKey", dir: "asc" },
+					workspaceScope: { mode: "all" },
+				},
+			}));
+			await pool.query(
+				`insert into dashboard (id, owner_id, scope, name, panels, sort_key)
+				select 'budget-dashboard-' || n, 'alice', 'personal', 'Budget', $1::jsonb, 'a' from generate_series(1,51) n`,
+				[JSON.stringify(panels)],
+			);
+		}
+		for (const version of [1, 2]) {
+			const response = await request(
+				{},
+				"alice",
+				undefined,
+				`?version=${version}`,
+			);
+			expect(response.status).toBe(413);
+			expect(await response.json()).toEqual({ code: "export-limit-exceeded" });
+		}
+	});
+
 	test("produces a file accepted by native format and graph validation", async () => {
 		const response = await request();
 		expect(response.status).toBe(200);

@@ -3,7 +3,11 @@ import type { Pool } from "pg";
 import { UserContextError } from "../../db/user-context.ts";
 import type { Guards } from "../guards.ts";
 import { serverErrorResponse } from "../server-error.ts";
-import { PORTABILITY_CONCURRENCY } from "./admission.ts";
+import {
+	acquirePortabilityConnection,
+	PORTABILITY_CONCURRENCY,
+	portabilityAdmission,
+} from "./admission.ts";
 import {
 	ExportInterruptedError,
 	ExportLimitError,
@@ -17,7 +21,7 @@ export function createPortabilityExporter(
 	pool: Pool,
 	options: ExportOptions = {},
 ) {
-	const activeUsers = new Set<string>();
+	const activeUsers = portabilityAdmission(pool);
 	return async (
 		request: Request,
 		userId: string,
@@ -35,6 +39,15 @@ export function createPortabilityExporter(
 				},
 			);
 		}
+		const releaseConnection = acquirePortabilityConnection(pool, userId);
+		if (!releaseConnection)
+			return Response.json(
+				{ code: "export-busy" },
+				{
+					status: 429,
+					headers: { "cache-control": "no-store", "retry-after": "5" },
+				},
+			);
 		activeUsers.add(userId);
 		try {
 			const exporter =
@@ -88,6 +101,7 @@ export function createPortabilityExporter(
 				{ status, headers: { "cache-control": "no-store" } },
 			);
 		} finally {
+			releaseConnection();
 			activeUsers.delete(userId);
 		}
 	};

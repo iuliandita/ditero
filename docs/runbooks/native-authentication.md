@@ -279,3 +279,15 @@ Use **Use a different account** to sign out of that browser session and return t
 sign-in with the same native request. The replacement account must still explicitly
 allow the device. A sign-out failure stays on consent and offers a retry; it never
 approves the request. The native app session and browser session are independent.
+
+## Portability admission and errors
+
+Native and browser import/export requests share three active portability slots per
+app process, with one operation per account. Busy requests return 429 with a retry
+delay. Retry after the active operation finishes; saved plans and applied content
+retain their existing idempotency rules. See [portability limits](data-portability.md#limits).
+
+Unexpected portability failures return a generic message, a `correlationId`, and an
+`X-Correlation-ID` response header. Operators can match that identifier to server
+logs containing only the error class and, when available, PostgreSQL SQLSTATE.
+Expected error identifiers retain their existing meaning.

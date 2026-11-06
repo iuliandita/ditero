@@ -8,6 +8,7 @@ import {
 	beforeEach,
 	expect,
 	test,
+	vi,
 } from "vitest";
 import { ordinaryArchiveContent } from "../../src/domain/portability/import-document.ts";
 import type { PortableExportV2 } from "../../src/domain/portability/v2.ts";
@@ -25,6 +26,22 @@ import {
 	historyImportUserIds,
 	historyImportWorkspaceIds,
 } from "./history-import-fixture.ts";
+
+// Import semantics run with requests spaced beyond the per-account refill interval.
+vi.mock("../../src/server/portability/admission.ts", async (importOriginal) => {
+	const actual =
+		await importOriginal<
+			typeof import("../../src/server/portability/admission.ts")
+		>();
+	let now = 0;
+	return {
+		...actual,
+		takePlanCreationToken: (admission: Set<string>, userId: string) => {
+			now += 15_000;
+			return actual.takePlanCreationToken(admission, userId, now);
+		},
+	};
+});
 
 const databaseURL = process.env.DATABASE_URL;
 if (!databaseURL) throw new Error("DATABASE_URL is required");

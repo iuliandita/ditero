@@ -1,8 +1,23 @@
+import {
+	corsPolicy,
+	fixtureConnectionHeaders,
+	securityHeaders,
+} from "./http-policy.ts";
+
 const KIB = 1024;
 const MIB = KIB * KIB;
 
 export function requestBodyLimit(request: Request): number | null {
 	const path = new URL(request.url).pathname;
+	// Signed listeners enforce their own limit after rate limiting, on raw bytes.
+	if (
+		/^\/api\/notifications\/(?:slack\/interactions|discord\/interactions|telegram\/webhook)\/?$/.test(
+			path,
+		)
+	)
+		return null;
+	// Zero combines an offline client's pending pushes into one authenticated POST.
+	if (/^\/api\/zero\/(?:mutate|push)\/?$/.test(path)) return null;
 	// Upload handlers count ciphertext bytes; import plans have their own envelope cap.
 	if (
 		(request.method === "PUT" || request.method === "POST") &&
@@ -18,7 +33,6 @@ export function requestBodyLimit(request: Request): number | null {
 		return null;
 	if (/^\/api\/auth\/sso\/saml2\/sp\/acs\/[\w-]+\/?$/.test(path)) return MIB;
 	if (path.startsWith("/api/auth/")) return 64 * KIB;
-	if (path.startsWith("/api/zero/")) return 4 * MIB;
 	return MIB;
 }
 
@@ -29,6 +43,22 @@ export async function enforceRequestBodyLimit({
 }): Promise<Response | undefined> {
 	const limit = requestBodyLimit(request);
 	if (limit === null) return;
+	const headers: Record<string, string> = {
+		...securityHeaders(process.env),
+		...fixtureConnectionHeaders(process.env),
+		"cache-control": "no-store",
+	};
+	const origin = request.headers.get("origin");
+	const policy = corsPolicy(process.env);
+	if (
+		origin &&
+		Array.isArray(policy.origin) &&
+		policy.origin.includes(origin)
+	) {
+		headers["access-control-allow-origin"] = origin;
+		headers["access-control-allow-credentials"] = "true";
+		headers.vary = "Origin";
+	}
 	const reject = (status: number) =>
 		Response.json(
 			{
@@ -39,7 +69,7 @@ export async function enforceRequestBodyLimit({
 							? "request-timeout"
 							: "invalid-request",
 			},
-			{ status, headers: { "cache-control": "no-store" } },
+			{ status, headers },
 		);
 	const declared = request.headers.get("content-length");
 	if (
@@ -59,7 +89,7 @@ export async function enforceRequestBodyLimit({
 		void request.body?.cancel().catch(() => {});
 	};
 	const abort = () => stop(408);
-	const timer = setTimeout(abort, 5000);
+	let timer = setTimeout(abort, 5000);
 	request.signal.addEventListener("abort", abort, { once: true });
 	if (request.signal.aborted) abort();
 	let bytes = 0;
@@ -68,6 +98,10 @@ export async function enforceRequestBodyLimit({
 		while (!stopped) {
 			const { done, value } = await reader.read();
 			if (done) break;
+			if (value.byteLength) {
+				clearTimeout(timer);
+				timer = setTimeout(abort, 5000);
+			}
 			bytes += value.byteLength;
 			if (bytes > limit || ++reads > 65_536) stop(413);
 		}

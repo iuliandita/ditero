@@ -105,10 +105,6 @@ export async function performImportParse<J extends ImportParseJob>(
 			ok: false,
 			code,
 			status,
-			detail:
-				status === 500
-					? String(error instanceof Error ? error.stack : error)
-					: undefined,
 		};
 	}
 }

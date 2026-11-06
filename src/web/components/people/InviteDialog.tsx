@@ -22,6 +22,7 @@ import type { Role } from "../../../domain/role.ts";
 import { m } from "../../../paraglide/messages.js";
 import { copyText } from "../../lib/clipboard.ts";
 import { useKeyring } from "../../lib/e2e/KeyringProvider.tsx";
+import { httpErrorMessage } from "../../lib/http-error.ts";
 import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
 import { InviteMailNotice } from "./InviteMailNotice";
 import { ROLE_DESCRIPTIONS, ROLE_LABELS } from "./role-labels.ts";
@@ -100,8 +101,12 @@ export function InviteDialog({
 				}),
 			});
 			if (!res.ok) {
-				const msg = (await res.text()).trim();
-				setError(msg || m.invite_create_failed_status({ status: res.status }));
+				setError(
+					await httpErrorMessage(
+						res,
+						m.invite_create_failed_status({ status: res.status }),
+					),
+				);
 				return;
 			}
 			const data = (await res.json()) as {

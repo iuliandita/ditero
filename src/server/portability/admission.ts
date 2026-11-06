@@ -1,4 +1,36 @@
-export const PORTABILITY_CONCURRENCY = 8;
+import type { Pool } from "pg";
+
+export const PORTABILITY_CONCURRENCY = 3;
+const admissions = new WeakMap<Pool, Set<string>>();
+const connections = new WeakMap<Pool, Set<string>>();
+
+function poolUsers(
+	budgets: WeakMap<Pool, Set<string>>,
+	pool: Pool,
+): Set<string> {
+	let users = budgets.get(pool);
+	if (!users) {
+		users = new Set();
+		budgets.set(pool, users);
+	}
+	return users;
+}
+
+export function portabilityAdmission(pool: Pool): Set<string> {
+	return poolUsers(admissions, pool);
+}
+
+export function acquirePortabilityConnection(
+	pool: Pool,
+	userId: string,
+): (() => void) | null {
+	const users = poolUsers(connections, pool);
+	if (users.has(userId) || users.size >= PORTABILITY_CONCURRENCY) return null;
+	users.add(userId);
+	return () => {
+		users.delete(userId);
+	};
+}
 const planBudgets = new WeakMap<
 	Set<string>,
 	Map<string, { tokens: number; updatedAt: number }>

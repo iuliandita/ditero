@@ -6,6 +6,14 @@ test("conceals unhandled messages, logs correlation details and preserves explic
 	const log = vi.spyOn(console, "error").mockImplementation(() => {});
 	try {
 		const error = new Error("database constraint private_detail");
+		Object.assign(error, {
+			cause: Object.assign(new Error("private database payload"), {
+				code: "23505",
+				query: "private SQL",
+				params: ["private params"],
+				detail: "private row",
+			}),
+		});
 		const api = new Elysia().onError(handleServerError).use(
 			new Elysia()
 				.get("/fail", () => {
@@ -28,9 +36,13 @@ test("conceals unhandled messages, logs correlation details and preserves explic
 		});
 		expect(response.headers.get("x-correlation-id")).toBe(body.correlationId);
 		expect(log).toHaveBeenCalledWith("HTTP request failed", {
-			error,
+			errorClass: "Error",
+			sqlState: "23505",
 			correlationId: body.correlationId,
 		});
+		expect(JSON.stringify(log.mock.calls)).not.toMatch(
+			/private|query|params|detail/,
+		);
 		const typed = await api.handle(new Request("http://localhost/typed"));
 		const typedThrow = await api.handle(
 			new Request("http://localhost/typed-throw"),

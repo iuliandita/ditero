@@ -22,4 +22,4 @@ export type ImportParseResult<J extends ImportParseJob> = J extends {
 		: unknown;
 export type ImportParseReply<J extends ImportParseJob> =
 	| { ok: true; value: ImportParseResult<J> }
-	| { ok: false; code: string; status: number; detail?: string };
+	| { ok: false; code: string; status: number };

@@ -26,6 +26,7 @@ import {
 	type WorkspaceKeyMaterial,
 } from "../../lib/e2e/KeyringProvider.tsx";
 import { uploadAttachment } from "../../lib/e2e/upload.ts";
+import { httpErrorMessage } from "../../lib/http-error.ts";
 import { formatBytes, formatList } from "../../lib/intl-format.ts";
 import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
 import { mutationServerSucceeded } from "../../lib/pref-mutation.ts";
@@ -554,11 +555,13 @@ function CommentComposer({
 				});
 				if (!res.ok) {
 					setError(
-						(await res.text()).trim() ||
+						await httpErrorMessage(
+							res,
 							m.mention_invite_failed_status({
 								name: inv.name,
 								status: res.status,
 							}),
+						),
 					);
 					return;
 				}

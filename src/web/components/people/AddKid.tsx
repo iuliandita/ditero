@@ -22,6 +22,7 @@ import {
 } from "../../../auth/display-name.ts";
 import { m } from "../../../paraglide/messages.js";
 import { copyText } from "../../lib/clipboard.ts";
+import { httpErrorMessage } from "../../lib/http-error.ts";
 import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
 import { ROLE_DESCRIPTIONS, ROLE_LABELS } from "./role-labels.ts";
 
@@ -81,13 +82,13 @@ export function AddKid({
 				}),
 			});
 			if (!res.ok) {
-				const text = (await res.text()).trim();
-				let message = text;
-				if (res.headers.get("content-type")?.includes("application/json")) {
-					const data = JSON.parse(text) as { message?: unknown };
-					message = typeof data.message === "string" ? data.message : "";
-				}
-				setError(message || m.add_kid_failed_status({ status: res.status }));
+				setError(
+					await httpErrorMessage(
+						res,
+						m.add_kid_failed_status({ status: res.status }),
+						true,
+					),
+				);
 				return;
 			}
 			const data = (await res.json()) as { userId: string; email: string };

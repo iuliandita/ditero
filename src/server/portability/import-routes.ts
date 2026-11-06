@@ -18,7 +18,11 @@ import { PortableExportValidationError } from "../../domain/portability/validate
 import { AttachmentQuotaError } from "../attachments/quota.ts";
 import type { Guards } from "../guards.ts";
 import { serverErrorResponse } from "../server-error.ts";
-import { PORTABILITY_CONCURRENCY, takePlanCreationToken } from "./admission.ts";
+import {
+	PORTABILITY_CONCURRENCY,
+	portabilityAdmission,
+	takePlanCreationToken,
+} from "./admission.ts";
 import { getAttachmentMigrationParents } from "./attachment-migration-parents.ts";
 import {
 	type AttachmentMigrationLimits,
@@ -302,7 +306,8 @@ function reservationOrdinal(request: Request): number {
 	return ordinal;
 }
 
-export function createImportAdmission(): Set<string> {
+export function createImportAdmission(pool?: Pool): Set<string> {
+	if (pool) return portabilityAdmission(pool);
 	return new Set();
 }
 
@@ -330,7 +335,7 @@ function migrationJson(text: string, strict: boolean): unknown {
 
 export function createAttachmentMigrationHandlers(
 	pool: Pool,
-	activeUsers = createImportAdmission(),
+	activeUsers = createImportAdmission(pool),
 	strictNative = false,
 	limits: AttachmentMigrationLimits = {
 		quotaBytes: attachmentStorageConfig(process.env).quotaBytes,
@@ -487,7 +492,7 @@ export function createAttachmentMigrationHandlers(
 export function importPlanRoutes(
 	pool: Pool,
 	guards: Guards,
-	activeUsers = createImportAdmission(),
+	activeUsers = createImportAdmission(pool),
 	limits?: AttachmentMigrationLimits,
 ) {
 	const migration = createAttachmentMigrationHandlers(
@@ -603,11 +608,6 @@ export function importPlanRoutes(
 			"/api/portability/import/plans",
 			guards.guardedPost((request, session) =>
 				handled(async () => {
-					if (!takePlanCreationToken(activeUsers, session.user.id))
-						return Response.json(
-							{ code: "import-busy" },
-							{ status: 429, headers: { ...headers, "retry-after": "15" } },
-						);
 					if (
 						activeUsers.size >= PORTABILITY_CONCURRENCY ||
 						activeUsers.has(session.user.id)
@@ -619,6 +619,11 @@ export function importPlanRoutes(
 					activeUsers.add(session.user.id);
 					const deadline = performance.now() + 45_000;
 					try {
+						if (!takePlanCreationToken(activeUsers, session.user.id))
+							return Response.json(
+								{ code: "import-busy" },
+								{ status: 429, headers: { ...headers, "retry-after": "15" } },
+							);
 						if (
 							(request.headers.get("content-type") ?? "")
 								.split(";")[0]

@@ -248,13 +248,16 @@ describe("native portability export", () => {
 			});
 			expect(log).toHaveBeenCalledWith("HTTP request failed", {
 				correlationId: body.correlationId,
-				error: expect.objectContaining({ message: "private database payload" }),
+				errorClass: "Error",
 			});
+			expect(JSON.stringify(log.mock.calls)).not.toContain(
+				"private database payload",
+			);
 		} finally {
 			log.mockRestore();
 		}
 	});
-	it("does not share admission between separately constructed exporters", async () => {
+	it("shares admission between separately constructed exporters", async () => {
 		let release!: (body: string) => void;
 		mocks.v2.mockImplementationOnce(
 			() =>
@@ -266,7 +269,7 @@ describe("native portability export", () => {
 		await vi.waitFor(() => expect(release).toBeDefined());
 		expect(
 			(await createPortabilityExporter(pool)(request("/"), "a", 2)).status,
-		).toBe(200);
+		).toBe(429);
 		release("{}");
 		await first;
 	});

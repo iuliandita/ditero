@@ -131,7 +131,7 @@ const { guardedPost, guardedGet, foreignOrigin } = makeGuards(
 	(headers) => auth.api.getSession({ headers }),
 );
 const portabilityExporter = createPortabilityExporter(pool);
-const importAdmission = createImportAdmission();
+const importAdmission = createImportAdmission(pool);
 const attachmentConfig = attachmentStorageConfig(process.env);
 const attachmentStore = await createAttachmentBlobStore(attachmentConfig);
 const nativeTrustedProxies = trustedProxyCIDRsFromEnv(
