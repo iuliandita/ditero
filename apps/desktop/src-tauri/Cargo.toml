@@ -27,7 +27,7 @@ chrono = { version = "0.4", default-features = false, features = ["std"] }
 native-tls = "0.2"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-tauri-plugin-single-instance = { version = "=2.5.2", default-features = false }
+tauri-plugin-single-instance = { version = "=2.5.5", default-features = false }
 zbus = "=5.19.0"
 zbus-secret-service-keyring-store = { version = "=1.0.1", features = ["crypto-rust"] }
 [target.'cfg(target_os = "macos")'.dependencies]
