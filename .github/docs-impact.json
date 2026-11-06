@@ -3,51 +3,37 @@
 	"groups": {
 		"ui": {
 			"sourceDigest": "af5074a7f2de290f63c3a8a3d0eb039210a3384133757eeb83f3feb47724a17d",
-			"docs": [
-				"docs/typography.md"
-			],
+			"docs": ["docs/typography.md"],
 			"note": "Text people type keeps its own direction in Arabic: input and textarea fields use dir=auto, rendered notes and comments take their own direction, and titles, list and people names and label chips inside translated text are isolated so punctuation and list separators stay in place. Arabic link underlines use a larger offset. Behavior, permissions, data and keyboard shortcuts are unchanged."
 		},
 		"release": {
 			"sourceDigest": "83c6448fa523a5c2cbb2ea05231458f67224d471154caf509d3762567dbf2e66",
-			"docs": [
-				"RELEASING.md"
-			],
+			"docs": ["RELEASING.md"],
 			"note": "Document environment secrets, the Compose release default and the version synchronization command."
 		},
 		"configuration": {
 			"sourceDigest": "dcc5178952a023f21a8e8588401bf3bd0454941c8d5174c01a88bc78c9335fea",
-			"docs": [
-				"docs/runbooks/deployment-settings.md"
-			],
+			"docs": ["docs/runbooks/deployment-settings.md"],
 			"note": "Document the released Compose image default and the explicit nightly selection."
 		},
 		"deployment": {
 			"sourceDigest": "b96b29bbe3c6d0338ed437cfd53e73f7d2127f2215bf615e94a7999666cc7b57",
-			"docs": [
-				"docs/runbooks/backup-restore.md"
-			],
+			"docs": ["docs/runbooks/backup-restore.md"],
 			"note": "Record the deployed Compose image tag for recovery; the default now follows the released version and image packages are pinned."
 		},
 		"native": {
 			"sourceDigest": "b455ef5963764bd40788e6427fa951e73c1ae830399a24e62cc398f55970fa15",
-			"docs": [
-				"apps/android/README.md"
-			],
+			"docs": ["apps/android/README.md"],
 			"note": "Native sync follows the bundled Zero 1.11.1 client: Android and desktop accept exactly /sync/v53/connect on the configured Zero origin (was v51, so beta.1 native apps never opened a sync socket) and relay inbound binary poke chunks up to 1 MiB to the page as base64, rebuilt as ArrayBuffers; malformed frames end the socket, an oversized frame gives the page one abnormal close before any later frame, and the page still sends text frames only. A pin test reads the installed Zero client and fails when either native path or inbound bound drifts. Grant, session, JWT splicing, refusal fences and canonical HTTPS checks are unchanged; no migration, storage or server change."
 		},
 		"authentication": {
 			"sourceDigest": "124ad5a60dc6a6d0a7acac135acd9727131a9af25d39acd6f2a864e6d297aac9",
-			"docs": [
-				"docs/runbooks/native-authentication.md"
-			],
+			"docs": ["docs/runbooks/native-authentication.md"],
 			"note": "Preserve the Better Auth 1.7.12 upgrade, JWT/provider-account migrations, explicit provider linking, nonce validation, verified-email admission and scoped Apple origin checks. Reset atomically consumes its token, writes the password, verifies the mailbox and retires sessions, native authority, access tokens, feeds, passkeys, provider links and pending account proofs while retaining TOTP and backup codes. Enforce the enrolled local factor on every sign-in path, including social/OIDC/SAML callbacks, passkeys and native system-browser flows. Reuse the plugin challenge, provisional-session deletion and reset invalidation. Provider MFA and remembered-device cookies cannot substitute. Native grants retain their ID and stay unapproved until successful factor completion and explicit consent; no bridge permissions or credential formats change. Upgrade server/web together and reload sign-in pages; rollback loses this protection."
 		},
 		"compatibility": {
 			"sourceDigest": "9f3b42b57e1325f123ab9ee0955ad09c580db6e09d043e197f0deef49ba88b88",
-			"docs": [
-				"docs/runbooks/backup-restore.md"
-			],
+			"docs": ["docs/runbooks/backup-restore.md"],
 			"note": "Migration 0091 adds nullable habit_log.completed_by referencing the user with ON DELETE SET NULL. Existing logs remain unattributed. Direct and reminder completion derive the actor from authenticated context; duplicate ticks preserve the original attribution and Karma award. Membership removal preserves attribution; account deletion explicitly clears the actor while preserving the occurrence and anonymized user row. The actor index and validated foreign key match the generated schema.",
 			"upgrade": "Back up the coordinated recovery set, stop app and Zero writers and apply migration 0091 with the migration role before starting the updated app and Zero. No backfill or role-policy change is required.",
 			"backup": "Include habit logs and their nullable attribution in the regular coordinated PostgreSQL recovery set, with the existing attachment ciphertext and secrets.",
@@ -56,16 +42,12 @@
 		},
 		"clients": {
 			"sourceDigest": "9e440d49e6f7aff5f7588c9a2af8fc981c6308406af74aa088714980d766f668",
-			"docs": [
-				"docs/cli.md"
-			],
+			"docs": ["docs/cli.md"],
 			"note": "Ship CLI/MCP/TUI JavaScript bundles for user-installed Bun 1.3.14+; document archive/checksum verification, MCP launch, JSON --version, BUILDINFO building-Bun identity, source URLs and notices/license texts covering every bundled or dependency-inlined package. The shebang uses --no-env-file and --config=/dev/null to prevent working-directory environment/preload injection. Minimum-version failure exits 2 and suffixes are tolerated. Scope is any Bun OS, qualified on Linux x64; rebuilds name tagged commit, building Bun and GNU tar. Commands, API envelopes, other exit codes and environment credentials remain unchanged. Standalone binary publication remains blocked/deferred."
 		},
 		"public-api": {
 			"sourceDigest": "da9126c5d9759f4a0d737870c3ff6f791c3cd5cd13f16b645c4366aecc0f7eca",
-			"docs": [
-				"docs/runbooks/public-api.md"
-			],
+			"docs": ["docs/runbooks/public-api.md"],
 			"note": "Preserve minute, second and fractional-second ISO timestamp acceptance for task create/update/completion, observations and metadata. Offset-capable inputs retain explicit offsets or Z; UTC-only responses remain UTC-only. CSV retains acceptance and normalization. No API version or persisted format changes."
 		}
 	}
