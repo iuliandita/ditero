@@ -12,14 +12,14 @@
 			"note": "Document environment secrets, the Compose release default and the version synchronization command."
 		},
 		"configuration": {
-			"sourceDigest": "e5036d1231449ca0ab92b39983d3f5cbc9fd95966668caa29efd9450af7c1419",
+			"sourceDigest": "5b70e28afef898e42e550ff9214a3fa2a2b9e61b33baf327efbe5c5ebc74dd44",
 			"docs": ["docs/runbooks/deployment-settings.md"],
-			"note": "Document the released Compose image default and the explicit nightly selection."
+			"note": "Document the released Compose image default and the explicit nightly selection. The auth and all-in-one URL settings accept HTTP(S) origins without credentials, paths, queries or fragments and normalize trailing slashes. Empty auth settings fall back to the public URL. Other settings retain their meanings."
 		},
 		"deployment": {
-			"sourceDigest": "19597c1ad4e137a5e30c94049fcaacffe832bf29a28b9bcf97212e1ed59cdf4a",
-			"docs": ["docs/runbooks/backup-restore.md"],
-			"note": "Record the deployed Compose image tag for recovery; the default now follows the released version and image packages, including musl, are pinned."
+			"sourceDigest": "6d49975f394d34e5b88125d52626b075db31fe5699231ed42ae475bdcd33fd22",
+			"docs": ["deploy/docker/aio/README.md"],
+			"note": "Record the deployed Compose image tag for recovery; the default now follows the released version and image packages, including musl, are pinned. The all-in-one wrapper validates public URLs as origins and normalizes trailing slashes. Remove paths, queries and fragments before upgrading. No image topology, credential format or storage migration changes."
 		},
 		"native": {
 			"sourceDigest": "1b8b2aaf21a0c4e67b850dde378d9948f5859014f90adf27fe11076f27d3a2aa",
@@ -27,9 +27,9 @@
 			"note": "Refuse Capacitor file, content and HTTP proxy resources for every WebView request, clear exported Activity task affinity and explicitly exclude native session and push preferences from Android cloud backup and device transfer. Preserve the release-only manifest guard and trusted-server choice of HTTPS sync origin. Source/build checks do not qualify Android runtime behavior."
 		},
 		"authentication": {
-			"sourceDigest": "a8499d6d84ee915c963834bb4007d9b0726c38d09c7dfc2c2c82248c4e31d21e",
+			"sourceDigest": "5bd6546472b2ba7d524a72bb720ddf2e164919b2c57b589cb7922eec9c2a4d9c",
 			"docs": ["docs/runbooks/native-authentication.md"],
-			"note": "Password changes retire account credentials and pending proofs transactionally, replace the initiating session, retain TOTP and leave email verification unchanged. SAML requires browser-bound RelayState unless IdP-initiated sign-in is enabled. Bootstrap counts soft-deleted accounts; auth resolves a configured origin and requires one in production. E2E rate limits require test mode; reset requests share a hashed per-recipient bucket across IPs. No storage or native bridge changes."
+			"note": "Preserve the Better Auth 1.7.12 upgrade, JWT/provider-account migrations, explicit provider linking, nonce validation, verified-email admission and scoped Apple origin checks. Reset atomically consumes its token, writes the password, verifies the mailbox and retires sessions, native authority, access tokens, feeds, passkeys, provider links and pending account proofs while retaining TOTP and backup codes. Enforce the enrolled local factor on every sign-in path, including social/OIDC/SAML callbacks, passkeys and native system-browser flows. Reuse the plugin challenge, provisional-session deletion and reset invalidation. Provider MFA and remembered-device cookies cannot substitute. Native grants retain their ID and stay unapproved until successful factor completion and explicit consent; no bridge permissions or credential formats change. Upgrade server/web together and reload sign-in pages; rollback loses this protection. The password credential remains linked so password-protected account settings keep their password requirement. Other provider accounts can still be unlinked. No credential format or native handoff changes. Password changes retain passkeys and provider links while retiring other sessions, access tokens, feeds and pending proofs transactionally, replacing the initiating cookie without returning its token and leaving email verification unchanged. SAML requires browser-bound RelayState unless IdP-initiated sign-in is enabled. Bootstrap counts soft-deleted accounts; auth requires a configured origin in production. E2E rate limits require test mode; detached reset mail uses a hashed recipient budget without changing responses. No storage or native bridge changes."
 		},
 		"compatibility": {
 			"sourceDigest": "2e1649b9eee04a7fb9bb3437f28efddebb99c6e9a596a444eb929b3928c795ac",

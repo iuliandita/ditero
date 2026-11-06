@@ -85,6 +85,7 @@ export type AuthMailDeps = {
 	// Where the recipient's stored locale is read from. Defaults to the shared
 	// app client; a test passes a stub.
 	database?: Pick<typeof db, "select">;
+	beforeSend?: () => Promise<boolean>;
 	// Test seam only. Production detaches the send and nothing awaits it.
 	track?: (settled: Promise<void>) => void;
 };
@@ -127,6 +128,7 @@ export function sendAuthMail(
 	// promise. resolveRecipientLocale falls back to en on any failure.
 	const settled = (async () => {
 		try {
+			if (deps.beforeSend && !(await deps.beforeSend())) return;
 			const locale = await resolveRecipientLocale(database, user.id ?? null);
 			// Two greetings rather than a pseudo-name in the {name} slot: a nameless
 			// recipient needs a whole line each locale writes itself, not a word

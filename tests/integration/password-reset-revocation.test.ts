@@ -14,6 +14,7 @@ import {
 	test,
 	vi,
 } from "vitest";
+import { lookupNativeSession } from "../../src/server/native-auth/session.ts";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL is required");
@@ -605,9 +606,31 @@ test.each([
 	undefined,
 	false,
 	true,
-])("password change revokes account credentials with revokeOtherSessions=%s", async (revokeOtherSessions) => {
+])("password change retains sign-in methods and revokes account access with revokeOtherSessions=%s", async (revokeOtherSessions) => {
 	const victim = await seedAccount();
 	const bystander = await seedAccount();
+	const deviceId = randomUUID();
+	const nativeSession = (
+		await admin.query("select id,token from session where user_id=$1", [
+			victim.userId,
+		])
+	).rows[0];
+	await admin.query(
+		"insert into user_device(id,user_id,label) values($1,$2,'Native fixture')",
+		[deviceId, victim.userId],
+	);
+	await admin.query(
+		"insert into native_session_link(session_id,user_id,device_id) values($1,$2,$3)",
+		[nativeSession.id, victim.userId, deviceId],
+	);
+	expect(await lookupNativeSession(runtime, nativeSession.token)).toMatchObject(
+		{ userId: victim.userId },
+	);
+	const proof = `sign-in-otp-${victim.userId}@reset.test`;
+	await admin.query(
+		"insert into verification(id,identifier,value,expires_at,updated_at) values($1,$2,'123456',now()+interval '1 hour',now())",
+		[randomUUID(), proof],
+	);
 	await admin.query('update "user" set email_verified=false where id=$1', [
 		victim.userId,
 	]);
@@ -626,12 +649,29 @@ test.each([
 		cookies(signedIn),
 	);
 	expect(response.status, await response.clone().text()).toBe(200);
+	expect(await response.json()).not.toHaveProperty("token");
+	expect(await lookupNativeSession(runtime, nativeSession.token)).toBeNull();
+	expect(
+		(
+			await admin.query(
+				"select * from native_session_link where session_id=$1",
+				[nativeSession.id],
+			)
+		).rows,
+	).toHaveLength(0);
+	expect(
+		(
+			await admin.query("select * from verification where identifier=$1", [
+				proof,
+			])
+		).rows,
+	).toHaveLength(0);
 	expect(await counts(victim.userId)).toEqual({
 		sessions: 1,
 		accessTokens: 0,
 		calendarFeeds: 0,
-		passkeys: 0,
-		linkedAccounts: 0,
+		passkeys: 1,
+		linkedAccounts: 1,
 		credentials: 1,
 		twoFactor: 1,
 		webhooks: 1,
@@ -689,4 +729,39 @@ test("password change rolls back if credential revocation fails", async () => {
 	expect(response.ok).toBe(false);
 	expect(await counts(victim.userId)).toEqual(before);
 	expect(await passwordMatches(victim.userId, "old-password-123")).toBe(true);
+	expect(
+		(
+			await auth.auth.api.getSession({
+				headers: new Headers({ cookie: cookies(signedIn) }),
+			})
+		)?.user.id,
+	).toBe(victim.userId);
+});
+
+test("a wrong current password preserves credentials, proofs and the original session", async () => {
+	const victim = await seedAccount();
+	const signedIn = await postAuth("/sign-in/email", {
+		email: `${victim.userId}@reset.test`,
+		password: "old-password-123",
+	});
+	expect(signedIn.status).toBe(200);
+	const before = await counts(victim.userId);
+	const response = await postAuth(
+		"/change-password",
+		{
+			currentPassword: "wrong-password-123",
+			newPassword: "changed-password-456",
+		},
+		cookies(signedIn),
+	);
+	expect(response.status).toBe(400);
+	expect(await counts(victim.userId)).toEqual(before);
+	expect(await passwordMatches(victim.userId, "old-password-123")).toBe(true);
+	expect(
+		(
+			await auth.auth.api.getSession({
+				headers: new Headers({ cookie: cookies(signedIn) }),
+			})
+		)?.user.id,
+	).toBe(victim.userId);
 });

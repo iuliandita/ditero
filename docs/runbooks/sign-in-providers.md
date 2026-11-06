@@ -469,8 +469,10 @@ self-service provider registration (those routes answer 404).
 
 Over HTTPS, a solicited SAML callback must carry the RelayState returned at
 sign-in start and the matching browser-binding cookie. A missing RelayState is
-refused before consuming the sign-in request. Callbacks without RelayState are
-accepted only when `DITERO_SAML_ALLOW_IDP_INITIATED=true` explicitly permits
+refused with `sso_missing_relay_state` before consuming the sign-in request.
+When upgrading, configure the IdP to echo the supplied RelayState on every
+SP-initiated callback; IdP configurations that omit it must be corrected.
+Callbacks without RelayState are accepted only when `DITERO_SAML_ALLOW_IDP_INITIATED=true` explicitly permits
 IdP-initiated sign-in.
 
 ### Settings
@@ -585,7 +587,8 @@ without assertion contents. Common codes: `account_not_linked` (an account with 
 email exists), `REGISTRATION_DISABLED` or `REGISTRATION_INVITE_REQUIRED` (registration
 policy), `invalid_saml_response` (signature, audience, recipient, time or algorithm),
 `unsolicited_response` (IdP-initiated while disabled), `replay_detected`,
-`invalid_state` (unknown or expired RelayState) and `sso_browser_mismatch` (the
+`invalid_state` (unknown or expired RelayState), `sso_missing_relay_state` (the IdP
+did not echo RelayState for an SP-initiated flow) and `sso_browser_mismatch` (the
 callback came from another browser than the one that started the sign-in; start again
 from Ditero in one browser). A failed start with `INVALID_RETURN_URL` means a custom
 client sent a return address outside the accepted routes.

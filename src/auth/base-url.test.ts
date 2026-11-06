@@ -28,8 +28,8 @@ test("uses the configured auth origin with a public-origin fallback", () => {
 });
 
 test.each([
-	"",
 	"not a URL",
+	" https://auth.example.test",
 	"ftp://auth.example.test",
 	"https://user:secret@auth.example.test",
 	"https://auth.example.test/path",
@@ -38,5 +38,20 @@ test.each([
 ])("refuses invalid configured auth origin %s", (configured) => {
 	expect(() => authBaseURL({ BETTER_AUTH_URL: configured })).toThrow(
 		/HTTP or HTTPS origin/,
+	);
+});
+
+test("empty settings fall back and diagnostics identify the setting", () => {
+	expect(
+		authBaseURL({
+			BETTER_AUTH_URL: "",
+			DITERO_PUBLIC_URL: "https://public.example.test",
+		}),
+	).toBe("https://public.example.test");
+	expect(authBaseURL({ BETTER_AUTH_URL: "  ", DITERO_PUBLIC_URL: "" })).toBe(
+		"http://localhost:3000",
+	);
+	expect(() => authBaseURL({ DITERO_PUBLIC_URL: "bad-url" })).toThrow(
+		'DITERO_PUBLIC_URL="bad-url"',
 	);
 });

@@ -241,38 +241,90 @@ describe("password reset is not a user-enumeration oracle", () => {
 it.each([
 	"ada@example.test",
 	"unknown@example.test",
-])("bounds reset requests for %s across client addresses", async (email) => {
-	await useSink();
-	await signup("ada@example.test");
-	const responses: Response[] = [];
-	for (let attempt = 0; attempt < 4; attempt++) {
-		responses.push(
-			await handleAuthRequest(
-				new Request("http://localhost:3000/api/auth/request-password-reset", {
-					method: "POST",
-					headers: {
-						"content-type": "application/json",
-						origin: "http://localhost:5173",
-					},
-					body: JSON.stringify({
-						email: attempt === 3 ? email.toUpperCase() : email,
-					}),
+])("keeps reset responses uniform for a flooded recipient %s", async (email) => {
+	const sink = await useSink();
+	expect((await signup("ada@example.test")).status).toBe(200);
+	await vi.waitFor(() => expect(sink.messages).toHaveLength(1));
+	const bodies: string[] = [];
+	for (let attempt = 0; attempt < 6; attempt++) {
+		const response = await handleAuthRequest(
+			new Request("http://localhost:3000/api/auth/request-password-reset", {
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					origin: "http://localhost:5173",
+				},
+				body: JSON.stringify({
+					email: attempt === 5 ? email.toUpperCase() : email,
 				}),
-				`198.51.100.${attempt + 1}`,
-			),
+			}),
+			`198.51.100.${attempt + 1}`,
 		);
+		expect(response.status).toBe(200);
+		expect(response.headers.get("retry-after")).toBeNull();
+		bodies.push(await response.text());
 	}
-	expect(responses.map((response) => response.status)).toEqual([
-		200, 200, 200, 429,
-	]);
-	expect(await responses[3].json()).toMatchObject({
-		code: "TOO_MANY_REQUESTS",
-	});
-	expect(responses[3].headers.get("retry-after")).toBe("100");
+	expect(new Set(bodies).size).toBe(1);
+	const known = email === "ada@example.test";
+	if (known) await vi.waitFor(() => expect(sink.messages).toHaveLength(4));
 	const buckets = await db
 		.select()
 		.from(tables.rateBucket)
 		.where(like(tables.rateBucket.key, "auth:password-reset:%"));
-	expect(buckets).toHaveLength(1);
-	expect(buckets[0].key).not.toContain(email);
+	expect(buckets).toHaveLength(known ? 1 : 0);
+	if (known) {
+		expect(buckets[0].key).not.toContain(email);
+		expect(Number(buckets[0].tokens)).toBeLessThan(1);
+	}
 }, 30_000);
+
+it("does not charge reset mail budgets before origin, body and per-IP validation", async () => {
+	const sink = await useSink();
+	expect((await signup("ada@example.test")).status).toBe(200);
+	await vi.waitFor(() => expect(sink.messages).toHaveLength(1));
+	for (const [origin, body] of [
+		[
+			"https://other.example.test",
+			JSON.stringify({ email: "ada@example.test" }),
+		],
+		["http://localhost:5173", "{"],
+	]) {
+		const response = await handleAuthRequest(
+			new Request("http://localhost:3000/api/auth/request-password-reset", {
+				method: "POST",
+				headers: { "content-type": "application/json", origin },
+				body,
+			}),
+			"198.51.100.10",
+		);
+		expect(response.ok).toBe(false);
+	}
+	expect(
+		await db
+			.select()
+			.from(tables.rateBucket)
+			.where(like(tables.rateBucket.key, "auth:password-reset:%")),
+	).toHaveLength(0);
+	// Exhaust the IP budget with unknown recipients, then request the known one.
+	for (let attempt = 0; attempt < 3; attempt++)
+		expect(
+			(
+				await post("/api/auth/request-password-reset", {
+					email: "unknown@example.test",
+				})
+			).status,
+		).toBe(200);
+	expect(
+		(
+			await post("/api/auth/request-password-reset", {
+				email: "ada@example.test",
+			})
+		).status,
+	).toBe(429);
+	expect(
+		await db
+			.select()
+			.from(tables.rateBucket)
+			.where(like(tables.rateBucket.key, "auth:password-reset:%")),
+	).toHaveLength(0);
+});

@@ -84,6 +84,33 @@ const TOKEN = "tok-6b9c1f2e4a";
 const RESET_URL = `http://localhost:3000/api/auth/reset-password/${TOKEN}?callbackURL=%2F`;
 const VERIFY_URL = `http://localhost:3000/api/auth/verify-email?token=${TOKEN}&callbackURL=%2F`;
 
+it.each([
+	false,
+	true,
+])("detaches the recipient budget and sends only when allowed=%s", async (allowed) => {
+	const started = await sink();
+	let release: (allowed: boolean) => void = () => {
+		throw new Error("budget not initialized");
+	};
+	const budget = new Promise<boolean>((resolve) => {
+		release = resolve;
+	});
+	let settled: Promise<void> | undefined;
+	sendAuthMail("reset", { email: "someone@example.test" }, RESET_URL, {
+		env: smtpEnv(started),
+		database: stubUserPrefDb("en"),
+		beforeSend: () => budget,
+		track: (promise) => {
+			settled = promise;
+		},
+	});
+	expect(settled).toBeDefined();
+	expect(started.messages).toHaveLength(0);
+	release(allowed);
+	await settled;
+	expect(started.messages).toHaveLength(allowed ? 1 : 0);
+});
+
 describe("auth mail", () => {
 	it("sends verification mail with the token link intact", async () => {
 		const started = await sink();

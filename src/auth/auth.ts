@@ -185,7 +185,10 @@ export const auth = betterAuth({
 		// the live session). password-reset.ts revokes the other credentials.
 		revokeSessionsOnPasswordReset: true,
 		sendResetPassword: async ({ user, url }) => {
-			sendAuthMail("reset", user, resetLinkWithWebCallback(url));
+			sendAuthMail("reset", user, resetLinkWithWebCallback(url), {
+				beforeSend: () =>
+					takeRateToken(db, passwordResetRateKey(user.email), 3, 1 / 100),
+			});
 		},
 	},
 	// requireEmailVerification stays off deliberately. It is the one setting
@@ -233,7 +236,9 @@ export const auth = betterAuth({
 				context.body &&
 				typeof context.body === "object"
 			)
-				context.body.revokeOtherSessions = true;
+				return {
+					context: { body: { ...context.body, revokeOtherSessions: true } },
+				};
 			if (context.path === "/sign-in/sso") return guardSsoStart(context);
 			if (context.path !== "/sign-up/email") return;
 			if (!context.body || typeof context.body !== "object") return;
@@ -321,11 +326,7 @@ export const auth = betterAuth({
 			id: "sign-in-identity-rate-limit",
 			async onRequest(request: Request) {
 				const path = new URL(request.url).pathname.replace(/\/+$/, "");
-				const resetting = path === "/api/auth/request-password-reset";
-				if (
-					request.method === "POST" &&
-					(path === "/api/auth/sign-in/email" || resetting)
-				) {
+				if (request.method === "POST" && path === "/api/auth/sign-in/email") {
 					const email = await readSignInEmail(request);
 					if (email === null)
 						return {
@@ -338,15 +339,12 @@ export const auth = betterAuth({
 					if (
 						!(await takeRateToken(
 							db,
-							resetting
-								? passwordResetRateKey(email)
-								: signInRateKey(
-										request.headers.get("x-ditero-client-ip") ??
-											UNKNOWN_CLIENT_IP,
-										email,
-									),
-							resetting ? 3 : SIGN_IN_RATE_CAPACITY,
-							resetting ? 1 / 100 : SIGN_IN_RATE_REFILL_PER_SEC,
+							signInRateKey(
+								request.headers.get("x-ditero-client-ip") ?? UNKNOWN_CLIENT_IP,
+								email,
+							),
+							SIGN_IN_RATE_CAPACITY,
+							SIGN_IN_RATE_REFILL_PER_SEC,
 						))
 					) {
 						return {
@@ -357,7 +355,7 @@ export const auth = betterAuth({
 								},
 								{
 									status: 429,
-									headers: { "retry-after": resetting ? "100" : "12" },
+									headers: { "retry-after": "12" },
 								},
 							),
 						};
@@ -485,7 +483,7 @@ async function dispatchAuth(request: Request): Promise<Response> {
 			: !saml.allowIdpInitiated)
 	)
 		return Response.redirect(
-			`${new URL(saml.acsURL).origin}/?error=sso_browser_mismatch`,
+			`${new URL(saml.acsURL).origin}/?error=${relayState ? "sso_browser_mismatch" : "sso_missing_relay_state"}`,
 			302,
 		);
 	const intent = relayState

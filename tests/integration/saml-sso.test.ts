@@ -466,7 +466,9 @@ describe("assertion verification", () => {
 			null,
 			withCookie ? cookie : undefined,
 		);
-		expect(refused.headers.get("location")).toContain("sso_browser_mismatch");
+		expect(refused.headers.get("location")).toContain(
+			"sso_missing_relay_state",
+		);
 		expect(hasSession(refused)).toBe(false);
 		expect(await userCount()).toBe(0);
 		const accepted = await postAcs(
