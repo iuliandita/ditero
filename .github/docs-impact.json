@@ -25,9 +25,9 @@
 			"note": "Native sync follows the bundled Zero 1.11.1 client: Android and desktop accept exactly /sync/v53/connect on the configured Zero origin (was v51, so beta.1 native apps never opened a sync socket) and relay inbound binary poke chunks up to 1 MiB to the page as base64, rebuilt as ArrayBuffers; malformed frames end the socket, an oversized frame gives the page one abnormal close before any later frame, and the page still sends text frames only. A pin test reads the installed Zero client and fails when either native path or inbound bound drifts. Grant, session, JWT splicing, refusal fences and canonical HTTPS checks are unchanged; no migration, storage or server change."
 		},
 		"authentication": {
-			"sourceDigest": "124ad5a60dc6a6d0a7acac135acd9727131a9af25d39acd6f2a864e6d297aac9",
+			"sourceDigest": "92d74c62e6f182efc981e76afc764ffce75aeb580ee699ab167d537dc5e396fc",
 			"docs": ["docs/runbooks/native-authentication.md"],
-			"note": "Preserve the Better Auth 1.7.12 upgrade, JWT/provider-account migrations, explicit provider linking, nonce validation, verified-email admission and scoped Apple origin checks. Reset atomically consumes its token, writes the password, verifies the mailbox and retires sessions, native authority, access tokens, feeds, passkeys, provider links and pending account proofs while retaining TOTP and backup codes. Enforce the enrolled local factor on every sign-in path, including social/OIDC/SAML callbacks, passkeys and native system-browser flows. Reuse the plugin challenge, provisional-session deletion and reset invalidation. Provider MFA and remembered-device cookies cannot substitute. Native grants retain their ID and stay unapproved until successful factor completion and explicit consent; no bridge permissions or credential formats change. Upgrade server/web together and reload sign-in pages; rollback loses this protection."
+			"note": "The password credential remains linked so password-protected account settings keep their password requirement. Other provider accounts can still be unlinked. No credential format or native handoff changes."
 		},
 		"compatibility": {
 			"sourceDigest": "9f3b42b57e1325f123ab9ee0955ad09c580db6e09d043e197f0deef49ba88b88",

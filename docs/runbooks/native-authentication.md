@@ -46,6 +46,8 @@ the neutral localized `PROVIDER_SIGN_IN_REFUSED` message and retains the grant I
 New provider accounts require a provider-verified email in every registration mode.
 A provider email is never linked to an existing account automatically; link providers from browser
 settings. See [sign-in providers](sign-in-providers.md).
+The password credential stays linked to the account. Other provider accounts can
+still be unlinked from browser settings.
 SAML single sign-on, when configured, appears on the same page and returns to it
 with the grant ID intact; it uses the browser flow described in
 [SAML single sign-on](sign-in-providers.md#saml-single-sign-on) and adds no native
