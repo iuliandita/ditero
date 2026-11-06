@@ -22,4 +22,8 @@ public class NativeActivityWiringTest {
     @Test public void notificationTapsAreConsumedOnlyFromAFreshLaunch() throws Exception {
         assertTrue(activity().contains("NativeIntentIngress.launchable(savedInstanceState != null, launch.getFlags())"));
     }
+    @Test public void localProxyResourcesAreRefusedBeforeFrameClassification() throws Exception {
+        String policy = new String(Files.readAllBytes(Paths.get("src/main/java/io/ditero/app/NativeShellPolicy.java")), StandardCharsets.UTF_8);
+        assertTrue(policy.contains("boolean deny = isLocalProxyPath(request.getUrl()) || (request.isForMainFrame()"));
+    }
 }

@@ -371,3 +371,18 @@ native support. Keep unsupported operations unavailable until their native
 transport and lifecycle behavior are implemented and tested.
 
 Quick add voice dictation is unavailable in the Android app: the shared interface detects the native bridge and shows an explanation instead of the control, and no native speech plugin exists. Use the browser; see the [voice capture guide](../../docs/runbooks/voice-capture.md).
+
+## Host request and transfer boundaries
+
+The WebView refuses Capacitor file, content and HTTP proxy paths for every
+request, including subresources. The exported Activity has no task affinity.
+[Android 12 and later backup rules](https://developer.android.com/identity/data/autobackup) explicitly exclude
+native session and push preferences in addition to disabling application backup.
+Debug-only user CA trust stays confined to the debug source set; the existing
+`verifyReleaseManifests` check rejects release network overrides and debuggability.
+
+The trusted server's HTTPS configuration selects the Zero origin, which can use
+a separate domain. Selecting a server therefore trusts its choice of sync host;
+the page cannot supply a replacement URL or obtain its JWT. No registrable-domain
+pin is imposed because self-hosted app and sync origins may differ.
+These source and build checks do not verify behavior on an Android device.
