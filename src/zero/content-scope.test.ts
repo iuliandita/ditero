@@ -14,6 +14,7 @@ function transaction(...reads: unknown[]) {
 		mutate: {
 			list: { insert, update },
 			task: { insert },
+			comment: { insert },
 			focusSession: { insert },
 		},
 	} as unknown as Transaction<Schema>;
@@ -126,10 +127,29 @@ test("optimistic task expansion verifies the retained root before inserting chil
 	expect(insert).toHaveBeenCalledOnce();
 });
 
-test("optimistic focus task references require workspace write access", async () => {
+test.each([
+	"member",
+	"viewer",
+])("optimistic focus logs accept a workspace %s", async (role) => {
 	const { tx, insert } = transaction({ list: { workspaceId: "other" } }, [
-		{ role: "viewer" },
+		{ role },
 	]);
+	await mutators.focus.logSession.fn({
+		tx,
+		ctx,
+		args: {
+			taskId: "task",
+			kind: "work",
+			startedAt: 0,
+			endedAt: 1000,
+			durationSec: 1,
+		},
+	});
+	expect(insert).toHaveBeenCalledOnce();
+});
+
+test("optimistic focus task references require workspace membership", async () => {
+	const { tx, insert } = transaction({ list: { workspaceId: "other" } }, []);
 	await expect(
 		mutators.focus.logSession.fn({
 			tx,
@@ -144,4 +164,60 @@ test("optimistic focus task references require workspace write access", async ()
 		}),
 	).rejects.toThrow(/access denied/);
 	expect(insert).not.toHaveBeenCalled();
+});
+
+const createListArgs = {
+	id: "new",
+	workspaceId: "own",
+	title: "List",
+	kind: "tasks" as const,
+	sortKey: "a0",
+};
+
+test.each([
+	"own",
+	"other",
+])("optimistic list creation refuses an existing id in %s", async (workspaceId) => {
+	const { tx, insert } = transaction(member, { id: "new", workspaceId });
+	await expect(
+		mutators.list.create.fn({ tx, ctx, args: createListArgs }),
+	).rejects.toThrow(/creation conflicts/);
+	expect(insert).not.toHaveBeenCalled();
+});
+
+test("list creation checks the row retained by its insert", async () => {
+	const { tx, insert } = transaction(member, undefined, {
+		id: "new",
+		workspaceId: "other",
+		ownerId: "bob",
+	});
+	await expect(
+		mutators.list.create.fn({ tx, ctx, args: createListArgs }),
+	).rejects.toThrow(/creation conflicts/);
+	expect(insert).toHaveBeenCalledOnce();
+});
+
+test.each([
+	"existing",
+	"retained",
+])("comment creation rejects a conflicting %s row before collecting mentions", async (kind) => {
+	const row = {
+		id: "comment",
+		taskId: "other-task",
+		authorId: "bob",
+		body: "Existing",
+	};
+	const { tx, insert } = transaction(
+		{ list: { workspaceId: "own" } },
+		member,
+		...(kind === "existing" ? [row] : [undefined, row]),
+	);
+	await expect(
+		mutators.comment.add.fn({
+			tx,
+			ctx,
+			args: { id: "comment", taskId: "task", body: "Comment" },
+		}),
+	).rejects.toThrow(/creation conflicts/);
+	expect(insert).toHaveBeenCalledTimes(kind === "existing" ? 0 : 1);
 });
