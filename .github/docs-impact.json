@@ -12,14 +12,12 @@
 			"note": "Prepare fourth beta 0.1.0-beta.4/Android code 16 after the v0.1.0-beta.3 tag failed the Debian image gate and never published (its run built code 15). Releases stay Alpine and Zero only (#1267); the changelog says why the -debian image is missing. Retain signing certificate, documentation epoch, remaining prerelease/native limits and prerelease publication wording; release steps are unchanged."
 		},
 		"configuration": {
-			"sourceDigest": "aff942ac8873c5ce6bd962be7363eb553beaae10a211e20c7219cd8a978b15da",
-			"docs": ["deploy/helm/ditero/README.md", "deploy/kustomize/README.md"],
-			"note": "Helm chart/appVersion, default app/Zero tags and Kustomize labels/images/overrides move to 0.1.0-beta.4 with no value or format changes; configuration is otherwise unchanged."
+			"sourceDigest": "c07dd8d5e60e0f2ded04fc9d1a10d951922626eea1e01d96593d16dea4df8043",
+			"noImpact": "The Alpine app, Zero, all-in-one and push-relay images upgrade zlib to 1.3.2-r1 alongside the existing targeted package upgrades; no settings, defaults or formats change."
 		},
 		"deployment": {
-			"sourceDigest": "78627dbb09129ed7e2f5f764dcb8d45db57bf26b4f6a68c85cdd828745e1d9c6",
-			"docs": ["deploy/helm/ditero/README.md", "deploy/kustomize/README.md"],
-			"note": "Published defaults move to 0.1.0-beta.4, which carries the unpublished beta.3 changes; upgrades from beta.2 need no cache rebuild and apply one additive database migration for the habit completer column. Deployment steps are otherwise unchanged."
+			"sourceDigest": "f91dc2c8e275896a448cf8cd7516a23d787b7ad7e06644d274819dc1e41eed27",
+			"noImpact": "Images now carry zlib 1.3.2-r1 (CVE-2026-85091); bases, tags, entrypoints and upgrade steps are unchanged, so deployments need no action beyond pulling new images."
 		},
 		"native": {
 			"sourceDigest": "b455ef5963764bd40788e6427fa951e73c1ae830399a24e62cc398f55970fa15",

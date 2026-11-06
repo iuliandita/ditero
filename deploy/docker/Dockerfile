@@ -69,9 +69,9 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 FROM alpine:3.24.2@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6 AS zero-runtime
 # Upgrade only the security-relevant packages; a full upgrade would move the
 # base off 3.24.2 and fail the all-in-one base assertion.
-RUN apk upgrade --no-cache curl brotli-libs libcrypto3 libssl3 \
+RUN apk upgrade --no-cache curl brotli-libs libcrypto3 libssl3 zlib \
 	&& apk add --no-cache ca-certificates 'curl>=8.23.0-r0' 'brotli-libs>=1.2.1-r0' \
-		'libcrypto3>=3.5.8-r0' 'libssl3>=3.5.8-r0' libstdc++ readline
+		'libcrypto3>=3.5.8-r0' 'libssl3>=3.5.8-r0' 'zlib>=1.3.2-r1' libstdc++ readline
 COPY --from=zero-node /usr/local/bin/node /usr/local/bin/node
 COPY --from=litestream-legacy /out/litestream /usr/local/bin/litestream
 COPY --from=litestream-v5 /out/litestream-v5 /usr/local/bin/litestream-v5
@@ -132,7 +132,7 @@ FROM runtime-${RUNTIME_VARIANT} AS runtime
 WORKDIR /app
 
 RUN if command -v apk >/dev/null 2>&1; then \
-		apk upgrade --no-cache libcrypto3 libssl3; \
+		apk upgrade --no-cache libcrypto3 libssl3 zlib; \
 	fi
 
 ENV NODE_ENV=production \
