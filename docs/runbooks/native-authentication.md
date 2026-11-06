@@ -190,6 +190,11 @@ credential storage; only the profile fields above may reach JavaScript.
 The development runtimes use these endpoints during verified sign-in and startup.
 Platform qualification and complete application delivery remain unfinished.
 
+Managed-account provisioning rechecks the guardian's live user, workspace and
+membership under ordered share locks before adding the managed marker and shared
+membership. A concurrent guardian departure either waits for provisioning and is
+refused, or finishes first and causes provisioning to reject shared admission.
+
 ## Native encryption operations
 
 `/api/native/e2e` exposes the existing identity, workspace-key provisioning,

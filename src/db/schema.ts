@@ -161,6 +161,28 @@ export const inboundWebhook = pgTable(
 			for: "select",
 			using: sql`${t.secretHash} = current_setting('ditero.webhook_hash', true)`,
 		}),
+		pgPolicy("inbound_webhook_membership_cleanup_read", {
+			for: "select",
+			using: sql`current_setting('ditero.activation_scope', true) = 'membership-remove'
+			and ${t.userId} = current_setting('ditero.removal_target', true)
+			and exists (select 1 from membership m join "user" u on u.id=m.user_id
+			where m.workspace_id=${t.workspaceId} and m.user_id=current_setting('ditero.user_id', true)
+			and m.role in ('owner','admin') and u.deleted_at is null)`,
+		}),
+		pgPolicy("inbound_webhook_membership_cleanup_revoke", {
+			for: "update",
+			using: sql`current_setting('ditero.activation_scope', true) = 'membership-remove'
+			and ${t.userId} = current_setting('ditero.removal_target', true)
+			and exists (select 1 from membership m join "user" u on u.id=m.user_id
+			where m.workspace_id=${t.workspaceId} and m.user_id=current_setting('ditero.user_id', true)
+			and m.role in ('owner','admin') and u.deleted_at is null)`,
+			withCheck: sql`${t.revokedAt} is not null
+			and current_setting('ditero.activation_scope', true) = 'membership-remove'
+			and ${t.userId} = current_setting('ditero.removal_target', true)
+			and exists (select 1 from membership m join "user" u on u.id=m.user_id
+			where m.workspace_id=${t.workspaceId} and m.user_id=current_setting('ditero.user_id', true)
+			and m.role in ('owner','admin') and u.deleted_at is null)`,
+		}),
 	],
 ).enableRLS();
 

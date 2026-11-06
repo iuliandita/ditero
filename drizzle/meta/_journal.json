@@ -666,6 +666,20 @@
       "when": 1794001005232,
       "tag": "0094_attachment_gc_retry",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1794006504208,
+      "tag": "0095_membership_cleanup_target",
+      "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "7",
+      "when": 1794006513490,
+      "tag": "0096_revoke_departed_webhooks",
+      "breakpoints": true
     }
   ]
 }

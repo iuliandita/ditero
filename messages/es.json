@@ -1,4 +1,5 @@
 {
+	"mutator_error_guardian_has_managed_members": "Primero elimina estas cuentas administradas de este espacio de trabajo: {names}. Después puedes eliminar a su tutor o salir.",
 	"startup_connection_retry": "Reintentar",
 	"startup_connection_heading": "Ditero necesita conexión para abrirse",
 	"startup_connection_body": "Volverá a intentarlo automáticamente cuando vuelva la conexión. También puedes intentarlo de nuevo ahora.",

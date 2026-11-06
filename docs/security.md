@@ -162,6 +162,16 @@ owner can remove legacy members, but cannot transfer its ownership or change mem
 Removing a member still requires key rotation before new encrypted uploads.
 Membership removal works with the documented runtime grants, without database TEMP
 privilege, and preserves assignment and notification cleanup in the same transaction.
+Removal and leave abandon queued or leased task and workspace notifications,
+expire pending, deferred and escalated reminders, and permanently revoke that member's inbound
+webhooks. Rejoining does not reactivate old webhook secrets. A delivery already
+handed to an external provider cannot be recalled. Remove a guardian's managed
+accounts from the workspace before removing the guardian or leaving; membership
+administration names those accounts and refuses the departure while their managed
+memberships remain. Workspace administrators sync the managed-account markers
+needed to apply the same refusal optimistically. Managed-account provisioning
+locks and rechecks the guardian before adding shared membership, so it serializes
+with guardian removal.
 
 New invitation links carry their bearer in `/accept#token=...`, keeping it out of
 HTTP request URLs and referrers. Preview uses `POST /api/invite/preview` with a JSON

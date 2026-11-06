@@ -268,7 +268,7 @@ removes the additional browser subject and avatar URL checks.
 
 Upgrade web and native server routes together after backing up the coordinated database, blobs
 and original key material. Apply `0094_attachment_gc_retry` after landed migrations 0092 and
-0093 before starting the app; it adds nullable `attachment.gc_retry_at` timestamps without
+0094 before starting the app; it adds nullable `attachment.gc_retry_at` timestamps without
 changing ciphertext or key formats. Keep the existing transfer token column and role guards.
 Retained soft-deleted files continue to consume workspace quota until GC removes them; migration
 reservations and replacements use the configured quota. Quota refusals identify retained bytes
@@ -282,3 +282,27 @@ GC column. Rolling back the server restores the preceding quota and deletion rul
 rejected grants blocking retries again.
 Rollback does not restore a discarded wrap; use a fresh key request or a coordinated
 database-plus-blob backup when restoring earlier state, accepting loss of later writes.
+
+## Membership cleanup policy upgrade
+
+After the landed 0092 role boundaries, 0093 upload tokens and 0094 GC retry column,
+migration 0095 adds read and revoke policies for workspace administrators during
+membership cleanup, bound to the transaction-local departing user. Migration 0096
+permanently revokes existing webhooks whose users
+have no membership in the hook workspace. Existing webhook bindings remain
+immutable; credential formats do not change.
+
+Upgrade: back up PostgreSQL, stop app and Zero writers, and apply migrations with
+the migration role before starting the updated server. Keep schema ownership and
+runtime grants as described in [database roles](database-roles.md).
+
+Backup: include webhook revocation times and notification state in the coordinated
+database backup. No additional secrets or export steps are needed.
+
+Rollback: retain the policies and backfilled revocations when running the preceding
+server. Previous server versions do not perform this membership cleanup. Restoring an earlier
+backup also restores its earlier notification and webhook state; review pending
+work and revoke departed members' webhooks before accepting traffic.
+
+Client versions: existing browser and native clients can use the updated server.
+Guardians must remove their managed accounts from a workspace before departing.

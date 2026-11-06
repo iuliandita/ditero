@@ -1,4 +1,5 @@
 {
+	"mutator_error_guardian_has_managed_members": "Entferne zuerst diese verwalteten Konten aus diesem Arbeitsbereich: {names}. Danach kannst du ihre Betreuungsperson entfernen oder den Arbeitsbereich verlassen.",
 	"startup_connection_retry": "Erneut versuchen",
 	"startup_connection_heading": "Ditero braucht zum Öffnen eine Verbindung",
 	"startup_connection_body": "Sobald deine Verbindung wieder da ist, versucht Ditero es automatisch erneut. Du kannst es auch jetzt noch einmal versuchen.",
