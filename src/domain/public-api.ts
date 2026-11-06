@@ -3,7 +3,13 @@ import { z } from "zod";
 export const PUBLIC_API_VERSION = 1;
 export const PUBLIC_API_PAGE_SIZE = 50;
 export const PUBLIC_API_MAX_PAGE_SIZE = 100;
-export const PUBLIC_API_ID = z.string().min(1).max(256);
+export const PUBLIC_API_ID = z
+	.string()
+	.min(1)
+	.max(256)
+	.refine(
+		(value) => !value.split("/").some((part) => part === "." || part === ".."),
+	);
 export const tokenCreateSchema = z
 	.object({
 		name: z

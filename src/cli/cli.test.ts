@@ -516,3 +516,52 @@ describe("profile setup notice", () => {
 		expect(stdout).toHaveBeenCalledTimes(1);
 	});
 });
+
+describe("client input and terminal boundaries", () => {
+	it.each([
+		".",
+		"..",
+		"a/../b",
+	])("refuses dot-segment IDs before any request: %s", async (id) => {
+		for (const [command, flag] of [
+			["observe-task", "--task"],
+			["observe-list", "--list"],
+			["observe-folder", "--folder"],
+			["observe-task-placement", "--task"],
+			["observe-task-relationships", "--task"],
+		]) {
+			const fetcher = vi.fn();
+			expect(
+				await runCli(
+					[command, flag, id],
+					env,
+					{ stdout: vi.fn(), stderr: vi.fn() },
+					fetcher,
+				),
+			).toBe(2);
+			expect(fetcher).not.toHaveBeenCalled();
+		}
+	});
+	it.each([
+		{ flags: [] },
+		{ flags: ["--json"] },
+	])("escapes terminal controls without changing decoded JSON: $flags", async ({
+		flags,
+	}) => {
+		const name = "Shared\u009b31m\u202econtent\u2069";
+		const stdout = vi.fn();
+		expect(
+			await runCli(
+				["workspaces", ...flags],
+				env,
+				{ stdout, stderr: vi.fn() },
+				async () => page([{ ...workspace, name }]),
+			),
+		).toBe(0);
+		const text = stdout.mock.calls[0][0];
+		expect(text).not.toMatch(
+			/[\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/,
+		);
+		expect(JSON.parse(text).data[0].name).toBe(name);
+	});
+});

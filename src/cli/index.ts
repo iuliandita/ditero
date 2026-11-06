@@ -72,10 +72,24 @@ Webhook commands take no request ID or paging, never retry, and send one request
 export async function runCli(
 	argv: string[],
 	env: Record<string, string | undefined>,
-	output: { stdout: (text: string) => void; stderr: (text: string) => void },
+	destination: {
+		stdout: (text: string) => void;
+		stderr: (text: string) => void;
+	},
 	fetcher?: Fetcher,
 	stdinReader?: StdinReader,
 ): Promise<number> {
+	const escapeControls = (text: string) =>
+		text.replace(
+			/[\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g,
+			(character) =>
+				`\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`,
+		);
+	const output = {
+		stdout: (text: string) => destination.stdout(escapeControls(text)),
+		stderr: (text: string) => destination.stderr(escapeControls(text)),
+	};
+
 	if (argv.length === 1 && argv[0] === "--version") {
 		output.stdout(clientVersion("ditero"));
 		return 0;

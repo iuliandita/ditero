@@ -6,7 +6,11 @@ import { createDiteroMcp, mcpConfiguration } from "./server.ts";
 
 const token = `ditero_pat_${"A".repeat(43)}`;
 const secret = `ditero_whk_${"B".repeat(43)}`;
-const env = { DITERO_URL: "https://todo.example.test", DITERO_TOKEN: token };
+const env = {
+	DITERO_URL: "https://todo.example.test",
+	DITERO_MCP_ALLOW_WRITES: "1",
+	DITERO_TOKEN: token,
+};
 const id = "11111111-1111-4111-8111-111111111111";
 const metadata = {
 	id,

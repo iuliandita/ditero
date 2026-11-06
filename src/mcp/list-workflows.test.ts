@@ -8,7 +8,11 @@ import type { Fetcher } from "../cli/client.ts";
 import { createDiteroMcp, mcpConfiguration } from "./server.ts";
 
 const token = `ditero_pat_${"A".repeat(43)}`;
-const env = { DITERO_URL: "https://todo.example.test", DITERO_TOKEN: token };
+const env = {
+	DITERO_URL: "https://todo.example.test",
+	DITERO_MCP_ALLOW_WRITES: "1",
+	DITERO_TOKEN: token,
+};
 const key = "00000000-0000-4000-8000-000000000001";
 const list = {
 	id: "list",
@@ -213,6 +217,7 @@ test("real Bun MCP stdio preserves exact manual retry after lost response and re
 		],
 		env: {
 			DITERO_URL: `http://127.0.0.1:${address.port}`,
+			DITERO_MCP_ALLOW_WRITES: "1",
 			DITERO_TOKEN: token,
 		},
 		stderr: "pipe",
@@ -281,9 +286,7 @@ test.each([
 		},
 	});
 	expect(result.isError).toBe(true);
-	expect(result.structuredContent).toMatchObject({
-		error: { code: "invalid_input" },
-	});
+	expect(JSON.stringify(result.content)).toContain("Input validation error");
 	expect(fetcher).not.toHaveBeenCalled();
 });
 

@@ -9,7 +9,11 @@ import type { Fetcher } from "../cli/client.ts";
 import { createDiteroMcp, mcpConfiguration } from "./server.ts";
 
 const token = `ditero_pat_${"A".repeat(43)}`;
-const env = { DITERO_URL: "https://todo.example.test", DITERO_TOKEN: token };
+const env = {
+	DITERO_URL: "https://todo.example.test",
+	DITERO_MCP_ALLOW_WRITES: "1",
+	DITERO_TOKEN: token,
+};
 const profile = {
 	id: "user",
 	name: "Alex",
@@ -27,6 +31,7 @@ afterEach(async () => {
 async function protocol(
 	fetcher: Fetcher = async () =>
 		Response.json({ version: 1, data: [], nextCursor: null }),
+	allowWrites = true,
 ) {
 	const client = new Client(
 		{ name: "ditero-test", version: "1" },
@@ -35,7 +40,14 @@ async function protocol(
 	const [clientTransport, serverTransport] =
 		InMemoryTransport.createLinkedPair();
 	const handle = serveStdio(
-		() => createDiteroMcp(mcpConfiguration(env), fetcher),
+		() =>
+			createDiteroMcp(
+				mcpConfiguration({
+					...env,
+					DITERO_MCP_ALLOW_WRITES: allowWrites ? "1" : undefined,
+				}),
+				fetcher,
+			),
 		{ transport: serverTransport },
 	);
 	cleanup.push(async () => {
@@ -165,7 +177,7 @@ test("returns matching JSON text and structured API envelopes for all read tools
 test("passes task filters and opaque cursors without permitting authority changes", async () => {
 	const fetcher = vi.fn(async (url: URL) => {
 		expect(url.pathname).toBe("/api/v1/tasks");
-		expect(url.searchParams.get("workspaceId")).toBe("../../;echo private");
+		expect(url.searchParams.get("workspaceId")).toBe("segment/;echo private");
 		expect(url.searchParams.get("listId")).toBe(
 			"https://other.example.test/path",
 		);
@@ -181,7 +193,7 @@ test("passes task filters and opaque cursors without permitting authority change
 			await client.callTool({
 				name: "list_tasks",
 				arguments: {
-					workspaceId: "../../;echo private",
+					workspaceId: "segment/;echo private",
 					listId: "https://other.example.test/path",
 					done: false,
 					limit: 2,
@@ -271,6 +283,8 @@ test("configuration is fixed at startup and rejects private or URL arguments saf
 	const configuration = mcpConfiguration(mutable);
 	mutable.DITERO_URL = "https://other.example.test";
 	mutable.DITERO_TOKEN = "changed";
+	mutable.DITERO_MCP_ALLOW_WRITES = "0";
+	expect(configuration.allowWrites).toBe(true);
 	expect(configuration.server).toBe(env.DITERO_URL);
 	expect(configuration.token).toBe(token);
 	expect(Object.isFrozen(configuration)).toBe(true);
@@ -331,6 +345,7 @@ test("real Bun stdio speaks SDK protocol, rejects API redirects, and prints no p
 		],
 		env: {
 			DITERO_URL: `http://127.0.0.1:${address.port}`,
+			DITERO_MCP_ALLOW_WRITES: "1",
 			DITERO_TOKEN: token,
 		},
 		stderr: "pipe",
@@ -375,4 +390,34 @@ test("advertises the application release version in the real SDK handshake", asy
 		name: "ditero",
 		version: release.version,
 	});
+});
+
+test("MCP disables every write tool until startup opt-in", async () => {
+	const fetcher = vi.fn(async () =>
+		Response.json({ version: 1, data: [], nextCursor: null }),
+	);
+	const enabled = await protocol(fetcher);
+	const writes = (await enabled.listTools()).tools
+		.filter((tool) => tool.annotations?.readOnlyHint === false)
+		.map((tool) => tool.name);
+	expect(writes.length).toBeGreaterThan(0);
+	const readonly = await protocol(fetcher, false);
+	const tools = (await readonly.listTools()).tools;
+	expect(tools.every((tool) => tool.annotations?.readOnlyHint === true)).toBe(
+		true,
+	);
+	for (const name of writes) {
+		await expect(readonly.callTool({ name, arguments: {} })).rejects.toThrow(
+			`Tool ${name} disabled`,
+		);
+	}
+	expect(fetcher).not.toHaveBeenCalled();
+	expect(
+		mcpConfiguration({ ...env, DITERO_MCP_ALLOW_WRITES: undefined })
+			.allowWrites,
+	).toBe(false);
+	expect(
+		mcpConfiguration({ ...env, DITERO_MCP_ALLOW_WRITES: "true" }).allowWrites,
+	).toBe(false);
+	expect(mcpConfiguration(env).allowWrites).toBe(true);
 });

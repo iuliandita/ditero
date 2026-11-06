@@ -157,7 +157,7 @@ test.each([".", ".."])("dot segment %s refuses before HTTP", async (id) => {
 	const fetcher = vi.fn();
 	await expect(
 		taskRelationshipsWorkflow(
-			options("update-task-relationships", id),
+			{ ...options("update-task-relationships"), taskId: id },
 			fetcher,
 			async () => encodeTaskRelationshipsInput(relationships),
 		),
