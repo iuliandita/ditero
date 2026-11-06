@@ -254,9 +254,99 @@ async function plannedAssignments(job: ImportPlanStatus) {
 	).rows;
 }
 
-test("self, viewer, and child assignments use canonical IDs and survive concurrent retries", async () => {
+async function concurrentApply(job: ImportPlanStatus, domain: string) {
+	const atRead = Promise.withResolvers<void>();
+	const release = Promise.withResolvers<void>();
+	let firstPid = 0;
+	const observed = new Proxy(runtime, {
+		get(target, key) {
+			if (key !== "connect") return Reflect.get(target, key);
+			return async () => {
+				const client = await target.connect();
+				firstPid = (await client.query("select pg_backend_pid() pid")).rows[0]
+					.pid as number;
+				return new Proxy(client, {
+					get(raw, field) {
+						if (field !== "query") return Reflect.get(raw, field);
+						return async (sql: string, args?: unknown[]) => {
+							const result = await raw.query(sql, args);
+							if (sql.includes(" from import_run where job_id =")) {
+								atRead.resolve();
+								await release.promise;
+							}
+							return result;
+						};
+					},
+				});
+			};
+		},
+	}) as Pool;
+	// Each replica has its own admission map, but both transactions use the same DB.
+	const application = `assignment-replica-${randomUUID()}`;
+	const replica =
+		domain === "cross-replica"
+			? new Pool({
+					connectionString: databaseURL,
+					application_name: application,
+					max: 1,
+				})
+			: undefined;
+	replica?.on("connect", (client) => {
+		void client.query("set role ditero_import_assignments_test");
+	});
+	const first = applyImportBatch(observed, "alice", job.id, confirmation(job));
+	let second: ReturnType<typeof applyImportBatch> | undefined;
+	try {
+		await Promise.race([
+			atRead.promise,
+			first.then(() => {
+				throw new Error("First apply completed before the run-read barrier");
+			}),
+		]);
+		if (replica) {
+			expect(
+				(
+					await replica.query(
+						"select current_user, r.rolsuper, r.rolbypassrls from pg_roles r where rolname=current_user",
+					)
+				).rows[0],
+			).toEqual({
+				current_user: "ditero_import_assignments_test",
+				rolsuper: false,
+				rolbypassrls: false,
+			});
+			second = applyImportBatch(replica, "alice", job.id, confirmation(job));
+			await Promise.race([
+				waitsFor(firstPid, application),
+				second.then(() => {
+					throw new Error(
+						"Second replica completed without waiting on the first transaction",
+					);
+				}),
+			]);
+		} else {
+			await expect(
+				applyImportBatch(observed, "alice", job.id, confirmation(job)),
+			).rejects.toMatchObject({ code: "import-busy", status: 429 });
+			release.resolve();
+			await first;
+			second = applyImportBatch(observed, "alice", job.id, confirmation(job));
+		}
+		release.resolve();
+		return await Promise.all([first, second]);
+	} finally {
+		release.resolve();
+		await Promise.allSettled([first, ...(second ? [second] : [])]);
+		await replica?.end();
+	}
+}
+
+test.each([
+	"same-process",
+	"cross-replica",
+])("self, viewer, and child assignments use canonical IDs across %s concurrency and retries", async (domain) => {
 	const job = await save();
-	const results = await Promise.all([apply(job), apply(job)]);
+	const results = await concurrentApply(job, domain);
 	expect(results.map((r) => r.state)).toEqual(["completed", "completed"]);
 	expect(results[0].appliedCount).toBe(9);
 	const frozen = await plannedAssignments(job);

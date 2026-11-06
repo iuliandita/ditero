@@ -432,6 +432,13 @@ per app process, shared by imports and exports, with one operation per user. Ext
 requests receive HTTP 429 and a retry delay. Interrupted or failed requests do not
 alter your content.
 
+Admission is local to each app process and its shared database pool. Separate
+replicas can accept work for the same account concurrently; database row locks
+serialize those transactions and idempotent retries return the stored result.
+A busy refusal preserves the saved plan or prepared attachment reservation for
+an explicit retry after the active operation finishes. Clients do not automatically
+replay refused mutations.
+
 Browser and native requests share these slots. Database-holding import and export
 work also shares a three-connection budget, leaving seven connections in the default
 10-connection pool for other requests. Abandoned pool waiters retain their slot until

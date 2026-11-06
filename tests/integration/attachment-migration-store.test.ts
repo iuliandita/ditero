@@ -139,9 +139,9 @@ function restricted() {
 	return runtime;
 }
 
-async function roleProof() {
+async function roleProof(pool = restricted()) {
 	const row = (
-		await restricted().query(`select session_user,current_user,r.rolsuper,r.rolbypassrls,r.rolinherit,r.rolcanlogin,
+		await pool.query(`select session_user,current_user,r.rolsuper,r.rolbypassrls,r.rolinherit,r.rolcanlogin,
  (select count(*)::int from pg_auth_members where member=r.oid or roleid=r.oid) memberships,
  (select count(*)::int from pg_class where relowner=r.oid) owned from pg_roles r where r.rolname=current_user`)
 	).rows[0];
@@ -1059,41 +1059,52 @@ async function waitBlocked(pid: number, blocker: number) {
 	}
 	throw new Error("Expected live lock wait not observed");
 }
-test("two connections same-owner absent reserve serialize to one exact attempt", async () => {
+test.each([
+	"same-process",
+	"cross-replica",
+])("same-owner absent reservations preserve one exact attempt across %s concurrency", async (domain) => {
 	const f = await ready(),
 		atInsert = Promise.withResolvers<void>(),
 		release = Promise.withResolvers<void>(),
 		secondConnected = Promise.withResolvers<number>();
 	let firstPid = 0,
 		connections = 0;
-	const racePool = new Proxy(restricted(), {
-		get(target, key) {
-			if (key !== "connect") return Reflect.get(target, key);
-			return async () => {
-				const client = await target.connect();
-				const number = ++connections;
-				const pid = (await client.query("select pg_backend_pid() pid")).rows[0]
-					.pid as number;
-				if (number === 1) firstPid = pid;
-				else secondConnected.resolve(pid);
-				return new Proxy(client, {
-					get(raw, field) {
-						if (field !== "query") return Reflect.get(raw, field);
-						return async (sql: string, args?: unknown[]) => {
-							if (
-								number === 1 &&
-								sql.startsWith("insert into attachment_migration(")
-							) {
-								atInsert.resolve();
-								await release.promise;
-							}
-							return raw.query(sql, args);
-						};
-					},
-				});
-			};
-		},
-	}) as Pool;
+	const observe = (pool: Pool) =>
+		new Proxy(pool, {
+			get(target, key) {
+				if (key !== "connect") return Reflect.get(target, key);
+				return async () => {
+					const client = await target.connect();
+					const number = ++connections;
+					const pid = (await client.query("select pg_backend_pid() pid"))
+						.rows[0].pid as number;
+					if (number === 1) firstPid = pid;
+					else secondConnected.resolve(pid);
+					return new Proxy(client, {
+						get(raw, field) {
+							if (field !== "query") return Reflect.get(raw, field);
+							return async (sql: string, args?: unknown[]) => {
+								if (
+									number === 1 &&
+									sql.startsWith("insert into attachment_migration(")
+								) {
+									atInsert.resolve();
+									await release.promise;
+								}
+								return raw.query(sql, args);
+							};
+						},
+					});
+				};
+			},
+		}) as Pool;
+	// Separate pools model replicas with independent process admission, sharing SQL locks.
+	const replica =
+		domain === "cross-replica"
+			? new Pool({ ...restricted().options, max: 1 })
+			: undefined;
+	if (replica) await roleProof(replica);
+	const racePool = observe(restricted());
 	const first = reserveAttachmentMigration(racePool, f.request);
 	let second: ReturnType<typeof reserveAttachmentMigration> | undefined;
 	try {
@@ -1103,18 +1114,35 @@ test("two connections same-owner absent reserve serialize to one exact attempt",
 				throw new Error("First reservation completed before insertion barrier");
 			}),
 		]);
-		second = reserveAttachmentMigration(racePool, f.request);
-		await waitBlocked(
+		if (!replica) {
+			await expect(
+				reserveAttachmentMigration(racePool, f.request),
+			).rejects.toMatchObject({ code: "import-busy", status: 429 });
+			expect(connections).toBe(1);
+			release.resolve();
+			await first;
+			second = reserveAttachmentMigration(racePool, f.request);
+		} else {
+			second = reserveAttachmentMigration(observe(replica), f.request);
 			await Promise.race([
-				secondConnected.promise,
+				waitBlocked(
+					await Promise.race([
+						secondConnected.promise,
+						second.then(() => {
+							throw new Error(
+								"Second reservation completed before connection barrier",
+							);
+						}),
+					]),
+					firstPid,
+				),
 				second.then(() => {
 					throw new Error(
-						"Second reservation completed before connection barrier",
+						"Second replica completed without waiting on the first transaction",
 					);
 				}),
-			]),
-			firstPid,
-		);
+			]);
+		}
 		release.resolve();
 		const [a, b] = await Promise.all([first, second]);
 		expect(a).toEqual(b);
@@ -1126,6 +1154,7 @@ test("two connections same-owner absent reserve serialize to one exact attempt",
 	} finally {
 		release.resolve();
 		await Promise.allSettled([first, ...(second ? [second] : [])]);
+		await replica?.end();
 	}
 }, 20000);
 
