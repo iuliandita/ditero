@@ -1337,6 +1337,9 @@ impl Actor {
         self.emit(reply);
     }
     fn file_post(&mut self, v: &Value, size: usize, rid: u64) -> Result<()> {
+        if !self.verified {
+            return Err("unverified-session");
+        }
         let op = protocol::string(v, "op")?;
         if size
             > if protocol::file_chunk(op) {
@@ -1619,6 +1622,9 @@ impl Actor {
                 Ok(json!({"ok":true}))
             }
             op if op.starts_with("e2e.") => {
+                if !self.verified {
+                    return Err("unverified-session");
+                }
                 let (post, path, body) = protocol::e2e(v)?;
                 let (status, raw) = self.authed(&path, post, body.as_deref(), false).await?;
                 let parsed = protocol::parse(&raw).is_ok();
@@ -2391,6 +2397,41 @@ mod tests {
         host.post(&json!({"op":op,"rid":1,"gen":host.gen}), 100)
             .await
     }
+    #[tokio::test]
+    async fn cold_restore_refuses_files_and_e2e_until_session_verification() {
+        let mut host = cached_host();
+        for op in [
+            "attachment.reserve",
+            "download.begin",
+            "archive.export.begin",
+            "archive.migration.reserve",
+        ] {
+            let message = json!({"op": op, "rid": 1, "gen": host.gen, "body": {}});
+            assert_eq!(
+                host.file_post(&message, 100, 1),
+                Err("unverified-session"),
+                "{op}"
+            );
+        }
+        for op in ["e2e.identity", "e2e.keysMine", "e2e.enroll"] {
+            host.responses.push_back((200, "{}".into(), false));
+            assert_eq!(
+                native_op(&mut host, op).await,
+                Err("unverified-session"),
+                "{op}"
+            );
+        }
+        assert!(host.requests.lock().unwrap().is_empty());
+        host.verified = true;
+        host.responses.clear();
+        host.responses.push_back((200, "{}".into(), false));
+        assert_eq!(
+            native_op(&mut host, "e2e.identity").await.unwrap()["ok"],
+            true
+        );
+        assert_eq!(host.requests.lock().unwrap().len(), 1);
+    }
+
     #[tokio::test]
     async fn cold_offline_start_restores_only_complete_protected_evidence_and_no_jwt() {
         let mut host = cached_host();

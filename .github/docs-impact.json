@@ -22,9 +22,9 @@
 			"note": "Record the deployed Compose image tag for recovery; the default now follows the released version and image packages, including musl, are pinned."
 		},
 		"native": {
-			"sourceDigest": "1b8b2aaf21a0c4e67b850dde378d9948f5859014f90adf27fe11076f27d3a2aa",
-			"docs": ["apps/android/README.md"],
-			"note": "Refuse Capacitor file, content and HTTP proxy resources for every WebView request, clear exported Activity task affinity and explicitly exclude native session and push preferences from Android cloud backup and device transfer. Preserve the release-only manifest guard and trusted-server choice of HTTPS sync origin. Source/build checks do not qualify Android runtime behavior."
+			"sourceDigest": "4a2ea01f62d7dc760f626627657e949f114b9660ded02fe193187108325e2099",
+			"docs": ["apps/desktop/README.md"],
+			"note": "Refuse Capacitor file, content and HTTP proxy resources for every WebView request, clear exported Activity task affinity and explicitly exclude native session and push preferences from Android cloud backup and device transfer. Preserve the release-only manifest guard and trusted-server choice of HTTPS sync origin. Source/build checks do not qualify Android runtime behavior. Require a verified current native session before dispatching file, archive export or E2E bridge operations. Restored vault credentials alone cannot authorize them before session.read. Existing offline proof, request-fence recovery, captured ownership and private saved-file permissions remain unchanged. Unit and web checks do not qualify installed native runtime behavior."
 		},
 		"authentication": {
 			"sourceDigest": "92d74c62e6f182efc981e76afc764ffce75aeb580ee699ab167d537dc5e396fc",
