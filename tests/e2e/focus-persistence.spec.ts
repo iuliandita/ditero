@@ -348,16 +348,20 @@ for (const deferredDisk of [true, false]) {
 		const intervalId = (await focusState(page, userId)).session?.intervalId;
 		expect(intervalId).toBeTruthy();
 		await page.evaluate(
-			({ marker, deferredDisk }) => {
-				// Count only Zero disk transactions, never the independent focus intent.
+			({ marker, userId, deferredDisk }) => {
+				// The earlier interval start is not completion persistence.
+				const completionRow = `"id":${JSON.stringify(`${userId}:${marker}`)}`;
+				const watchedTransactions = new WeakSet<IDBTransaction>();
 				const put = IDBObjectStore.prototype.put;
 				(window as unknown as { focusQueueWrites: number }).focusQueueWrites =
 					0;
 				IDBObjectStore.prototype.put = function (value, key) {
 					if (
 						this.transaction.db.name !== "ditero-focus" &&
-						JSON.stringify(value).includes(marker)
+						JSON.stringify(value).includes(completionRow) &&
+						!watchedTransactions.has(this.transaction)
 					) {
+						watchedTransactions.add(this.transaction);
 						this.transaction.addEventListener(
 							"complete",
 							() => {
@@ -377,7 +381,7 @@ for (const deferredDisk of [true, false]) {
 					window.__zeroCloseControls.idleRequests = 0;
 				}
 			},
-			{ marker: intervalId ?? "", deferredDisk },
+			{ marker: intervalId ?? "", userId, deferredDisk },
 		);
 		refuseConnection = true;
 		await context.setOffline(true);
