@@ -103,8 +103,8 @@ final class NativeShellPolicy {
     }
 
     /**
-     * Capacitor serves local files, content URIs and an HTTP proxy under the app origin. As a
-     * main-frame document any of them would run foreign bytes as the app, so they never navigate.
+     * Capacitor serves local files, content URIs and an HTTP proxy under the app origin. They are
+     * unavailable to every page request, including subresources.
      */
     private static boolean isLocalProxyPath(Uri url) {
         String path = url.getPath();
@@ -174,17 +174,17 @@ final class NativeShellPolicy {
         }
 
         /**
-         * Runs on a WebView IO thread for every request, redirects included. Main-frame
-         * requests off the bundled origin never reach the network. Requests that look like
+         * Runs on a WebView IO thread for every request, redirects included. Local proxy
+         * resources and main-frame requests off the bundled origin are refused. Requests that look like
          * subframe navigations are refused as defense in depth; the CSP and
          * shouldOverrideUrlLoading are the primary subframe barriers. Everything else is
          * Capacitor's local server, unchanged.
          */
         @Override
         public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-            boolean deny = request.isForMainFrame()
+            boolean deny = isLocalProxyPath(request.getUrl()) || (request.isForMainFrame()
                     ? !isBundledDocument(request.getUrl())
-                    : looksLikeDocumentNavigation(request);
+                    : looksLikeDocumentNavigation(request));
             return deny ? blocked() : super.shouldInterceptRequest(view, request);
         }
 
