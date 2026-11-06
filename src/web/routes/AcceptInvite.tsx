@@ -29,6 +29,7 @@ import {
 	runAfterZeroRetirement,
 	ZeroRetirementError,
 } from "../lib/zero-lifecycle.ts";
+import { Login } from "./Login.tsx";
 
 // Client accept page for `/accept#token=` (legacy `?token=` also works).
 // An invitee landing here previews the
@@ -131,6 +132,8 @@ export async function consumeInviteMailboxProof(): Promise<boolean> {
 		body: JSON.stringify({ proof }),
 	});
 	params.delete("proof");
+	params.delete("token");
+	params.set("confirm", "email");
 	history.replaceState(
 		history.state,
 		"",
@@ -155,6 +158,17 @@ function acceptMessage(status: number, reason: string): string {
 
 export function AcceptInvite() {
 	const { data: session, isPending } = authClient.useSession();
+	const [confirmation] = useState(() => {
+		const params = new URLSearchParams(window.location.hash.slice(1));
+		return params.has("proof") || params.get("confirm") === "email";
+	});
+	if (confirmation)
+		return (
+			<InviteMailboxConfirmation
+				userId={session?.user.id ?? null}
+				isPending={isPending}
+			/>
+		);
 	if (session) {
 		return (
 			<KeyringProvider userId={session.user.id} autoLockMinutes={null}>
@@ -167,6 +181,64 @@ export function AcceptInvite() {
 	}
 	return (
 		<AcceptInvitePage userId={null} isPending={isPending} keyring={null} />
+	);
+}
+
+function InviteMailboxConfirmation({
+	userId,
+	isPending,
+}: {
+	userId: string | null;
+	isPending: boolean;
+}) {
+	const [confirmed, setConfirmed] = useState(false);
+	const [busy, setBusy] = useState(false);
+	const [failed, setFailed] = useState(false);
+	const hasProof = new URLSearchParams(window.location.hash.slice(1)).has(
+		"proof",
+	);
+	return (
+		<div
+			data-testid="invite-mailbox-confirmation"
+			className="mx-auto flex max-w-sm flex-col gap-4 p-6"
+		>
+			<h1 className="text-lg font-semibold">{m.auth_mail_verify_subject()}</h1>
+			<p role="status">
+				{confirmed ? m.accept_verify_confirmed() : m.accept_verify_return()}
+			</p>
+			{isPending ? (
+				<p>{m.accept_loading()}</p>
+			) : !userId && hasProof ? (
+				<Login
+					callbackURL={`${window.location.pathname}${window.location.search}${window.location.hash}`}
+				/>
+			) : hasProof ? (
+				<Button
+					type="button"
+					data-testid="accept-confirm-email"
+					disabled={busy}
+					onClick={() => {
+						if (busy) return;
+						setBusy(true);
+						setFailed(false);
+						void consumeInviteMailboxProof()
+							.then((ok) => {
+								setConfirmed(ok);
+								setFailed(!ok);
+							})
+							.catch(() => setFailed(true))
+							.finally(() => setBusy(false));
+					}}
+				>
+					{m.auth_mail_verify_subject()}
+				</Button>
+			) : null}
+			{failed && (
+				<p role="alert" className="text-sm text-destructive">
+					{m.accept_verify_failed()}
+				</p>
+			)}
+		</div>
 	);
 }
 

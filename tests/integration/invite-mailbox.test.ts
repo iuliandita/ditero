@@ -84,7 +84,9 @@ async function proofFromMail() {
 	const link = body.match(/http:\/\/localhost:3000\/accept#[^\s]+/)?.[0];
 	if (!link) throw new Error("proof link missing");
 	const params = new URLSearchParams(new URL(link).hash.slice(1));
-	expect(params.get("token")).toBe("mailbox-token");
+	expect(params.has("token")).toBe(false);
+	expect(params.get("confirm")).toBe("email");
+	expect(params.has("e2e")).toBe(false);
 	expect(
 		sink.commands.some((c) => c === "RCPT TO:<invited@example.test>"),
 	).toBe(true);
@@ -291,6 +293,13 @@ test("HTTP confirmation preserves session guards and identical resend acknowledg
 	const proof = await proofFromMail();
 	expect((await call("verify-email", { proof })).status).toBe(200);
 	expect((await call("verify-email", { proof })).status).toBe(400);
+	expect(
+		(await pool.query("select user_id from membership where workspace_id='ws'"))
+			.rows,
+	).toEqual([{ user_id: "owner" }]);
+	expect(
+		(await pool.query("select status,uses,claimed_by from invite")).rows,
+	).toEqual([{ status: "pending", uses: 0, claimed_by: null }]);
 	expect((await call("accept", { token: "mailbox-token" })).status).toBe(200);
 	expect(
 		(

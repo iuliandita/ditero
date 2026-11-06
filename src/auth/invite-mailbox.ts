@@ -108,7 +108,7 @@ export async function sendInviteMailboxProof(
 		});
 	});
 	const link = new URL("/accept", base);
-	link.hash = new URLSearchParams({ token, proof }).toString();
+	link.hash = new URLSearchParams({ confirm: "email", proof }).toString();
 	sendAuthMail("verify", { id: userId, email, name: row.name }, link.href, {
 		database,
 	});

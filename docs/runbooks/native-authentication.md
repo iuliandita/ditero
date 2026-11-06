@@ -307,8 +307,12 @@ The HTTPS accept page shows a masked address; enter the full invited address.
 Email/password registration on closed or bootstrapped instances requires the link's
 token. When SMTP is configured, email-bound invitations grant membership only to
 verified accounts. The page can send a single-use confirmation link valid for 15
-minutes; open it and sign in to the same account before joining. Resends are limited
-to one per minute per invitation/address and keep existing valid links usable.
+minutes. Keep the original invitation tab open. The email only confirms your
+address: sign in to the same account there, confirm, then return to the original
+invitation tab and choose Join. Reopen the original invitation link if you closed
+its tab. The email contains neither the invitation token nor the encrypted key
+fragment; confirmation creates no membership and leaves the invitation redeemable.
+Resends are limited to one per minute per invitation/address and keep existing valid links usable.
 Mail remains detached, and delivery failures are logged.
 
 Without SMTP, the token and matching account address still grant the invited role.

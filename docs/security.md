@@ -399,13 +399,19 @@ address, so enter the full invited address yourself.
 
 When `DITERO_SMTP_HOST` is configured, an email-bound invitation grants membership
 only after the account's email is verified. The accept page can send a single-use
-confirmation link valid for 15 minutes. Sign in to the same account and join from
-that link, or return to the original invitation after confirming. Sends are
-limited to one per minute per invitation/address; resending keeps earlier valid
+confirmation link valid for 15 minutes. Keep the original invitation tab open.
+The emailed link only verifies your address: sign in to the same account, confirm,
+then return to the original invitation tab and choose Join. If you closed that
+tab, reopen the original invitation link. The email carries no invitation token
+or encrypted key fragment, and confirmation never creates membership or consumes
+the invitation. The original tab retains the fragment for the encrypted grant.
+Sends are limited to one per minute per invitation/address; resending keeps earlier valid
 links usable. Accounts already verified skip this step. Mail delivery is detached
 and failures are logged. A broken configured SMTP service must be repaired before
 unverified invitees can join; account sign-in and global email verification policy
 remain unchanged. Provider sign-ups still require a provider-verified address.
+Invite mailbox proof verifies the account address; notification destinations
+still require their own channel confirmation.
 
 Without SMTP, membership still requires the invitation token and an account with
 the matching address. The server cannot prove mailbox control in this mode, so a

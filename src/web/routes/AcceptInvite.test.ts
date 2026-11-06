@@ -102,7 +102,7 @@ test.each([
 		headers: { "content-type": "application/json" },
 		body: JSON.stringify({ proof: "mailbox-proof" }),
 	});
-	expect(browser.location.hash).toBe("#token=bearer");
+	expect(browser.location.hash).toBe("#confirm=email");
 	expect(browser.location.search).toBe("?e2e=sealed");
 	expect(await consumeInviteMailboxProof()).toBe(true);
 	expect(fetcher).toHaveBeenCalledTimes(1);
