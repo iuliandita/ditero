@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
 	fetchZeroToken,
+	SessionChangedError,
 	SessionExpiredError,
 	watchZeroAuth,
 } from "./zero-auth.ts";
@@ -41,7 +42,7 @@ function harness(getToken = vi.fn(async () => "fresh-token")) {
 	let signal = () => {};
 	const stopSignals = vi.fn();
 	const stop = watchZeroAuth(
-		{ connection: { state, connect } },
+		{ userID: "user", connection: { state, connect } },
 		getToken,
 		errors,
 		{
@@ -279,5 +280,40 @@ test.each([
 		"fetch",
 		vi.fn(async () => new Response(null, { status })),
 	);
-	await expect(fetchZeroToken()).rejects.toBeInstanceOf(SessionExpiredError);
+	await expect(fetchZeroToken("user")).rejects.toBeInstanceOf(
+		SessionExpiredError,
+	);
+});
+
+test.each([
+	"user",
+	"other",
+	undefined,
+])("token refresh binds the subject to the captured account: %s", async (sub) => {
+	const token = `e30.${Buffer.from(JSON.stringify({ sub })).toString("base64url")}.signature`;
+	vi.stubGlobal(
+		"fetch",
+		vi.fn(async () => Response.json({ token })),
+	);
+	if (sub === "user") await expect(fetchZeroToken("user")).resolves.toBe(token);
+	else
+		await expect(fetchZeroToken("user")).rejects.toBeInstanceOf(
+			SessionChangedError,
+		);
+});
+
+test("an account switch refuses reconnection and enters the reauthentication state", async () => {
+	const token = `e30.${Buffer.from(JSON.stringify({ sub: "other" })).toString("base64url")}.signature`;
+	vi.stubGlobal(
+		"fetch",
+		vi.fn(async () => Response.json({ token })),
+	);
+	const h = harness(vi.fn(() => fetchZeroToken("user")));
+	h.state.emit({ name: "needs-auth" });
+	await flush();
+	expect(h.connect).not.toHaveBeenCalled();
+	expect(h.expired).toHaveBeenLastCalledWith(true);
+	expect(h.errors).toHaveBeenCalledWith(expect.any(SessionChangedError));
+	await vi.advanceTimersByTimeAsync(60000);
+	expect(h.getToken).toHaveBeenCalledTimes(1);
 });

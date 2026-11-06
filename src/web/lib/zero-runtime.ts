@@ -6,11 +6,11 @@ import { fetchZeroToken } from "./zero-auth.ts";
 type ZeroRuntimeOperations = {
 	bootstrap(): Promise<void>;
 	fetchConfig(): Promise<PublicConfig>;
-	getAuth(): Promise<string>;
 };
 
 export type BrowserZeroRuntime = ZeroRuntimeOperations & {
 	kind: "browser";
+	getAuth(userID: string): Promise<string>;
 	storageScope?: undefined;
 };
 
@@ -18,6 +18,7 @@ export type BrowserZeroRuntime = ZeroRuntimeOperations & {
 // a verified native instance/account adapter and never from caller input.
 export type NativeZeroRuntime = ZeroRuntimeOperations & {
 	kind: "native";
+	getAuth(userID?: string): Promise<string>;
 	storageScope: string;
 };
 

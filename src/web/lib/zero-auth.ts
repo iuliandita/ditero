@@ -1,3 +1,4 @@
+import { decodeJwt } from "jose";
 import { fetchWithConnectionCheck } from "./connection-required.ts";
 
 type ConnectionState = { name: string };
@@ -15,15 +16,26 @@ type ZeroConnection = {
 // in again.
 export class SessionExpiredError extends Error {}
 
-export async function fetchZeroToken(): Promise<string> {
+export class SessionChangedError extends SessionExpiredError {}
+
+export async function fetchZeroToken(userID: string): Promise<string> {
 	const response = await fetchWithConnectionCheck("/api/auth/token", {
 		credentials: "include",
 	});
 	if (response.status === 401 || response.status === 403)
 		throw new SessionExpiredError(`token refresh refused: ${response.status}`);
 	if (!response.ok) throw new Error(`token refresh failed: ${response.status}`);
-	const body = (await response.json()) as { token?: string };
-	if (!body.token) throw new Error("token refresh returned no token");
+	const body: unknown = await response.json();
+	if (
+		typeof body !== "object" ||
+		body === null ||
+		!("token" in body) ||
+		typeof body.token !== "string" ||
+		!body.token
+	)
+		throw new Error("token refresh returned no token");
+	if (decodeJwt(body.token).sub !== userID)
+		throw new SessionChangedError("The browser session changed accounts");
 	return body.token;
 }
 
@@ -43,8 +55,12 @@ function onNetworkOrFocus(retry: () => void): () => void {
 }
 
 export function watchZeroAuth(
-	zero: { connection: ZeroConnection },
-	getToken: () => Promise<string> = fetchZeroToken,
+	zero: { userID?: string; connection: ZeroConnection },
+	getToken: () => Promise<string> = () => {
+		if (!zero.userID)
+			return Promise.reject(new SessionChangedError("Zero account is missing"));
+		return fetchZeroToken(zero.userID);
+	},
 	onError: (error: unknown) => void = console.error,
 	{
 		onSessionExpired = () => {},

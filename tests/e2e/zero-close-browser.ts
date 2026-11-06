@@ -55,7 +55,7 @@ export async function openClient(
 	listTitle: string,
 ) {
 	const [token, config] = await Promise.all([
-		fetchZeroToken(),
+		fetchZeroToken(userID),
 		fetchPublicConfig(),
 	]);
 	options = [userID, token, config.zeroURL, storageKey];

@@ -22,6 +22,7 @@ import { runMutation } from "../../lib/run-mutation.ts";
 import { useConfirm } from "../ui/confirm.tsx";
 import { RowActions } from "../ui/row-actions.tsx";
 import { AddKid } from "./AddKid.tsx";
+import { MemberAvatar } from "./avatar.tsx";
 import { InviteDialog } from "./InviteDialog.tsx";
 import { memberActions } from "./memberActions.ts";
 import { ROLE_LABELS } from "./role-labels.ts";
@@ -32,13 +33,6 @@ const ROLE_BADGE: Record<Role, "default" | "secondary" | "outline"> = {
 	member: "outline",
 	viewer: "outline",
 };
-
-function initials(name: string): string {
-	const parts = name.trim().split(/\s+/).filter(Boolean);
-	if (parts.length === 0) return "?";
-	if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-	return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
 
 export function MembersPanel({
 	workspaceId,
@@ -165,17 +159,7 @@ export function MembersPanel({
 											data-testid="member-row"
 											className="group flex items-center gap-3 rounded-lg border p-2"
 										>
-											<span className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-xs font-medium">
-												{mem.user?.image ? (
-													<img
-														src={mem.user.image}
-														alt=""
-														className="size-full object-cover"
-													/>
-												) : (
-													initials(name)
-												)}
-											</span>
+											<MemberAvatar name={name} image={mem.user?.image} />
 											<span className="min-w-0 flex-1 truncate text-sm">
 												<bdi>{name}</bdi>
 												{mem.userId === zero.userID && (
