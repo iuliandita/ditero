@@ -1,7 +1,7 @@
 import { zeroNodePg } from "@rocicorp/zero/server/adapters/pg";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
+import { afterAll, beforeAll, beforeEach, expect, test, vi } from "vitest";
 import { acceptInvite } from "../../src/auth/invite-accept.ts";
 import { emailHasRedeemableInvite } from "../../src/auth/invite-bypass.ts";
 import { createInvite } from "../../src/auth/invite-create.ts";
@@ -87,7 +87,20 @@ async function make(
 		{},
 	);
 }
-async function change(next: "member" | "viewer" | "remove") {
+async function change(
+	next: "owner" | "member" | "viewer" | "remove" | "leave",
+) {
+	if (next === "leave")
+		return zero.transaction((tx) =>
+			withZeroUserContext(tx, "creator", () =>
+				mutators.membership.leave.fn({
+					tx,
+					ctx: { id: "creator" },
+					args: { id: "mc" },
+				}),
+			),
+		);
+
 	return zero.transaction((tx) =>
 		withZeroUserContext(tx, "owner", () =>
 			next === "remove"
@@ -148,6 +161,7 @@ test.each([
 	"member",
 	"viewer",
 	"remove",
+	"leave",
 ] as const)("membership %s revokes only unclaimed grants beyond the new authority", async (next) => {
 	const high = await make();
 	const low = await make("member");
@@ -248,4 +262,171 @@ test.each([
 		),
 	).rejects.toMatchObject({ status: 400 });
 	expect((await admin.query("select id from invite")).rows).toEqual([]);
+});
+
+test("promotion from admin to owner preserves pending invitations", async () => {
+	const high = await make();
+	const low = await make("member");
+	await change("owner");
+	expect(
+		(await admin.query("select status from invite order by id")).rows,
+	).toEqual([{ status: "pending" }, { status: "pending" }]);
+	await expect(
+		acceptInvite(high.token, "joiner", "joiner@example.test", restricted),
+	).resolves.toMatchObject({ workspaceId: "ws" });
+	expect(
+		(await admin.query("select status from invite where id=$1", [low.id]))
+			.rows[0].status,
+	).toBe("pending");
+});
+
+test.each([
+	[false, "fallback"],
+	[true, "fallback"],
+	[false, "fast"],
+	[true, "fast"],
+] as const)("removed invitee cannot finalize or consume its reservation (attached=%s, mode=%s)", async (attached, mode) => {
+	const inv = await make("member", attached, true);
+	await claimFastInvite(runtime, inv.token, "joiner", "joiner@example.test");
+	const member = (
+		await admin.query(
+			"select id from membership where user_id='joiner' and workspace_id='ws'",
+		)
+	).rows[0];
+	await zero.transaction((tx) =>
+		withZeroUserContext(tx, "owner", () =>
+			mutators.membership.remove.fn({
+				tx,
+				ctx: { id: "owner" },
+				args: { id: member.id },
+			}),
+		),
+	);
+	await expect
+		.soft(finalizeFastInvite(runtime, inv.token, "joiner", mode))
+		.rejects.toMatchObject({ reason: "not_found" });
+	expect
+		.soft(
+			(
+				await admin.query("select status,uses from invite where id=$1", [
+					inv.id,
+				])
+			).rows,
+		)
+		.toEqual([{ status: "pending", uses: 0 }]);
+	expect
+		.soft(
+			(await admin.query("select id from task_assignee where user_id='joiner'"))
+				.rows,
+		)
+		.toEqual([]);
+	expect
+		.soft(
+			(
+				await admin.query(
+					"select id from membership where user_id='joiner' and workspace_id='ws'",
+				)
+			).rows,
+		)
+		.toEqual([]);
+});
+
+test.each([
+	[undefined, 1],
+	[null, null],
+	[3, 3],
+] as const)("email invite cap preserves omitted/default and explicit values (%s)", async (maxUses, expected) => {
+	const inv = await createInvite(
+		{
+			workspaceId: "ws",
+			role: "member",
+			email: "joiner@example.test",
+			maxUses,
+		},
+		"creator",
+		db,
+		{},
+	);
+	expect(
+		(await admin.query("select max_uses from invite where id=$1", [inv.id]))
+			.rows[0].max_uses,
+	).toBe(expected);
+});
+
+test.each([
+	"revoke",
+	"redeem",
+] as const)("concurrent revocation and redemption preserve the first committed outcome (%s first)", async (first) => {
+	const inv = await make("member");
+	const holder = await admin.connect();
+	let redeem: Promise<unknown> | undefined;
+	let revoke: Promise<unknown> | undefined;
+	const redeemOperation = () =>
+		acceptInvite(inv.token, "joiner", "joiner@example.test", restricted).then(
+			() => "accepted",
+			(error: unknown) => error,
+		);
+	const revokeOperation = () =>
+		zero.transaction((tx) =>
+			withZeroUserContext(tx, "owner", () =>
+				mutators.invite.revoke.fn({
+					tx,
+					ctx: { id: "owner" },
+					args: { id: inv.id },
+				}),
+			),
+		);
+	async function waiting(count: number) {
+		await vi.waitFor(
+			async () => {
+				expect(
+					(
+						await admin.query(`select pid from pg_stat_activity
+				where datname=current_database() and cardinality(pg_blocking_pids(pid))>0
+				and query ilike '%invite%'`)
+					).rows,
+				).toHaveLength(count);
+			},
+			{ timeout: 5000 },
+		);
+	}
+	try {
+		await holder.query("begin");
+		await holder.query("select id from invite where id=$1 for update", [
+			inv.id,
+		]);
+		if (first === "revoke") revoke = revokeOperation();
+		else redeem = redeemOperation();
+		await waiting(1);
+		if (first === "revoke") redeem = redeemOperation();
+		else revoke = revokeOperation();
+		await waiting(2);
+		await holder.query("commit");
+		expect(await redeem).toEqual(
+			first === "revoke"
+				? expect.objectContaining({ reason: "revoked" })
+				: "accepted",
+		);
+		await revoke;
+		expect(
+			(
+				await admin.query("select uses,status from invite where id=$1", [
+					inv.id,
+				])
+			).rows,
+		).toEqual([{ uses: first === "revoke" ? 0 : 1, status: "revoked" }]);
+		expect(
+			(
+				await admin.query(
+					"select id from membership where user_id='joiner' and workspace_id='ws'",
+				)
+			).rows,
+		).toHaveLength(first === "revoke" ? 0 : 1);
+	} finally {
+		await holder.query("rollback");
+		holder.release();
+		await Promise.allSettled(
+			[redeem, revoke].filter((promise) => promise !== undefined),
+		);
+	}
 });

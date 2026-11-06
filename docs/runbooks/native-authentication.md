@@ -13,10 +13,12 @@ fragments retain their existing key-binding and reload recovery behavior.
 New redemptions and fragment claims require the creator's current membership to
 permit the invited role under the server's member-invitation policy. Removal and
 role changes revoke pending, unclaimed invites the creator can no longer issue.
-A previously reserved fragment claim may still resume and finalize. Email addresses
-are matched without regard to case. Invite creation accepts a positive integer
-use cap up to 32767 and a future timestamp within the supported date range;
-invalid fields return 400.
+A previously reserved fragment claim may still resume and finalize while its
+invitee remains a member; removal prevents finalization and task assignment.
+Email addresses are matched without regard to case. Invite creation accepts a
+positive integer use cap up to 32767 and a future timestamp within the supported
+date range; invalid fields return 400. Email invites default to one use. Existing
+server-side callers can explicitly pass a null cap for unlimited uses.
 These are browser links. The Android and desktop `ditero://task` handlers accept
 task navigation only; invitation changes do not add native scheme destinations.
 

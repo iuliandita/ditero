@@ -466,6 +466,11 @@ export async function finalizeFastInvite(
 			}
 		}
 		const invite = await lockedInvite(client, token);
+		const member = await client.query(
+			"select id from membership where user_id=$1 and workspace_id=$2",
+			[userId, invite.workspace_id],
+		);
+		if (member.rowCount !== 1) throw new FastInviteError("not_found");
 		if (!sameAttachment(observed, invite))
 			throw new FastInviteError("conflict");
 		if (

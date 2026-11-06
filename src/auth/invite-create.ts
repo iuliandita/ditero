@@ -175,7 +175,8 @@ export async function createInvite(
 			input.expiresAt > 8_640_000_000_000_000)
 	)
 		throw new InviteCreateError(400, "expiresAt must be a future timestamp");
-	const maxUses = input.maxUses ?? (email != null ? 1 : null);
+	const maxUses =
+		input.maxUses !== undefined ? input.maxUses : email != null ? 1 : null;
 	const values = {
 		id,
 		workspaceId: input.workspaceId,
