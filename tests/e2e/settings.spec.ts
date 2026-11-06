@@ -167,6 +167,8 @@ for (const width of [1440, 390]) {
 		await expect(page.getByTestId("timezone-select")).toBeFocused();
 		await expect(selected).toHaveText("Appearance and language");
 
+		// The passkey empty state adds height above the clamped destination.
+		await expect(page.getByTestId("passkeys-empty")).toBeVisible();
 		await chooseSection("Your data");
 		await expect(page.locator("#settings-data-heading")).toBeFocused();
 		await expect
