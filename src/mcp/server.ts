@@ -326,10 +326,12 @@ const nextCursor = z
 	.regex(/^[A-Za-z0-9_-]{1,2048}$/)
 	.nullable();
 
+type McpConfiguration = CliOptions & { readonly allowWrites: boolean };
+
 export function mcpConfiguration(
 	env: Record<string, string | undefined>,
 	argv: string[] = [],
-): CliOptions {
+): McpConfiguration {
 	if (
 		argv.length > 1 ||
 		(argv.length === 1 && argv[0] !== "--allow-loopback-http")
@@ -346,11 +348,14 @@ export function mcpConfiguration(
 			"MCP configuration is required.",
 			2,
 		);
-	return Object.freeze(options);
+	return Object.freeze({
+		...options,
+		allowWrites: env.DITERO_MCP_ALLOW_WRITES === "1",
+	});
 }
 
 export function createDiteroMcp(
-	configuration: CliOptions,
+	configuration: McpConfiguration,
 	fetcher: Fetcher = fetch,
 ): McpServer {
 	const fixed = Object.freeze({ ...configuration });
@@ -490,7 +495,7 @@ export function createDiteroMcp(
 		},
 		(intent) => workflow("plan-task", intent),
 	);
-	server.registerTool(
+	const createTaskTool = server.registerTool(
 		"create_task",
 		{
 			description:
@@ -510,7 +515,7 @@ export function createDiteroMcp(
 		({ requestId, task }) =>
 			workflow("create-task", task, requestId.toLowerCase()),
 	);
-	server.registerTool(
+	const completeTaskTool = server.registerTool(
 		"complete_task",
 		{
 			description:
@@ -568,7 +573,7 @@ export function createDiteroMcp(
 				),
 		);
 	}
-	server.registerTool(
+	const updateTaskTool = server.registerTool(
 		"update_task",
 		{
 			description:
@@ -598,7 +603,7 @@ export function createDiteroMcp(
 		({ taskId, requestId, update }) =>
 			workflow("update-task", update, requestId.toLowerCase(), taskId),
 	);
-	server.registerTool(
+	const deleteTaskTool = server.registerTool(
 		"delete_task",
 		{
 			description:
@@ -647,7 +652,7 @@ export function createDiteroMcp(
 			),
 		);
 	}
-	server.registerTool(
+	const createListTool = server.registerTool(
 		"create_list",
 		{
 			description:
@@ -701,7 +706,7 @@ export function createDiteroMcp(
 				ctx.mcpReq.signal,
 			),
 	);
-	server.registerTool(
+	const updateListTool = server.registerTool(
 		"update_list",
 		{
 			description:
@@ -766,7 +771,7 @@ export function createDiteroMcp(
 				ctx.mcpReq.signal,
 			),
 	);
-	server.registerTool(
+	const deleteListTool = server.registerTool(
 		"delete_list",
 		{
 			description:
@@ -849,7 +854,7 @@ export function createDiteroMcp(
 				ctx.mcpReq.signal,
 			),
 	);
-	server.registerTool(
+	const updateTaskRelationshipsTool = server.registerTool(
 		"update_task_relationships",
 		{
 			description:
@@ -930,7 +935,7 @@ export function createDiteroMcp(
 				ctx.mcpReq.signal,
 			),
 	);
-	server.registerTool(
+	const placeTaskTool = server.registerTool(
 		"place_task",
 		{
 			description:
@@ -1067,7 +1072,7 @@ export function createDiteroMcp(
 				ctx.mcpReq.signal,
 			),
 	);
-	server.registerTool(
+	const createTaskCommentTool = server.registerTool(
 		"create_task_comment",
 		{
 			description:
@@ -1095,7 +1100,7 @@ export function createDiteroMcp(
 				ctx.mcpReq.signal,
 			),
 	);
-	server.registerTool(
+	const updateTaskCommentTool = server.registerTool(
 		"update_task_comment",
 		{
 			description:
@@ -1128,7 +1133,7 @@ export function createDiteroMcp(
 				ctx.mcpReq.signal,
 			),
 	);
-	server.registerTool(
+	const deleteTaskCommentTool = server.registerTool(
 		"delete_task_comment",
 		{
 			description:
@@ -1205,7 +1210,7 @@ export function createDiteroMcp(
 				ctx.mcpReq.signal,
 			),
 	);
-	server.registerTool(
+	const createWebhookTool = server.registerTool(
 		"create_webhook",
 		{
 			description:
@@ -1234,7 +1239,7 @@ export function createDiteroMcp(
 		({ webhook }, ctx) =>
 			webhookOperation("create-webhook", webhook, undefined, ctx.mcpReq.signal),
 	);
-	server.registerTool(
+	const revokeWebhookTool = server.registerTool(
 		"revoke_webhook",
 		{
 			description:
@@ -1306,7 +1311,7 @@ export function createDiteroMcp(
 				),
 			),
 	);
-	server.registerTool(
+	const createFolderTool = server.registerTool(
 		"create_folder",
 		{
 			description:
@@ -1345,7 +1350,7 @@ export function createDiteroMcp(
 				),
 			),
 	);
-	server.registerTool(
+	const updateFolderTool = server.registerTool(
 		"update_folder",
 		{
 			description:
@@ -1388,7 +1393,7 @@ export function createDiteroMcp(
 				),
 			),
 	);
-	server.registerTool(
+	const deleteFolderTool = server.registerTool(
 		"delete_folder",
 		{
 			description:
@@ -1431,6 +1436,29 @@ export function createDiteroMcp(
 				),
 			),
 	);
+
+	if (!fixed.allowWrites) {
+		for (const tool of [
+			createTaskTool,
+			completeTaskTool,
+			updateTaskTool,
+			deleteTaskTool,
+			createListTool,
+			updateListTool,
+			deleteListTool,
+			updateTaskRelationshipsTool,
+			placeTaskTool,
+			createTaskCommentTool,
+			updateTaskCommentTool,
+			deleteTaskCommentTool,
+			createWebhookTool,
+			revokeWebhookTool,
+			createFolderTool,
+			updateFolderTool,
+			deleteFolderTool,
+		])
+			tool.disable();
+	}
 
 	return server;
 }

@@ -541,3 +541,8 @@ share the account-wide task/list/comment/folder write namespace.
 `ditero setup-status --json` reads the versioned setup status without changing content. An older server returning 404 produces `data: null`, meaning the capability is unavailable. Other errors retain their normal error codes. Discovery is bounded to 1.5 seconds and 16 KiB.
 
 `profile` may print a localized starter suggestion on stderr for a pending, eligible account. JSON stdout stays unchanged. The link always uses the configured server origin and `/setup`. No browser opens, and discovery failure does not block normal operations.
+
+IDs containing `.` or `..` path segments are rejected before a request is sent.
+CLI JSON output escapes C1 and bidirectional control characters as Unicode escape
+sequences, including in member-written names and notes. Parsing that JSON restores
+the original strings; terminals never receive the raw control characters.

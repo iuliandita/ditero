@@ -10,6 +10,7 @@ import { createDiteroMcp, mcpConfiguration } from "./server.ts";
 
 const env = {
 	DITERO_URL: "https://todo.example.test",
+	DITERO_MCP_ALLOW_WRITES: "1",
 	DITERO_TOKEN: `ditero_pat_${"A".repeat(43)}`,
 };
 const key = "00000000-0000-4000-8000-000000000001";

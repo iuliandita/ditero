@@ -347,7 +347,9 @@ test.each([
 	expect(exit).toBe(2);
 	expect(fetcher).not.toHaveBeenCalled();
 	expect(stdout).not.toHaveBeenCalled();
-	expect(JSON.parse(stderr.mock.calls[0][0]).error.code).toBe("invalid_input");
+	expect(JSON.parse(stderr.mock.calls[0][0]).error.code).toBe(
+		"invalid_arguments",
+	);
 });
 test.each([
 	".hidden",

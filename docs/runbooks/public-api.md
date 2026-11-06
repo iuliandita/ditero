@@ -482,6 +482,11 @@ only `name`, `listId` and `expiresInDays` (1–365, default 90). There can be at
 a secret and relative `/api/v1/calendar-feeds/:secret/calendar.ics` path once.
 Combine that path with your trusted configured server origin; it is a read-only
 capability independent of personal access tokens. Treat the URL as a secret.
+Configure reverse proxies, ingress controllers, access logs and telemetry to
+redact the entire calendar-feed secret segment before recording request URLs.
+Do not log raw feed paths, even for errors. Restrict existing log access and
+rotate a feed if its URL has already been recorded or shared unintentionally.
+
 Metadata responses retain only its hint and never recover the URL. Listings return
 up to 100 records, placing all active feeds before the newest expired/revoked history.
 
@@ -655,3 +660,7 @@ trims names to 1-80 characters and rejects control characters; profile and peopl
 discovery return the current name after an update. Managed-account creation uses
 the same trimmed 1-80-character limit and returns a 400 JSON validation message
 for invalid names. Avatars remain outside this flow.
+
+Public API IDs reject `.` and `..` path segments across task, list, folder,
+placement and relationship workflows so URL normalization cannot change the
+intended endpoint. Existing IDs and response envelopes otherwise stay unchanged.

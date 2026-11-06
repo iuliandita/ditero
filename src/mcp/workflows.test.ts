@@ -108,6 +108,7 @@ async function protocol(
 				createDiteroMcp(
 					mcpConfiguration({
 						DITERO_URL: "https://todo.example.test",
+						DITERO_MCP_ALLOW_WRITES: "1",
 						DITERO_TOKEN: token,
 					}),
 					fetcher,
@@ -153,6 +154,7 @@ async function protocol(
 			],
 			env: {
 				DITERO_URL: `http://127.0.0.1:${address.port}`,
+				DITERO_MCP_ALLOW_WRITES: "1",
 				DITERO_TOKEN: token,
 			},
 			stderr: "pipe",

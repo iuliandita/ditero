@@ -30,6 +30,13 @@ through `DITERO_TOKEN` from your secret manager or protected client environment.
 Do not put the token in arguments, a URL, tracked configuration, or shared logs.
 Start the server with `bun run src/mcp/index.ts` or `bun run mcp`.
 
+Write tools are disabled by default, including direct calls by name. To expose
+writes, explicitly set `DITERO_MCP_ALLOW_WRITES=1` in this server process's protected
+startup environment and restart it. Other values leave writes disabled. This is
+a process-level permission, separate from tool annotations and per-call approval
+in your MCP client. Use a read-only PAT when only discovery is needed, especially
+for shared workspaces; enabling tools never widens the PAT or membership rights.
+
 Configure your MCP client to launch Bun with these arguments:
 
 ```json

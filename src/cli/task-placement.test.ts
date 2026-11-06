@@ -275,8 +275,10 @@ test.each([
 test.each([".", ".."])("dot path %s refuses before HTTP", async (id) => {
 	const fetcher = vi.fn();
 	await expect(
-		taskPlacementWorkflow(options("place-task", id), fetcher, async () =>
-			encodeTaskPlacementInput(placement),
+		taskPlacementWorkflow(
+			{ ...options("place-task"), taskId: id },
+			fetcher,
+			async () => encodeTaskPlacementInput(placement),
 		),
 	).rejects.toMatchObject({ code: "invalid_input" });
 	expect(fetcher).not.toHaveBeenCalled();

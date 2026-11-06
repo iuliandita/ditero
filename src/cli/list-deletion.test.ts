@@ -119,7 +119,7 @@ test.each([
 test.each([".", ".."])("dot segment %s fails before HTTP", async (id) => {
 	const fetcher = vi.fn();
 	await expect(
-		listWorkflow(options("delete-list", id), fetcher, async () =>
+		listWorkflow({ ...options("delete-list"), listId: id }, fetcher, async () =>
 			encodeListDeletionInput(deletion),
 		),
 	).rejects.toMatchObject({ code: "invalid_input" });
