@@ -519,7 +519,13 @@ test.each([
 		rows.push(row);
 	});
 	const tx = {
-		run: async () => rows[0],
+		location: "client",
+		run: vi
+			.fn()
+			.mockResolvedValueOnce(undefined)
+			.mockResolvedValueOnce({ list: { workspaceId: "workspace" } })
+			.mockResolvedValueOnce([{ role: "member" }])
+			.mockImplementation(async () => rows[0]),
 		mutate: { focusSession: { insert } },
 	} as unknown as LogInput["tx"];
 	for (const [args] of fixture.mutate.mock.calls) {

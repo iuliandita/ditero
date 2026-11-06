@@ -697,7 +697,14 @@ test("list insertion committed before empty-delete folder lock is refused withou
 	}
 });
 
-test("empty-delete holding folder update lock makes a concurrent native list insertion fail its FK", async () => {
+test.each([
+	"native",
+	"SQL",
+] as const)("empty-delete holding folder update lock rejects a concurrent %s list insertion", async (writerKind) => {
+	const expectedRejection =
+		writerKind === "native"
+			? { message: "folder not in list workspace" }
+			: { code: "23503", constraint: "list_folder_id_folder_id_fk" };
 	const body = await observedBody(),
 		key = randomUUID(),
 		fn = `${prefix}_pause_fn`,
@@ -730,22 +737,31 @@ test("empty-delete holding folder update lock makes a concurrent native list ins
 			const writerFailures: unknown[] = [];
 			try {
 				await writer.query("begin");
-				await folderDatabase(writer).transaction((tx) =>
-					withZeroUserContext(tx, bob, () =>
-						mutators.list.create.fn({
-							tx,
-							ctx: { id: bob },
-							args: {
-								id: `${prefix}_racing_list`,
-								workspaceId: workspace,
-								title: "Race",
-								sortKey: "a1",
-								kind: "tasks",
-								folderId: folder,
-							},
-						}),
-					),
-				);
+				if (writerKind === "SQL") {
+					await writer.query("select set_config('ditero.user_id',$1,true)", [
+						bob,
+					]);
+					await writer.query(
+						"insert into list(id,workspace_id,owner_id,title,sort_key,folder_id) values($1,$2,$3,'Race','a1',$4)",
+						[`${prefix}_racing_list`, workspace, bob, folder],
+					);
+				} else
+					await folderDatabase(writer).transaction((tx) =>
+						withZeroUserContext(tx, bob, () =>
+							mutators.list.create.fn({
+								tx,
+								ctx: { id: bob },
+								args: {
+									id: `${prefix}_racing_list`,
+									workspaceId: workspace,
+									title: "Race",
+									sortKey: "a1",
+									kind: "tasks",
+									folderId: folder,
+								},
+							}),
+						),
+					);
 				await writer.query("commit");
 			} catch (error) {
 				writerFailures.push(error);
@@ -782,7 +798,14 @@ test("empty-delete holding folder update lock makes a concurrent native list ins
 		expect((await deleting).status).toBe(200);
 		const result = await outcome;
 		expect(result.ok).toBe(false);
-		if (!result.ok) expect(result.error).toMatchObject({ code: "23503" });
+		if (!result.ok) {
+			expect(result.error).toBeInstanceOf(Error);
+			expect(result.error).toMatchObject(expectedRejection);
+		}
+		expect(
+			(await admin.query("select id from folder where id=$1", [folder]))
+				.rowCount,
+		).toBe(0);
 		expect(
 			(
 				await admin.query("select id from list where id=$1", [
@@ -806,12 +829,15 @@ test("empty-delete holding folder update lock makes a concurrent native list ins
 						try {
 							await creating;
 						} catch (error) {
-							// The expected FK refusal was asserted above; retain every other failure.
+							// Retain every failure except the precise rejection asserted above.
 							if (
-								error &&
-								typeof error === "object" &&
-								"code" in error &&
-								error.code === "23503"
+								error instanceof Error &&
+								(writerKind === "native"
+									? error.message === "folder not in list workspace"
+									: "code" in error &&
+										error.code === "23503" &&
+										"constraint" in error &&
+										error.constraint === "list_folder_id_folder_id_fk")
 							)
 								return;
 							throw error;

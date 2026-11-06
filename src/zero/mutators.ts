@@ -175,6 +175,66 @@ async function requireWrite(
 	if (!role || !WRITE_ROLES.has(role)) throw denied();
 }
 
+async function requireFolderInWorkspace(
+	tx: Transaction<Schema>,
+	workspaceId: string,
+	folderId: string | null | undefined,
+): Promise<void> {
+	if (folderId == null) return;
+	const folder = await tx.run(zql.folder.where("id", folderId).one());
+	if (!folder || folder.workspaceId !== workspaceId)
+		throw new Error("folder not in list workspace");
+	if (tx.location === "server") {
+		const rows = await tx.dbTransaction.query(
+			"select id from folder where id=$1 and workspace_id=$2 for share",
+			[folderId, workspaceId],
+		);
+		if (Array.from(rows).length !== 1)
+			throw new Error("folder not in list workspace");
+	}
+}
+
+async function lockContentWorkspace(
+	tx: Transaction<Schema>,
+	userId: string,
+	workspaceId: string,
+): Promise<void> {
+	await requireWrite(tx, userId, workspaceId);
+	if (tx.location !== "server") return;
+	await lockZeroPreferenceUser(tx, userId);
+	await tx.dbTransaction.query(
+		"select id from workspace where id=$1 for share",
+		[workspaceId],
+	);
+	const rows = await tx.dbTransaction.query(
+		"select role from membership where user_id=$1 and workspace_id=$2 for share",
+		[userId, workspaceId],
+	);
+	const role = Array.from(rows)[0]?.role;
+	if (role !== "owner" && role !== "admin" && role !== "member") throw denied();
+}
+
+async function requireFocusTask(
+	tx: Transaction<Schema>,
+	userId: string,
+	taskId: string,
+): Promise<void> {
+	const task = await tx.run(zql.task.where("id", taskId).related("list").one());
+	if (!task?.list) throw new Error("task not found");
+	if (!(await roleInWorkspace(tx, userId, task.list.workspaceId)))
+		throw new Error("access denied: need workspace membership");
+	if (tx.location !== "server") return;
+	const rows = await tx.dbTransaction.query(
+		`select t.id from task t join list l on l.id=t.list_id
+		 join membership m on m.workspace_id=l.workspace_id
+		 where t.id=$1 and l.workspace_id=$2 and m.user_id=$3
+		 for share of t,l,m`,
+		[taskId, task.list.workspaceId, userId],
+	);
+	if (Array.from(rows).length !== 1)
+		throw new Error("access denied: need workspace membership");
+}
+
 // Shared creator-or-admin delete gate, used by list/template/comment/view/
 // dashboard deletion. Admin+ may delete any row; a write-role holder may delete
 // only one they own. `ownerLabel` is the noun the rejection names, so each
@@ -524,6 +584,13 @@ async function insertInstantiatedTask(
 	tx: Transaction<Schema>,
 	t: InstantiatedTask,
 ): Promise<void> {
+	if (await tx.run(zql.task.where("id", t.id).one()))
+		throw new Error("task creation conflicts with existing state");
+	if (t.parentId !== undefined) {
+		const parent = await tx.run(zql.task.where("id", t.parentId).one());
+		if (!parent || parent.listId !== t.listId || parent.parentId != null)
+			throw new Error("parent not in target list");
+	}
 	await tx.mutate.task.insert({
 		hasImportActivation: false,
 		id: t.id,
@@ -540,6 +607,14 @@ async function insertInstantiatedTask(
 		...(t.unit !== undefined ? { unit: t.unit } : {}),
 		...(t.category !== undefined ? { category: t.category } : {}),
 	});
+	// Zero inserts ignore primary-key conflicts, including concurrent inserts.
+	const created = await tx.run(zql.task.where("id", t.id).one());
+	if (
+		!created ||
+		created.listId !== t.listId ||
+		(created.parentId ?? null) !== (t.parentId ?? null)
+	)
+		throw new Error("task creation conflicts with existing state");
 }
 
 // Insert an instantiated list plus its tasks (the shared tail of both
@@ -553,6 +628,10 @@ async function insertInstantiatedList(
 	tasks: InstantiatedTask[],
 	folderId?: string,
 ): Promise<void> {
+	await lockContentWorkspace(tx, ownerId, workspaceId);
+	await requireFolderInWorkspace(tx, workspaceId, folderId);
+	if (await tx.run(zql.list.where("id", list.id).one()))
+		throw new Error("list creation conflicts with existing state");
 	await tx.mutate.list.insert({
 		id: list.id,
 		workspaceId,
@@ -564,6 +643,15 @@ async function insertInstantiatedList(
 		...(list.icon !== undefined ? { icon: list.icon } : {}),
 		...(folderId !== undefined ? { folderId } : {}),
 	});
+	const created = await tx.run(zql.list.where("id", list.id).one());
+	if (
+		!created ||
+		created.workspaceId !== workspaceId ||
+		created.ownerId !== ownerId ||
+		(created.folderId ?? null) !== (folderId ?? null)
+	)
+		throw new Error("list creation conflicts with existing state");
+	await lockZeroContainerWrite(tx, ownerId, { listId: list.id });
 	for (const t of tasks) await insertInstantiatedTask(tx, t);
 }
 
@@ -761,6 +849,10 @@ export const mutators = defineMutators({
 				const list = await tx.run(zql.list.where("id", args.listId).one());
 				if (!list) throw new Error("list not found");
 				await requireWrite(tx, ctx.id, list.workspaceId);
+				await lockZeroContainerWrite(tx, ctx.id, {
+					listId: args.listId,
+					allowPending: true,
+				});
 				if (args.parentId != null) {
 					const parent = await tx.run(
 						zql.task.where("id", args.parentId).one(),
@@ -1444,6 +1536,9 @@ export const mutators = defineMutators({
 					(await tx.run(zql.focusSession.where("id", id).one()))
 				)
 					return;
+				if (args.taskId !== undefined) {
+					await requireFocusTask(tx, ctx.id, args.taskId);
+				}
 				if (tx.location === "server" && args.intervalId) {
 					const started = Array.from(
 						await tx.dbTransaction.query(
@@ -1495,7 +1590,10 @@ export const mutators = defineMutators({
 				icon: z.string().optional(),
 			}),
 			async ({ tx, ctx, args }) => {
-				await requireWrite(tx, ctx.id, args.workspaceId);
+				await lockContentWorkspace(tx, ctx.id, args.workspaceId);
+				await requireFolderInWorkspace(tx, args.workspaceId, args.folderId);
+				if (await tx.run(zql.list.where("id", args.id).one()))
+					throw new Error("list creation conflicts with existing state");
 				await tx.mutate.list.insert({
 					id: args.id,
 					workspaceId: args.workspaceId,
@@ -1507,6 +1605,14 @@ export const mutators = defineMutators({
 					...(args.folderId !== undefined ? { folderId: args.folderId } : {}),
 					...(args.icon !== undefined ? { icon: args.icon } : {}),
 				});
+				const created = await tx.run(zql.list.where("id", args.id).one());
+				if (
+					!created ||
+					created.workspaceId !== args.workspaceId ||
+					created.ownerId !== ctx.id ||
+					(created.folderId ?? null) !== (args.folderId ?? null)
+				)
+					throw new Error("list creation conflicts with existing state");
 			},
 		),
 		update: defineMutator(
@@ -1522,6 +1628,7 @@ export const mutators = defineMutators({
 				const list = await tx.run(zql.list.where("id", args.id).one());
 				if (!list) throw new Error("list not found");
 				await requireWrite(tx, ctx.id, list.workspaceId);
+				await requireFolderInWorkspace(tx, list.workspaceId, args.folderId);
 				await lockZeroContainerWrite(tx, ctx.id, {
 					listId: args.id,
 					targetFolderId: args.folderId,
@@ -1864,6 +1971,10 @@ export const mutators = defineMutators({
 				);
 				if (!targetList) throw new Error("list not found");
 				await requireWrite(tx, ctx.id, targetList.workspaceId);
+				await lockZeroContainerWrite(tx, ctx.id, {
+					listId: args.listId,
+					allowPending: true,
+				});
 				const template = await tx.run(
 					zql.template.where("id", args.templateId).one(),
 				);
@@ -1987,12 +2098,22 @@ export const mutators = defineMutators({
 				if (!task) throw new Error("task not found");
 				const list = task.list as List;
 				await requireWrite(tx, ctx.id, list.workspaceId);
+				if (await tx.run(zql.comment.where("id", args.id).one()))
+					throw new Error("comment creation conflicts with existing state");
 				await tx.mutate.comment.insert({
 					id: args.id,
 					taskId: args.taskId,
 					authorId: ctx.id,
 					body: args.body,
 				});
+				const created = await tx.run(zql.comment.where("id", args.id).one());
+				if (
+					!created ||
+					created.taskId !== args.taskId ||
+					created.authorId !== ctx.id ||
+					created.body !== args.body
+				)
+					throw new Error("comment creation conflicts with existing state");
 				// Only handles that resolve to a current member of this workspace are
 				// notified; a mention of anyone else is the invite-on-mention flow's
 				// job, not a notification. Self-mentions are excluded.
