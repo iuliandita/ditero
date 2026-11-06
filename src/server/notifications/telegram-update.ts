@@ -134,6 +134,7 @@ export async function telegramChannels(
 				"telegram",
 				row.config as Record<string, unknown>,
 				ring,
+				row.userId,
 			);
 		} catch {
 			continue;

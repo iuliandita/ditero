@@ -350,6 +350,7 @@ beforeAll(async () => {
 					channelId: CHANNEL_A,
 				},
 				ring,
+				id,
 			),
 		})),
 		// A SECOND Slack app on its own channel: without it, "signed by the wrong
@@ -367,6 +368,7 @@ beforeAll(async () => {
 					channelId: CHANNEL_B,
 				},
 				ring,
+				OTHER,
 			),
 		},
 		// A THIRD app whose user id sorts last of every app-mode row. Only reason
@@ -385,6 +387,7 @@ beforeAll(async () => {
 					channelId: CHANNEL_C,
 				},
 				ring,
+				LAST_USER,
 			),
 		},
 		// Webhook mode carries no signing secret and mints only a link button; it
@@ -400,6 +403,7 @@ beforeAll(async () => {
 					webhookUrl: "https://hooks.slack.com/services/T1/B1/abcdefabcdefabcd",
 				},
 				ring,
+				WEBHOOK_USER,
 			),
 		},
 	]);

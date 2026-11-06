@@ -41,9 +41,10 @@ export async function backfillChannelConfigs(
 			await client.query("begin");
 			const { rows } = await client.query<{
 				kind: ChannelKind;
+				user_id: string;
 				config: Record<string, unknown>;
 			}>(
-				"select kind, config from notification_channel where id = $1 for update",
+				"select kind, user_id, config from notification_channel where id = $1 for update",
 				[id],
 			);
 			// Deleted between the id scan and the lock.
@@ -51,8 +52,8 @@ export async function backfillChannelConfigs(
 				await client.query("commit");
 				continue;
 			}
-			const { kind, config } = rows[0];
-			const next = reencryptChannelConfig(kind, config, ring);
+			const { kind, config, user_id } = rows[0];
+			const next = reencryptChannelConfig(kind, config, ring, user_id);
 			if (JSON.stringify(next) !== JSON.stringify(config)) {
 				await client.query(
 					"update notification_channel set config = $1 where id = $2",

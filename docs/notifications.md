@@ -4,7 +4,7 @@ Ditero can remind you about due tasks and habit occurrences, and can notify you
 about assignments, `@`-mentions, and overdue tasks.
 
 ntfy, Telegram, Discord, Slack, and email are supported. Email requires operator
-SMTP configuration. Discord and Slack have send-only webhook modes and interactive
+SMTP configuration and a public base URL for address verification. Discord and Slack have send-only webhook modes and interactive
 app modes; app modes require a public listener on your Ditero server. Settings
 only offers setup for channels the server reports available. Missing or invalid
 settings show repair guidance beside each affected field.
@@ -20,6 +20,9 @@ Two independent loops:
   advisory lock). Every tick it expands reminder-bearing tasks over the window
   `[now - grace, now]`, creates one `reminder_state` row per
   (occurrence, recipient), applies quiet hours, and drives the escalation ladder.
+  Reminder candidates and their recipient preferences are loaded in ordered batches
+  of 100 tasks. Each tick traverses every batch in the same fixed grace window;
+  batching bounds memory and query results, not total tick duration.
   It writes to the outbox; it never sends.
 - **Outbox worker** (runs on *every* replica, no leader). Claims queued rows with
   `FOR UPDATE SKIP LOCKED`, sends them, and writes the outcome back behind a
@@ -32,8 +35,8 @@ cannot stall the scan.
 ## Channel setup (ntfy)
 
 1. Settings -> Notifications -> ntfy.
-2. **Server URL** — your ntfy server, `http(s)` only. By default it must resolve
-   to a public address; see [private ntfy servers](#private-ntfy-servers).
+2. **Server URL** — your ntfy server. Public targets require HTTPS on port
+   80 or 443; see [private ntfy servers](#private-ntfy-servers).
 3. **Topic** — 1-64 characters, `A-Z a-z 0-9 _ -` only.
 4. **Token** — optional ntfy access token. Printable ASCII, no spaces, max 256
    characters. It is encrypted at rest and never returned to the browser; the
@@ -54,7 +57,10 @@ than queueing forever.
 
 The operator can allow specific private destinations with
 `DITERO_NOTIFY_ALLOWED_PRIVATE_CIDRS`. Use the narrowest CIDR for the intended
-server; it permits every instance user to send to that range. Loopback, link-local,
+server; it permits every instance user to send to that range, using HTTP or
+HTTPS and custom ports. This is an operator grant for self-hosted listeners;
+HTTP sends credentials without transport encryption. Every DNS answer must satisfy
+the transport and address policy, including mixed public/private answers. Loopback, link-local,
 metadata, and other never-allowed ranges remain blocked. See the
 [egress boundary](security.md#notification-egress-and-ntfy-topics).
 
@@ -75,8 +81,23 @@ use the test message's acknowledgement control to verify the return path too.
 
 Settings supplies the Discord and Slack interactions URLs for provider setup.
 App mode is refused without `DITERO_PUBLIC_URL` or a usable `BETTER_AUTH_URL`.
-Email configuration is refused when SMTP is unavailable. SMTP settings and secrets
+Discord and Slack webhook URLs require HTTPS on the default port.
+Email configuration is refused when SMTP or the public base URL is unavailable. SMTP settings and secrets
 are documented in [.env.example](../.env.example).
+
+Email channels remain pending after saving. Use **Send test**, then open the link
+in the delivered message to confirm the destination. SMTP acceptance is shown as
+sent; recipient confirmation is required before reminders, escalations or events
+can be queued or delivered, including previously queued mail. Changing the address
+clears that proof and invalidates outstanding verification links. Existing email
+channels without recipient confirmation must complete this step too.
+
+Verification and scheduled email share a persistent per-user budget: a burst of
+20 sends, refilling one per minute. The separate test-send budget still applies.
+Changing addresses or restarting a replica does not reset it. A depleted budget
+returns a retryable 429 to the worker with a 60-second delay, subject to the normal
+attempt limit; heavy mail traffic can therefore end in retry exhaustion.
+
 
 ## Native system notices
 

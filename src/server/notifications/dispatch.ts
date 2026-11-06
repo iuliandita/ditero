@@ -4,7 +4,7 @@
 // classifies a ProviderResult, and a rejection would be flattened into an
 // untyped transport error that loses the permanent/retryable distinction.
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { z } from "zod";
 import * as tables from "../../db/schema.ts";
@@ -41,7 +41,13 @@ import {
 	ACK_TTL_MS,
 	ackToken,
 	hashAckToken,
+	takeRateToken,
 } from "./capability.ts";
+import {
+	EMAIL_SEND_CAPACITY,
+	EMAIL_SEND_REFILL_PER_SEC,
+	emailBudgetKey,
+} from "./email-budget.ts";
 import { createNativeDelivery } from "./native-delivery.ts";
 import type { OutboxRow, SendFn } from "./worker.ts";
 
@@ -181,6 +187,9 @@ async function loadChannelConfig(
 				eq(tables.notificationChannel.userId, userId),
 				eq(tables.notificationChannel.kind, kind),
 				eq(tables.notificationChannel.enabled, true),
+				kind === "email"
+					? isNotNull(tables.notificationChannel.ackVerifiedAt)
+					: undefined,
 			),
 		)
 		.limit(1);
@@ -192,6 +201,7 @@ async function loadChannelConfig(
 			kind,
 			rows[0].config as Record<string, unknown>,
 			ring,
+			userId,
 		),
 	};
 }
@@ -270,6 +280,22 @@ export function createSendFn(deps: DispatchDeps): SendFn {
 				return permanent(
 					`dispatch: ${row.channelKind} channel is not configured or is disabled`,
 				);
+			}
+			if (
+				row.channelKind === "email" &&
+				!(await takeRateToken(
+					deps.database,
+					emailBudgetKey(row.recipientUserId),
+					EMAIL_SEND_CAPACITY,
+					EMAIL_SEND_REFILL_PER_SEC,
+				))
+			) {
+				return {
+					ok: false,
+					status: 429,
+					retryAfterSec: 60,
+					error: "email: notification mail budget exhausted",
+				};
 			}
 			const ackUrl = await mintAckUrl(deps.database, row, deps.ackBaseUrl);
 			return await adapter.send(

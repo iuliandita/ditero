@@ -113,6 +113,7 @@
 	"channel_interactions_url_label": "رابط التفاعلات",
 	"channel_copy": "نسخ",
 	"channel_copied": "تم النسخ",
+	"channel_email_verification_required": "استخدم إرسال اختبار، ثم افتح الرابط في تلك الرسالة للتحقق من هذا العنوان. تبقى الإشعارات متوقفة حتى تؤكد.",
 	"channel_email_unavailable": "تسليم البريد الإلكتروني غير مُعدّ على هذا الخادم.",
 	"channel_email_delivery_paused": "تسليم البريد الإلكتروني غير مُعدّ على هذا الخادم، لذا لا يُرسَل شيء. تبقى إعداداتك محفوظة.",
 	"channel_telegram_webhook_unreachable": "تم إعداد Telegram لاستخدام Webhook، لكن هذا الخادم بلا عنوان عام. راجع المسؤول.",

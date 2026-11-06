@@ -21,6 +21,12 @@ DITERO_ENCRYPTION_KEY_NEXT="$NEW_KEY" \
 bun run security:encrypt-channel-configs
 ```
 
+   This also upgrades legacy plaintext and unbound notification-channel fields to
+   the owner-bound envelope. Keep legacy reads and both keys available until the
+   backfill and actual delivery have been verified. An older application version
+   cannot read the new channel envelope; use matching application/database backups
+   for rollback.
+
    Skipping this can leave credentials under the old key and make them unreadable
    after its retirement. The reported count totals only rewritten rows across the
    three credential stores, rather than configured channels. An idempotent rerun

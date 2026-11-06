@@ -199,8 +199,11 @@ export function channelHealth(
 	row: ChannelHealthRow | null,
 ): ChannelHealth {
 	if (stored === null) return { state: "unconfigured" };
-	const verifiedAt = row?.verifiedAt ?? stored.verifiedAt;
 	const ackVerifiedAt = row?.ackVerifiedAt ?? stored.ackVerifiedAt;
+	const verifiedAt =
+		stored.kind === "email"
+			? ackVerifiedAt
+			: (row?.verifiedAt ?? stored.verifiedAt);
 	const errorAt = row?.lastErrorAt ?? null;
 	const code = row?.lastErrorCode ?? null;
 	if (

@@ -539,3 +539,15 @@ describe("field-level repair guidance", () => {
 		expect(rowUnavailable("ntfy", caps({ available: ["ntfy"] }))).toBeNull();
 	});
 });
+
+describe("email verification health", () => {
+	it("SMTP acceptance does not establish recipient verification", () => {
+		const row = stored("email", { address: "recipient@example.test" }, T0);
+		expect(channelHealth(row, null)).toEqual({ state: "untested" });
+		expect(channelHealth({ ...row, ackVerifiedAt: T0 + 1 }, null)).toEqual({
+			state: "verified",
+			at: T0 + 1,
+			ackProven: true,
+		});
+	});
+});

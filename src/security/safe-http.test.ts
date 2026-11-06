@@ -327,3 +327,56 @@ describe("assertPublicAddress with an allowlist", () => {
 		).rejects.toThrow(/public/i);
 	});
 });
+
+describe("outbound TLS and port policy", () => {
+	test.each([
+		"http://hooks.example.test/notify",
+		"http://hooks.example.test:443/notify",
+		"https://hooks.example.test:8080/notify",
+		"https://hooks.example.test:25/notify",
+	])("rejects public target %s before opening a socket", async (url) => {
+		const { calls, requestFn } = fakeTransport();
+		await expect(
+			safeFetch(url, {}, { resolver: publicResolver, requestFn }),
+		).rejects.toBeInstanceOf(OutboundPolicyError);
+		expect(calls).toHaveLength(0);
+	});
+
+	test.each([
+		"http://192.168.1.20:8080/notify",
+		"https://[fd00::20]:8443/notify",
+	])("allows operator-approved private listener %s", async (url) => {
+		const { calls, requestFn } = fakeTransport();
+		const allowedPrivateCIDRs = parseTrustedProxyCIDRs([
+			"192.168.1.0/24",
+			"fd00::/8",
+		]);
+		expect(
+			(await safeFetch(url, { allowedPrivateCIDRs }, { requestFn })).ok,
+		).toBe(true);
+		expect(calls).toHaveLength(1);
+	});
+
+	test("a mixed private/public DNS answer cannot grant public HTTP or extra ports", async () => {
+		for (const url of [
+			"http://hooks.example.test/notify",
+			"https://hooks.example.test:8080/notify",
+		]) {
+			const { calls, requestFn } = fakeTransport();
+			await expect(
+				safeFetch(
+					url,
+					{ allowedPrivateCIDRs: parseTrustedProxyCIDRs(["192.168.1.0/24"]) },
+					{
+						resolver: {
+							resolve4: async () => ["192.168.1.20", "93.184.216.34"],
+							resolve6: async () => [],
+						},
+						requestFn,
+					},
+				),
+			).rejects.toBeInstanceOf(OutboundPolicyError);
+			expect(calls).toHaveLength(0);
+		}
+	});
+});

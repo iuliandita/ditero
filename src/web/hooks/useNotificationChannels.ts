@@ -32,6 +32,7 @@ export type ChannelView = {
 export type TestResult =
 	| { state: "untested" }
 	| { state: "verified"; at: number }
+	| { state: "sent"; at: number }
 	| { state: "failed"; reason: string };
 
 // Delivery readiness, read straight off the synced notification_channel rows
@@ -44,7 +45,10 @@ export function useChannelDeliveryStatus(): { allUnverified: boolean } {
 		const enabled = rows.filter((r) => r.enabled);
 		return {
 			allUnverified:
-				enabled.length > 0 && enabled.every((r) => r.verifiedAt == null),
+				enabled.length > 0 &&
+				enabled.every(
+					(r) => (r.kind === "email" ? r.ackVerifiedAt : r.verifiedAt) == null,
+				),
 		};
 	}, [rows]);
 }
@@ -139,11 +143,13 @@ export function useNotificationChannels(): {
 				return { state: "failed", reason };
 			}
 			const data = (await res.json()) as
-				| { ok: true; verifiedAt: number }
+				| { ok: true; verifiedAt: number | null; sentAt: number }
 				| { ok: false; reason: string };
 			await reload();
 			return data.ok
-				? { state: "verified", at: data.verifiedAt }
+				? data.verifiedAt === null
+					? { state: "sent", at: data.sentAt }
+					: { state: "verified", at: data.verifiedAt }
 				: { state: "failed", reason: data.reason };
 		},
 		[reload],

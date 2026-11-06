@@ -49,6 +49,20 @@ const CREDENTIALS = [
 ];
 
 describe("channelConfigSchema", () => {
+	it.each([
+		["discord", "http://discord.com/api/webhooks/1/secret"],
+		["discord", "https://discord.com:8443/api/webhooks/1/secret"],
+		["slack", "http://hooks.slack.com/services/T/B/secret"],
+		["slack", "https://hooks.slack.com:80/services/T/B/secret"],
+	])("requires canonical HTTPS for %s webhook credentials", (kind, webhookUrl) => {
+		expect(
+			channelConfigSchema[kind as ChannelKind].safeParse({
+				mode: "webhook",
+				webhookUrl,
+			}).success,
+		).toBe(false);
+	});
+
 	it("accepts a valid ntfy config", () => {
 		const parsed = channelConfigSchema.ntfy.safeParse({
 			serverUrl: "https://ntfy.sh",

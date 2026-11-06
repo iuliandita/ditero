@@ -113,6 +113,7 @@
 	"channel_interactions_url_label": "URL de interacciones",
 	"channel_copy": "Copiar",
 	"channel_copied": "Copiado",
+	"channel_email_verification_required": "Usa Enviar prueba y abre el enlace de ese correo para verificar esta dirección. Las notificaciones quedan en pausa hasta que confirmes.",
 	"channel_email_unavailable": "El envío de correo no está configurado en este servidor.",
 	"channel_email_delivery_paused": "El envío de correo no está configurado en este servidor, así que no se envía nada. Tus ajustes se conservan.",
 	"channel_telegram_webhook_unreachable": "Telegram está configurado con webhooks, pero este servidor no tiene dirección pública. Pregúntale a tu administrador.",

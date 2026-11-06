@@ -113,6 +113,7 @@
 	"channel_interactions_url_label": "Interaktions-URL",
 	"channel_copy": "Kopieren",
 	"channel_copied": "Kopiert",
+	"channel_email_verification_required": "Nutze „Test senden“ und öffne dann den Link in der E-Mail, um diese Adresse zu bestätigen. Bis zur Bestätigung bleiben Benachrichtigungen pausiert.",
 	"channel_email_unavailable": "Der E-Mail-Versand ist auf diesem Server nicht eingerichtet.",
 	"channel_email_delivery_paused": "Der E-Mail-Versand ist auf diesem Server nicht eingerichtet, es wird also nichts verschickt. Deine Einstellungen bleiben gespeichert.",
 	"channel_telegram_webhook_unreachable": "Telegram ist für Webhooks eingerichtet, aber dieser Server hat keine öffentliche Adresse. Frag deinen Administrator.",

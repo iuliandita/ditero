@@ -13,13 +13,17 @@ import {
 	createFieldKeyRing,
 	decryptField,
 	encryptField,
-	reencryptField,
 } from "./field-encryption.ts";
 
 const ENVELOPE_PREFIX = "ditero:v1:";
+const BOUND_PREFIX = "ditero:channel:v2:";
 
-function channelFieldContext(kind: ChannelKind, field: string): string {
-	return `notification-channel:${kind}:${field}`;
+function channelFieldContext(
+	userId: string,
+	kind: ChannelKind,
+	field: string,
+): string {
+	return `notification-channel:v2:${JSON.stringify([userId, kind, field])}`;
 }
 
 // Mirrors auth.ts: production cannot boot without the key (auth.ts throws), so
@@ -36,16 +40,16 @@ export function encryptChannelConfig(
 	kind: ChannelKind,
 	config: Record<string, unknown>,
 	ring: FieldKeyRing | null,
+	userId: string,
 ): Record<string, unknown> {
 	if (!ring) return { ...config };
 	const out: Record<string, unknown> = {};
 	for (const [key, value] of Object.entries(config)) {
 		out[key] =
-			isPublicChannelField(kind, key) ||
-			typeof value !== "string" ||
-			value.startsWith(ENVELOPE_PREFIX)
+			isPublicChannelField(kind, key) || typeof value !== "string"
 				? value
-				: encryptField(value, channelFieldContext(kind, key), ring);
+				: BOUND_PREFIX +
+					encryptField(value, channelFieldContext(userId, kind, key), ring);
 	}
 	return out;
 }
@@ -58,13 +62,14 @@ export function decryptChannelConfig(
 	kind: ChannelKind,
 	config: Record<string, unknown>,
 	ring: FieldKeyRing | null,
+	userId: string,
 ): Record<string, unknown> {
 	const out: Record<string, unknown> = {};
 	for (const [key, value] of Object.entries(config)) {
 		if (
 			isPublicChannelField(kind, key) ||
 			typeof value !== "string" ||
-			!value.startsWith(ENVELOPE_PREFIX)
+			(!value.startsWith(ENVELOPE_PREFIX) && !value.startsWith(BOUND_PREFIX))
 		) {
 			out[key] = value;
 			continue;
@@ -75,35 +80,42 @@ export function decryptChannelConfig(
 			);
 		}
 		out[key] = decryptField(
-			value,
-			channelFieldContext(kind, key),
+			value.startsWith(BOUND_PREFIX) ? value.slice(BOUND_PREFIX.length) : value,
+			value.startsWith(BOUND_PREFIX)
+				? channelFieldContext(userId, kind, key)
+				: `notification-channel:${kind}:${key}`,
 			ring,
 		).plaintext;
 	}
 	return out;
 }
 
-// What the backfill uses, and the ONLY path that moves an already-enveloped
-// secret onto a new key. encryptChannelConfig deliberately skips anything that
-// already looks enveloped -- that is what makes the write path idempotent, and
-// it is also why it can never rotate. reencryptField decrypts under whichever
-// read key works and re-encrypts under the write key only when the two differ,
-// so this stays a no-op when no rotation is in progress.
+// Only the backfill accepts existing envelopes. Legacy reads remain available
+// until operators have verified the backfill and retired their old keys.
 export function reencryptChannelConfig(
 	kind: ChannelKind,
 	config: Record<string, unknown>,
 	ring: FieldKeyRing,
+	userId: string,
 ): Record<string, unknown> {
+	const plain = decryptChannelConfig(kind, config, ring, userId);
 	const out: Record<string, unknown> = {};
 	for (const [key, value] of Object.entries(config)) {
 		if (isPublicChannelField(kind, key) || typeof value !== "string") {
 			out[key] = value;
 			continue;
 		}
-		const context = channelFieldContext(kind, key);
-		out[key] = value.startsWith(ENVELOPE_PREFIX)
-			? reencryptField(value, context, ring)
-			: encryptField(value, context, ring);
+		const context = channelFieldContext(userId, kind, key);
+		if (
+			value.startsWith(BOUND_PREFIX) &&
+			!decryptField(value.slice(BOUND_PREFIX.length), context, ring)
+				.needsRotation
+		) {
+			out[key] = value;
+		} else {
+			out[key] =
+				BOUND_PREFIX + encryptField(plain[key] as string, context, ring);
+		}
 	}
 	return out;
 }

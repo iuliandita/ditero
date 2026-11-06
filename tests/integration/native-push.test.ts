@@ -451,6 +451,7 @@ test("the CLI credential pass rotates both channels and native push before old k
 					token: "channel-secret",
 				},
 				ring,
+				a.owner.userId,
 			),
 		],
 	);
@@ -483,9 +484,9 @@ test("the CLI credential pass rotates both channels and native push before old k
 				channel,
 			])
 		).rows[0].config;
-		expect(decryptChannelConfig("ntfy", config, retired).token).toBe(
-			"channel-secret",
-		);
+		expect(
+			decryptChannelConfig("ntfy", config, retired, a.owner.userId).token,
+		).toBe("channel-secret");
 		expect(await backfillCredentialConfigs(admin, rotating)).toBe(0);
 		expect(await backfillCredentialConfigs(admin, retired)).toBe(0);
 	} finally {

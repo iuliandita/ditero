@@ -113,6 +113,7 @@
 	"channel_interactions_url_label": "URL pentru interacțiuni",
 	"channel_copy": "Copiază",
 	"channel_copied": "Copiat",
+	"channel_email_verification_required": "Folosește Trimite test, apoi deschide linkul din acel email pentru a verifica această adresă. Notificările rămân oprite până confirmi.",
 	"channel_email_unavailable": "Livrarea prin email nu este configurată pe acest server.",
 	"channel_email_delivery_paused": "Livrarea prin email nu este configurată pe acest server, așa că nu se trimite nimic. Setările tale rămân salvate.",
 	"channel_telegram_webhook_unreachable": "Telegram este configurat pentru webhookuri, dar acest server nu are o adresă publică. Cere-i administratorului.",

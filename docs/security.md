@@ -326,6 +326,12 @@ Notification channel URLs are supplied by users, so every outbound send goes thr
 
 **Address policy.** Each DNS answer for the target host is checked before the request. Anything that is not a public unicast address is refused unless an operator explicitly allows it. Some ranges are never allowable, no matter what is configured: loopback, `0.0.0.0/8`, link-local `169.254.0.0/16` (which covers cloud instance metadata), CGNAT `100.64.0.0/10`, multicast, limited broadcast, IPv6 loopback/unspecified/link-local/multicast, and the IPv6 transition encodings (`64:ff9b::/96`, `64:ff9b:1::/48`, `2001::/32`, `2002::/16`) that can hide a private IPv4 payload inside an apparently-unicast literal. URL credentials and non-HTTP(S) protocols are refused outright, redirects are not followed, and responses are size-capped.
 
+**Transport policy.** Public targets require HTTPS and port 80 or 443. Only
+operator-allowlisted private targets may use HTTP or other ports. The private
+allowlist grants every instance user access to those listeners; HTTP provides no
+transport encryption. Each DNS answer must satisfy both policies. Discord and
+Slack webhook configuration additionally requires HTTPS on the default port.
+
 **Widening it.** `DITERO_NOTIFY_ALLOWED_PRIVATE_CIDRS` takes a comma-separated CIDR list and is empty by default. It can re-enable RFC1918 space and IPv6 unique-local (`fc00::/7`) — the legitimate case, an ntfy server on your own LAN. It cannot re-enable any range in the never-allowed list above, and a `/0` entry is rejected at boot because it would remove the boundary entirely.
 
 Widening this is the operator's decision and the operator's risk. Every CIDR listed becomes reachable from any URL any user of the instance can save. On a multi-user instance that is an SSRF primitive into your internal network, granted to everyone who can reach the settings page. List the narrowest prefix that covers your ntfy host, never a whole site range.
@@ -341,9 +347,19 @@ The transport does not resolve the hostname a second time during connection.
 including tokens, webhook URLs, and signing secrets, use AES-256-GCM envelopes under
 `DITERO_ENCRYPTION_KEY`. Public destination fields remain readable. Reads return
 masked placeholders, and writes restore masked secrets only from the caller's own
-row. A decryption failure is a hard error. Rotation requires the channel-config
+row. New writes use a `ditero:channel:v2:` envelope that authenticates the owner,
+channel kind and field. Submitted ciphertext is encrypted as literal credential
+text and never adopted. Legacy plaintext and unbound envelopes remain readable;
+`security:encrypt-channel-configs` upgrades them under row locks. A decryption
+failure is a hard error. Rotation requires the channel-config
 re-encryption step in [Field-Key Rotation](runbooks/key-rotation.md) before retiring
 the old key.
+
+Email destinations must redeem a verification capability before either fan-out
+or delivery permits notification mail. An address change clears verification and
+invalidates old links transactionally. Verification and scheduled mail share a
+persistent per-user token bucket (20 sends, refilling one per minute), in addition
+to the test-send limit. SMTP acceptance alone does not verify an email channel.
 
 ## Acknowledge Capabilities
 

@@ -113,6 +113,7 @@
 	"channel_interactions_url_label": "Interactions URL",
 	"channel_copy": "Copy",
 	"channel_copied": "Copied",
+	"channel_email_verification_required": "Use Send test, then open the link in that email to verify this address. Notifications stay paused until you confirm.",
 	"channel_email_unavailable": "Email delivery is not set up on this server.",
 	"channel_email_delivery_paused": "Email delivery is not set up on this server, so nothing is being sent. Your settings are kept.",
 	"channel_telegram_webhook_unreachable": "Telegram is set up for webhooks, but this server has no public address. Ask your administrator.",

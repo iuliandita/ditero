@@ -2,7 +2,7 @@
 // event enqueue path (events.ts): both need the same preferences, the same
 // enabled-channel fan-out, and the same never-suppress-on-a-broken-preference
 // quiet-hours rule.
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, ne, or, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as tables from "../../db/schema.ts";
 import type { Locale } from "../../domain/locale.ts";
@@ -96,6 +96,10 @@ export async function loadChannels(
 			and(
 				inArray(tables.notificationChannel.userId, userIds),
 				eq(tables.notificationChannel.enabled, true),
+				or(
+					ne(tables.notificationChannel.kind, "email"),
+					isNotNull(tables.notificationChannel.ackVerifiedAt),
+				),
 			),
 		);
 	for (const row of rows) {

@@ -372,6 +372,44 @@ describe("withLeaderLock", () => {
 });
 
 describe("reminder creation", () => {
+	test("pages recurring candidates without omitting later tasks or repeating earlier ones", async () => {
+		const count = 103;
+		await db.insert(tables.task).values(
+			Array.from({ length: count }, (_, i) => ({
+				id: `sched-page-${String(i).padStart(4, "0")}`,
+				listId: LIST,
+				title: "Recurring",
+				sortKey: `p${i}`,
+				dueAt: new Date("2026-01-05T12:00:00Z"),
+				rrule: "FREQ=DAILY",
+				reminderTime: REMINDER_TIME,
+			})),
+		);
+		const pages: { query: string; params: unknown[] }[] = [];
+		const observed = drizzle(pool, {
+			schema: tables,
+			logger: {
+				logQuery(query, params) {
+					if (
+						query.startsWith('select "task"."id"') &&
+						query.includes('"task"."reminder_time"')
+					)
+						pages.push({ query, params });
+				},
+			},
+		});
+		const summary = await scanTick(observed, { now: ON_TIME, timing });
+		expect(summary.created).toBe(count);
+		expect(summary.enqueued).toBe(count);
+		expect(pages).toHaveLength(3);
+		for (const page of pages) {
+			expect(page.query).toContain('order by "task"."id"');
+			expect(page.query).toContain("limit");
+			expect(page.params.at(-1)).toBe(100);
+		}
+		expect((await tick(ON_TIME)).created).toBe(0);
+	}, 30_000);
+
 	test("a due occurrence creates one reminder row and one outbox row", async () => {
 		await seedTask("sched-t1", { repeatEveryMin: 10, maxRepeats: 2 });
 		await tick(ON_TIME);

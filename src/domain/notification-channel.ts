@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { mailableAddress } from "./mail-address.ts";
 
 export type ChannelKind = "ntfy" | "telegram" | "discord" | "slack" | "email";
 
@@ -51,7 +52,10 @@ function webhookUrlFor(provider: string, domains: readonly string[]) {
 		.max(2_048)
 		.refine((value) => {
 			if (!isHttpUrl(value)) return false;
-			const host = new URL(value).hostname.toLowerCase();
+			const url = new URL(value);
+			if (url.protocol !== "https:" || url.port || url.username || url.password)
+				return false;
+			const host = url.hostname.toLowerCase();
 			return domains.some(
 				(domain) => host === domain || host.endsWith(`.${domain}`),
 			);
@@ -111,7 +115,14 @@ const slackConfigSchema = z.discriminatedUnion("mode", [
 		.strict(),
 ]);
 
-const emailConfigSchema = z.object({ address: z.email().max(254) }).strict();
+const emailConfigSchema = z
+	.object({
+		address: z
+			.email()
+			.max(254)
+			.refine((value) => mailableAddress(value) !== null),
+	})
+	.strict();
 
 export const channelConfigSchema: Record<ChannelKind, z.ZodTypeAny> = {
 	ntfy: ntfyConfigSchema,

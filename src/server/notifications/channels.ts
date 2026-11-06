@@ -3,7 +3,7 @@
 // the MASKED placeholder from the caller's own stored row, and the secret half
 // is enveloped at rest (security/channel-config.ts).
 import { randomUUID } from "node:crypto";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { isMailConfigured } from "../../config/mail.ts";
 import { notifyAllowedPrivateCIDRs } from "../../config/notify-egress.ts";
@@ -40,9 +40,30 @@ import {
 	VERIFY_TTL_MS,
 } from "./capability.ts";
 import { DISCORD_INTERACTIONS_PATH } from "./discord-interactions.ts";
+import {
+	EMAIL_SEND_CAPACITY,
+	EMAIL_SEND_REFILL_PER_SEC,
+	emailBudgetKey,
+} from "./email-budget.ts";
 import { SLACK_INTERACTIONS_PATH } from "./slack-interactions.ts";
 
 type Database = NodePgDatabase<typeof tables>;
+type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
+type ChannelDatabase = Database | Transaction;
+
+async function lockChannelOwner(
+	tx: Transaction,
+	userId: string,
+): Promise<void> {
+	const { rowCount } = await tx.execute(sql`select id from "user"
+		where id = ${userId} and deleted_at is null for update`);
+	if (rowCount !== 1)
+		throw new ChannelError(
+			"no_stored_config",
+			"channel owner is unavailable",
+			400,
+		);
+}
 
 // Rows without an adapter are rendered disabled in the UI (shell doc 1) and are
 // rejected here so a hand-rolled POST cannot store a config for a channel
@@ -173,10 +194,10 @@ function requireInteractiveSupport(
 // page, and silently never deliver. Refused at save with the setting to fix.
 function requireMailSupport(kind: ChannelKind, env: NodeJS.ProcessEnv): void {
 	if (kind !== "email") return;
-	if (!isMailConfigured(env)) {
+	if (!isMailConfigured(env) || ackBaseUrl(env) === null) {
 		throw new ChannelError(
 			"email_unsupported",
-			"email needs an SMTP server: set DITERO_SMTP_HOST first",
+			"email needs SMTP and a public base URL for recipient verification",
 			400,
 		);
 	}
@@ -191,7 +212,7 @@ function canonical(config: Record<string, unknown>): string {
 }
 
 async function storedConfig(
-	database: Database,
+	database: ChannelDatabase,
 	userId: string,
 	kind: ChannelKind,
 	env: NodeJS.ProcessEnv,
@@ -211,6 +232,7 @@ async function storedConfig(
 		kind,
 		rows[0].config as Record<string, unknown>,
 		channelKeyRing(env),
+		userId,
 	);
 }
 
@@ -239,7 +261,7 @@ export function channelCapabilities(
 	return {
 		available: Object.keys(IMPLEMENTED) as ChannelKind[],
 		ackBaseUrl: base,
-		email: isMailConfigured(env),
+		email: isMailConfigured(env) && base,
 		telegramTransport: transport,
 		// A webhook cannot be registered without a public origin to register, so
 		// the operator has selected a transport this deployment cannot run.
@@ -285,7 +307,7 @@ export async function listChannels(
 // Returns the effective (decrypted) config alongside the stored view, so
 // test-send can send what it just persisted without a second read.
 async function upsertChannel(
-	database: Database,
+	database: ChannelDatabase,
 	userId: string,
 	body: unknown,
 	env: NodeJS.ProcessEnv,
@@ -342,7 +364,12 @@ async function upsertChannel(
 	}
 	const config = parsed.data as Record<string, unknown>;
 	requireInteractiveSupport(config, env);
-	const stored = encryptChannelConfig(kind, config, channelKeyRing(env));
+	const stored = encryptChannelConfig(
+		kind,
+		config,
+		channelKeyRing(env),
+		userId,
+	);
 	// A changed config invalidates the previous verification: the old
 	// verified_at described a server/topic/token combination that no longer
 	// exists. Compared key-order-insensitively because `previous` came back
@@ -403,7 +430,10 @@ export async function saveChannel(
 	body: unknown,
 	env: NodeJS.ProcessEnv = process.env,
 ): Promise<ChannelView> {
-	return (await upsertChannel(database, userId, body, env)).view;
+	return database.transaction(async (tx) => {
+		await lockChannelOwner(tx, userId);
+		return (await upsertChannel(tx, userId, body, env)).view;
+	});
 }
 
 export async function deleteChannel(
@@ -439,7 +469,7 @@ function classify(result: {
 // Bound to (recipient, channel) rather than to a reminder: there is no
 // occurrence to ack, and redeeming it stamps verified_at on this channel.
 async function mintVerifyCapability(
-	database: Database,
+	database: ChannelDatabase,
 	userId: string,
 	kind: ChannelKind,
 	baseUrl: string | null,
@@ -469,7 +499,8 @@ export async function testChannel(
 	body: unknown,
 	deps: ChannelDeps = {},
 ): Promise<
-	{ ok: true; verifiedAt: number } | { ok: false; reason: TestFailure }
+	| { ok: true; verifiedAt: number | null; sentAt: number }
+	| { ok: false; reason: TestFailure }
 > {
 	const env = deps.env ?? process.env;
 	// Budget is spent BEFORE the config is persisted: a caller who has run out
@@ -487,7 +518,32 @@ export async function testChannel(
 			429,
 		);
 	}
-	const { view, config } = await upsertChannel(database, userId, body, env);
+	const { view, config, ackUrl } = await database.transaction(async (tx) => {
+		await lockChannelOwner(tx, userId);
+		const channel = await upsertChannel(tx, userId, body, env);
+		const ackUrl = await mintVerifyCapability(
+			tx,
+			userId,
+			channel.view.kind,
+			ackBaseUrl(env),
+		);
+		return { ...channel, ackUrl };
+	});
+	if (
+		view.kind === "email" &&
+		!(await takeRateToken(
+			database,
+			emailBudgetKey(userId),
+			EMAIL_SEND_CAPACITY,
+			EMAIL_SEND_REFILL_PER_SEC,
+		))
+	) {
+		throw new ChannelError(
+			"rate_limited",
+			"notification mail budget exhausted",
+			429,
+		);
+	}
 	const adapter = (deps.adapters ?? IMPLEMENTED)[view.kind];
 	if (!adapter)
 		throw new ChannelError("not_implemented", "channel not available yet", 400);
@@ -495,12 +551,6 @@ export async function testChannel(
 	// Minted before the send so the test message carries a real, single-use
 	// Acknowledge button: in an interactive mode the outbound leg is exactly the
 	// half that can succeed while the button was silently dropped.
-	const ackUrl = await mintVerifyCapability(
-		database,
-		userId,
-		view.kind,
-		ackBaseUrl(env),
-	);
 	// The caller is the recipient here, so their stored preference is the one
 	// the test message renders in -- including the ack button the adapter adds.
 	const locale = await resolveRecipientLocale(database, userId);
@@ -533,7 +583,9 @@ export async function testChannel(
 
 	if (!result.ok) return { ok: false, reason: classify(result) };
 
-	const verifiedAt = new Date();
+	const sentAt = Date.now();
+	if (view.kind === "email") return { ok: true, verifiedAt: null, sentAt };
+	const verifiedAt = new Date(sentAt);
 	await database
 		.update(tables.notificationChannel)
 		.set({ verifiedAt })
@@ -543,5 +595,5 @@ export async function testChannel(
 				eq(tables.notificationChannel.kind, view.kind),
 			),
 		);
-	return { ok: true, verifiedAt: verifiedAt.getTime() };
+	return { ok: true, verifiedAt: verifiedAt.getTime(), sentAt };
 }

@@ -277,6 +277,7 @@ beforeAll(async () => {
 				"telegram",
 				{ botToken: BOT_TOKEN, chatId: String(CHAT_ID) },
 				channelKeyRing(process.env),
+				USER,
 			),
 		},
 		// The rest of the family, same chat, each with its own bot token.
@@ -288,6 +289,7 @@ beforeAll(async () => {
 				"telegram",
 				{ botToken: groupBotToken(id), chatId: String(CHAT_ID) },
 				channelKeyRing(process.env),
+				id,
 			),
 		})),
 		// Stored by @username, in the case the operator typed it in.
@@ -299,6 +301,7 @@ beforeAll(async () => {
 				"telegram",
 				{ botToken: groupBotToken(NAMED_USER), chatId: NAMED_CHAT },
 				channelKeyRing(process.env),
+				NAMED_USER,
 			),
 		},
 	]);

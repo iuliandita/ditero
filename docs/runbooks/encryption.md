@@ -10,7 +10,7 @@ Provide it as `DITERO_ENCRYPTION_KEY` or `DITERO_ENCRYPTION_KEY_FILE`. Productio
 
 Encrypted values use `ditero:v1:<fingerprint>:<nonce>:<ciphertext>:<tag>`. The AES-GCM associated data binds each value to its model and field or user-secret kind. Copying ciphertext to another protected field will fail authentication.
 
-Notification channel credentials (`notification_channel.config`) are enveloped the same way; only the secret fields are, so the public ones (ntfy server URL and topic) stay readable. Rows written before this landed are plaintext until backfilled:
+Notification channel credentials (`notification_channel.config`) wrap that field envelope in `ditero:channel:v2:` and bind its associated data to the owner, channel kind and field. Only secret fields are encrypted, so the public ones (ntfy server URL and topic) stay readable. Legacy plaintext and `ditero:v1:` unbound channel secrets remain readable. Backfill them to the owner-bound format:
 
 ```sh
 bun run security:encrypt-channel-configs

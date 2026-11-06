@@ -496,7 +496,7 @@ export function ChannelRow({
 							className="flex items-center gap-1 text-xs"
 						>
 							{copied && m.channel_copied_announcement()}
-							{result.state === "verified" && (
+							{(result.state === "verified" || result.state === "sent") && (
 								<>
 									<Check className="size-3.5 text-success" />
 									{acked
@@ -513,6 +513,11 @@ export function ChannelRow({
 						</span>
 					</div>
 
+					{kind === "email" && !acked && (
+						<p className="text-xs text-muted-foreground">
+							{m.channel_email_verification_required()}
+						</p>
+					)}
 					{rowError && (
 						<p
 							role="alert"

@@ -184,6 +184,7 @@ export async function discordAppChannels(
 				"discord",
 				row.config as Record<string, unknown>,
 				ring,
+				row.userId,
 			);
 		} catch {
 			continue;
