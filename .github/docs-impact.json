@@ -27,7 +27,7 @@
 		"authentication": {
 			"sourceDigest": "92d74c62e6f182efc981e76afc764ffce75aeb580ee699ab167d537dc5e396fc",
 			"docs": ["docs/runbooks/native-authentication.md"],
-			"note": "The password credential remains linked so password-protected account settings keep their password requirement. Other provider accounts can still be unlinked. No credential format or native handoff changes."
+			"note": "Preserve the Better Auth 1.7.12 upgrade, JWT/provider-account migrations, explicit provider linking, nonce validation, verified-email admission and scoped Apple origin checks. Reset atomically consumes its token, writes the password, verifies the mailbox and retires sessions, native authority, access tokens, feeds, passkeys, provider links and pending account proofs while retaining TOTP and backup codes. Enforce the enrolled local factor on every sign-in path, including social/OIDC/SAML callbacks, passkeys and native system-browser flows. Reuse the plugin challenge, provisional-session deletion and reset invalidation. Provider MFA and remembered-device cookies cannot substitute. Native grants retain their ID and stay unapproved until successful factor completion and explicit consent; no bridge permissions or credential formats change. Upgrade server/web together and reload sign-in pages; rollback loses this protection. The password credential remains linked so password-protected account settings keep their password requirement. Other provider accounts can still be unlinked. No credential format or native handoff changes."
 		},
 		"compatibility": {
 			"sourceDigest": "9f3b42b57e1325f123ab9ee0955ad09c580db6e09d043e197f0deef49ba88b88",
