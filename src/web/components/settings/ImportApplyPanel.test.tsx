@@ -297,3 +297,45 @@ test.each([
 				: body,
 	);
 });
+
+test("a busy status read recovers Apply without confirmation or mutation", async () => {
+	vi.useFakeTimers();
+	vi.stubGlobal("document", {
+		addEventListener: vi.fn(),
+		removeEventListener: vi.fn(),
+	});
+	const fetch = vi
+		.fn()
+		.mockResolvedValueOnce(new Response(null, { status: 429 }))
+		.mockResolvedValueOnce(Response.json({ run: null }));
+	vi.stubGlobal("fetch", fetch);
+	function render() {
+		fixture.cursor = 0;
+		const elements = nodes(
+			ImportApplyPanel({
+				plan,
+				ownerId: "owner",
+				onBusy: fixture.onBusy,
+				disabled: false,
+			}),
+		);
+		for (const callback of fixture.effects.splice(0)) callback();
+		return elements;
+	}
+	try {
+		render();
+		await vi.advanceTimersByTimeAsync(500);
+		const elements = render();
+		expect(
+			elements.some((node) => node.props.children === "import_apply_action"),
+		).toBe(true);
+		expect(elements.some((node) => node.props.role === "alert")).toBe(false);
+		expect(fetch).toHaveBeenCalledTimes(2);
+		expect(fixture.confirm).not.toHaveBeenCalled();
+		expect(
+			fetch.mock.calls.every((call) => !(call[1] as RequestInit).method),
+		).toBe(true);
+	} finally {
+		vi.useRealTimers();
+	}
+});

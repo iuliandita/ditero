@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { m } from "../../../paraglide/messages.js";
 import { getLocale } from "../../../paraglide/runtime.js";
+import { readPortabilityMetadata } from "../../lib/portability-read.ts";
 import { Button } from "../ui/button.tsx";
 import { useConfirm } from "../ui/confirm.tsx";
 import { AttachmentArchiveImportDialog } from "./AttachmentArchiveImportDialog.tsx";
@@ -90,13 +91,10 @@ export function ImportApplyPanel({
 		setError(null);
 		void (async () => {
 			try {
-				const response = await fetch(`${path}/run`, {
-					signal: controller.signal,
-					credentials: "same-origin",
-					cache: "no-store",
-				});
-				if (!response.ok) throw new Error("Import status unavailable");
-				const body = (await response.json()) as { run: Run | null };
+				const body = await readPortabilityMetadata<{ run: Run | null }>(
+					`${path}/run`,
+					controller.signal,
+				);
 				if (!controller.signal.aborted) {
 					if (body.run?.state === "completed" || body.run?.state === "conflict")
 						focusTerminal.current ||= document.activeElement === action.current;

@@ -22,6 +22,13 @@ deployment's security headers and CORS policy. Auth dispatch reuses the bounded
 bytes across header sanitization so fixed-length and chunked bodies remain readable
 on the packaged Bun runtime; peer identity still comes from the original request.
 
+Import sources and saved-plan status reads retry temporary 429 admission refusals
+up to twice, within a 15-second request budget. Retry-After delays up to five seconds
+are honored; leaving the import panel cancels pending reads and retries. Persistent
+refusals retain the explicit status retry action. Apply requests still require
+confirmation and explicit recovery rather than automatic replay. The shared limit
+of three portability database operations per process and one per account is unchanged.
+
 ## Authentication
 
 Email/password, passkeys, TOTP, and recovery codes are supported. Cookie-authenticated mutations require an exact configured origin. Sensitive auth routes use PostgreSQL-backed rate limits. Proxy headers are ignored unless the direct peer is within `DITERO_TRUSTED_PROXIES`.

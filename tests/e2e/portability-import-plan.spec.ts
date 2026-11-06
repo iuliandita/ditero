@@ -11,6 +11,7 @@ import {
 	uniqueEmail,
 	waitWorkspaceReady,
 } from "./helpers.ts";
+import { readPortabilityExport } from "./portability-reads.ts";
 
 test("saves and deduplicates a dry run without changing tasks, then discards it", async ({
 	page,
@@ -33,7 +34,7 @@ test("saves and deduplicates a dry run without changing tasks, then discards it"
 	).toBeVisible();
 	await expect
 		.poll(async () => {
-			const response = await page.request.get("/api/portability/export");
+			const response = await readPortabilityExport(page);
 			expect(response.ok()).toBeTruthy();
 			return (await response.json()).data.tasks.map(
 				(task: { title: string }) => task.title,
@@ -121,7 +122,7 @@ test("saves and deduplicates a dry run without changing tasks, then discards it"
 	await expect(
 		panel.getByRole("button", { name: "Resume import" }),
 	).toHaveCount(0);
-	const after = await page.request.get("/api/portability/export");
+	const after = await readPortabilityExport(page);
 	expect((await after.json()).data.tasks).toEqual(exported.data.tasks);
 	await panel
 		.getByRole("button", { name: "Discard dry run", exact: true })
@@ -165,11 +166,9 @@ test("rejects an invalid historical graph locally and accepts a replacement v1 f
 	await page.setViewportSize({ width: 375, height: 812 });
 	await signUp(page, uniqueEmail("history-archive"));
 	await waitWorkspaceReady(page);
-	const exported = await (
-		await page.request.get("/api/portability/export")
-	).json();
+	const exported = await (await readPortabilityExport(page)).json();
 	const archive = await (
-		await page.request.get("/api/portability/export?version=2")
+		await readPortabilityExport(page, "?version=2")
 	).json();
 	archive.data.comments.push({
 		id: "invalid-parent",
@@ -257,13 +256,11 @@ test("imports assignments, recovers a lost response, and supports ordinary unass
 	await expect
 		.poll(
 			async () =>
-				(await (await page.request.get("/api/portability/export")).json()).data
-					.assignments.length,
+				(await (await readPortabilityExport(page)).json()).data.assignments
+					.length,
 		)
 		.toBe(1);
-	const original = await (
-		await page.request.get("/api/portability/export")
-	).json();
+	const original = await (await readPortabilityExport(page)).json();
 	expect(original.data.tasks).toHaveLength(1);
 	expect(original.data.assignments).toHaveLength(1);
 	expect(original.data.assignments[0].userId).toBe(original.sourceUserId);
@@ -336,13 +333,11 @@ test("imports assignments, recovers a lost response, and supports ordinary unass
 	);
 	await page.getByTestId("confirm-cancel").click();
 	expect(
-		(await (await page.request.get("/api/portability/export")).json()).data
-			.assignments,
+		(await (await readPortabilityExport(page)).json()).data.assignments,
 	).toEqual(original.data.assignments);
-	expect(
-		(await (await page.request.get("/api/portability/export")).json()).data
-			.tasks,
-	).toEqual(original.data.tasks);
+	expect((await (await readPortabilityExport(page)).json()).data.tasks).toEqual(
+		original.data.tasks,
+	);
 	await page.route(
 		"**/api/portability/import/plans/*/apply",
 		async (route) => {
@@ -366,9 +361,7 @@ test("imports assignments, recovers a lost response, and supports ordinary unass
 	await expect(panel.getByTestId("import-apply-status")).toContainText(
 		"completed",
 	);
-	const after = await (
-		await page.request.get("/api/portability/export")
-	).json();
+	const after = await (await readPortabilityExport(page)).json();
 	expect(after.data.tasks).toHaveLength(2);
 	expect(
 		new Set(after.data.tasks.map((row: { id: string }) => row.id)).size,
@@ -425,8 +418,7 @@ test("imports assignments, recovers a lost response, and supports ordinary unass
 	await expect
 		.poll(
 			async () =>
-				(await (await page.request.get("/api/portability/export")).json()).data
-					.assignments,
+				(await (await readPortabilityExport(page)).json()).data.assignments,
 		)
 		.toEqual(original.data.assignments);
 	await page.reload();

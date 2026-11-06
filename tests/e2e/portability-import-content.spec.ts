@@ -7,6 +7,7 @@ import {
 	uniqueEmail,
 	waitWorkspaceReady,
 } from "./helpers.ts";
+import { readPortabilityExport } from "./portability-reads.ts";
 
 const cases: {
 	provider: string;
@@ -69,9 +70,7 @@ for (const item of cases)
 	}) => {
 		await signUp(page, uniqueEmail(`content-${item.provider}`));
 		await waitWorkspaceReady(page);
-		const original = await (
-			await page.request.get("/api/portability/export")
-		).json();
+		const original = await (await readPortabilityExport(page)).json();
 		await goToSettings(page);
 		const panel = page.getByRole("region", { name: "Plan an import" });
 		await chooseOption(page, panel.getByTestId("import-format"), item.picker);
@@ -105,6 +104,16 @@ for (const item of cases)
 		await expect(save).toBeDisabled();
 		await policy.check();
 		await expect(save).toBeEnabled();
+		let refusedStatus = false;
+		await page.route("**/api/portability/import/plans/*/run", async (route) => {
+			if (refusedStatus) return route.continue();
+			refusedStatus = true;
+			await route.fulfill({
+				status: 429,
+				headers: { "Retry-After": "0.1" },
+				json: { code: "import-busy" },
+			});
+		});
 		const saved = page.waitForResponse(
 			(response) =>
 				response.url().endsWith("/api/portability/import/plans") &&
@@ -118,21 +127,20 @@ for (const item of cases)
 			timezone: "UTC",
 		});
 		expect(
-			(await (await page.request.get("/api/portability/export")).json()).data
-				.tasks,
+			(await (await readPortabilityExport(page)).json()).data.tasks,
 		).toEqual(original.data.tasks);
 		const apply = panel.getByRole("button", {
 			name: "Apply import",
 			exact: true,
 		});
+		await expect(apply).toBeEnabled();
+		expect(refusedStatus).toBe(true);
 		await apply.click();
 		await page.getByTestId("confirm-accept").click();
 		await expect(panel.getByTestId("import-apply-status")).toContainText(
 			"completed",
 		);
-		const imported = await (
-			await page.request.get("/api/portability/export")
-		).json();
+		const imported = await (await readPortabilityExport(page)).json();
 		expect(imported.data.tasks).toHaveLength(item.tasks);
 		const task = imported.data.tasks.find(
 			(row: { title: string }) => row.title === item.title,
@@ -169,8 +177,7 @@ for (const item of cases)
 			"completed",
 		);
 		expect(
-			(await (await page.request.get("/api/portability/export")).json()).data
-				.tasks,
+			(await (await readPortabilityExport(page)).json()).data.tasks,
 		).toEqual(imported.data.tasks);
 	});
 

@@ -10,6 +10,7 @@ import {
 	uniqueEmail,
 	waitWorkspaceReady,
 } from "./helpers.ts";
+import { readPortabilityExport } from "./portability-reads.ts";
 
 const fixture = readFileSync(
 	new URL("../fixtures/portability/providers/csv-v1.csv", import.meta.url),
@@ -168,9 +169,7 @@ test("CSV original-file workflow requires policy acknowledgment, applies and rep
 }) => {
 	await signUp(page, uniqueEmail("csv-import"));
 	await waitWorkspaceReady(page);
-	const original = await (
-		await page.request.get("/api/portability/export")
-	).json();
+	const original = await (await readPortabilityExport(page)).json();
 	await goToSettings(page);
 	const panel = page.getByRole("region", { name: "Plan an import" });
 	await chooseOption(page, panel.getByTestId("import-format"), "Ditero CSV v1");
@@ -204,8 +203,7 @@ test("CSV original-file workflow requires policy acknowledgment, applies and rep
 		identityMode: "stable-ids",
 	});
 	expect(
-		(await (await page.request.get("/api/portability/export")).json()).data
-			.tasks,
+		(await (await readPortabilityExport(page)).json()).data.tasks,
 	).toHaveLength(0);
 	const apply = panel.getByRole("button", {
 		name: "Apply import",
@@ -362,9 +360,7 @@ test("CSV original-file workflow requires policy acknowledgment, applies and rep
 	await panel.screenshot({
 		path: test.info().outputPath("import-completed-focus-desktop.png"),
 	});
-	const imported = await (
-		await page.request.get("/api/portability/export")
-	).json();
+	const imported = await (await readPortabilityExport(page)).json();
 	expect(
 		imported.data.tasks.map((row: { title: string }) => row.title).sort(),
 	).toEqual(["Buy apples", "Prepare groceries"]);
@@ -382,6 +378,7 @@ test("CSV original-file workflow requires policy acknowledgment, applies and rep
 	const runPath = `**/api/portability/import/plans/${plan.id}/run`;
 	const unavailableRun = async (route: Route) => {
 		const response = await route.fetch();
+		if (response.status() === 429) return route.fulfill({ response });
 		expect(response.ok()).toBe(true);
 		expect((await response.json()).run.state).toBe("completed");
 		await route.fulfill({ status: 503 });
@@ -470,10 +467,9 @@ test("CSV original-file workflow requires policy acknowledgment, applies and rep
 	await expect(panel.getByTestId("import-apply-status")).toContainText(
 		"completed",
 	);
-	expect(
-		(await (await page.request.get("/api/portability/export")).json()).data
-			.tasks,
-	).toEqual(imported.data.tasks);
+	expect((await (await readPortabilityExport(page)).json()).data.tasks).toEqual(
+		imported.data.tasks,
+	);
 	expect(
 		(await new AxeBuilder({ page }).include("#import-plan").analyze())
 			.violations,
