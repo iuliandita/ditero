@@ -499,6 +499,17 @@ class ReleaseTests(unittest.TestCase):
                     with self.assertRaises(ValueError):
                         release.verify_standalone_candidate(changed, "0.0.1-alpha.1", "a" * 40)
 
+    def test_compose_version_sync_and_stale_rejection(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(release, "ROOT", Path(directory)):
+            path = Path(directory) / "deploy/docker/docker-compose.yml"
+            path.parent.mkdir(parents=True)
+            path.write_text("${DITERO_IMAGE_TAG:-old}\n${DITERO_ZERO_IMAGE_TAG:-${DITERO_IMAGE_TAG:-old}-zero}\n${OTHER-default}\n")
+            with self.assertRaisesRegex(ValueError, "Compose image tags"):
+                release.compose_version("1.2.3")
+            release.compose_version("1.2.3", update=True)
+            self.assertEqual(path.read_text(), "${DITERO_IMAGE_TAG:-1.2.3}\n${DITERO_ZERO_IMAGE_TAG:-${DITERO_IMAGE_TAG:-1.2.3}-zero}\n${OTHER-default}\n")
+            release.compose_version("1.2.3")
+
     def test_deployment_requires_matching_kustomize_images(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(release, "ROOT", Path(directory)), patch.object(release, "metadata", return_value={"version": "0.0.1-alpha.1"}), patch.object(release.subprocess, "run") as run:
             root = Path(directory)

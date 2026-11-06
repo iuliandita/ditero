@@ -34,9 +34,8 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/kubectl"
           curl --fail --silent --show-error --location https://dl.k8s.io/release/v1.37.1/bin/linux/amd64/kubectl -o "$RUNNER_TEMP/kubectl/kubectl"
-          curl --fail --silent --show-error --location https://dl.k8s.io/release/v1.37.1/bin/linux/amd64/kubectl.sha256 -o "$RUNNER_TEMP/kubectl/kubectl.sha256"
           cd "$RUNNER_TEMP/kubectl"
-          echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check
+          echo "65691ff77eb6fa44c908b77a1082c9f092c3b9733b5cefabec0d1104890e21a8  kubectl" | sha256sum --check
           chmod 0755 kubectl
           echo "$RUNNER_TEMP/kubectl" >> "$GITHUB_PATH"
       - name: Validate release helpers

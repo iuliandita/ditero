@@ -7,17 +7,19 @@
 			"note": "Text people type keeps its own direction in Arabic: input and textarea fields use dir=auto, rendered notes and comments take their own direction, and titles, list and people names and label chips inside translated text are isolated so punctuation and list separators stay in place. Arabic link underlines use a larger offset. Behavior, permissions, data and keyboard shortcuts are unchanged."
 		},
 		"release": {
-			"sourceDigest": "c8b47e2394f6be9f9db7ebe715b8292d9e3fb5f9d57fbc39004bf60b8988bd3a",
-			"docs": ["RELEASING.md", "README.md"],
-			"note": "Prepare fourth beta 0.1.0-beta.4/Android code 16 after the v0.1.0-beta.3 tag failed the Debian image gate and never published (its run built code 15). Releases stay Alpine and Zero only (#1267); the changelog says why the -debian image is missing. Retain signing certificate, documentation epoch, remaining prerelease/native limits and prerelease publication wording; release steps are unchanged."
+			"sourceDigest": "83c6448fa523a5c2cbb2ea05231458f67224d471154caf509d3762567dbf2e66",
+			"docs": ["RELEASING.md"],
+			"note": "Document environment secrets, the Compose release default and the version synchronization command."
 		},
 		"configuration": {
-			"sourceDigest": "c07dd8d5e60e0f2ded04fc9d1a10d951922626eea1e01d96593d16dea4df8043",
-			"noImpact": "The Alpine app, Zero, all-in-one and push-relay images upgrade zlib to 1.3.2-r1 alongside the existing targeted package upgrades; no settings, defaults or formats change."
+			"sourceDigest": "e5036d1231449ca0ab92b39983d3f5cbc9fd95966668caa29efd9450af7c1419",
+			"docs": ["docs/runbooks/deployment-settings.md"],
+			"note": "Document the released Compose image default and the explicit nightly selection."
 		},
 		"deployment": {
-			"sourceDigest": "f91dc2c8e275896a448cf8cd7516a23d787b7ad7e06644d274819dc1e41eed27",
-			"noImpact": "Images now carry zlib 1.3.2-r1 (CVE-2026-85091); bases, tags, entrypoints and upgrade steps are unchanged, so deployments need no action beyond pulling new images."
+			"sourceDigest": "19597c1ad4e137a5e30c94049fcaacffe832bf29a28b9bcf97212e1ed59cdf4a",
+			"docs": ["docs/runbooks/backup-restore.md"],
+			"note": "Record the deployed Compose image tag for recovery; the default now follows the released version and image packages, including musl, are pinned."
 		},
 		"native": {
 			"sourceDigest": "1b8b2aaf21a0c4e67b850dde378d9948f5859014f90adf27fe11076f27d3a2aa",

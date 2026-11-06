@@ -67,11 +67,9 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     -tags osusergo,netgo,sqlite_omit_load_extension -o /out/litestream-v5 ./cmd/litestream
 
 FROM alpine:3.24.2@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6 AS zero-runtime
-# Upgrade only the security-relevant packages; a full upgrade would move the
-# base off 3.24.2 and fail the all-in-one base assertion.
-RUN apk upgrade --no-cache curl brotli-libs libcrypto3 libssl3 zlib \
-	&& apk add --no-cache ca-certificates 'curl>=8.23.0-r0' 'brotli-libs>=1.2.1-r0' \
-		'libcrypto3>=3.5.8-r0' 'libssl3>=3.5.8-r0' 'zlib>=1.3.2-r1' libstdc++ readline
+RUN apk add --no-cache 'ca-certificates=20261020-r0' 'curl=8.23.0-r0' 'brotli-libs=1.2.1-r0' \
+		'libcrypto3=3.5.9-r0' 'libssl3=3.5.9-r0' 'zlib=1.4-r0' 'libstdc++=15.2.0-r5' 'readline=8.3.3-r1' \
+		'musl=1.2.6-r3' 'musl-utils=1.2.6-r3'
 COPY --from=zero-node /usr/local/bin/node /usr/local/bin/node
 COPY --from=litestream-legacy /out/litestream /usr/local/bin/litestream
 COPY --from=litestream-v5 /out/litestream-v5 /usr/local/bin/litestream-v5
@@ -107,6 +105,9 @@ ENV DITERO_GIT_SHA=${DITERO_GIT_SHA}
 
 # --- runtime bases ----------------------------------------------------------
 FROM ${RUNTIME_IMAGE} AS runtime-alpine
+# Bump these pins when Alpine rolls a revision; missing versions fail the build.
+RUN apk add --no-cache 'libcrypto3=3.5.9-r0' 'libssl3=3.5.9-r0' 'zlib=1.4-r0' \
+		'musl=1.2.5-r13' 'musl-utils=1.2.5-r13'
 RUN mkdir -p /data/attachments && chown bun:bun /data/attachments
 
 # Debian fallback: distroless is the only Debian base whose packages scan clean
@@ -130,10 +131,6 @@ COPY --from=debian-prep /rootfs/ /
 # --- runtime stage ----------------------------------------------------------
 FROM runtime-${RUNTIME_VARIANT} AS runtime
 WORKDIR /app
-
-RUN if command -v apk >/dev/null 2>&1; then \
-		apk upgrade --no-cache libcrypto3 libssl3 zlib; \
-	fi
 
 ENV NODE_ENV=production \
     API_PORT=3000 \

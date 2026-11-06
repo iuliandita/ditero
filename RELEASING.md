@@ -106,12 +106,18 @@ Version tags omit the Git tag's `v` prefix. Debian app tags have a `-debian` suf
 Zero tags have a `-zero` suffix. Nightly Zero tags are `nightly-zero` and
 `nightly-zero-<sha>`. Prereleases never move `latest`, major/minor or `stable` tags.
 
-For the beta Compose package, set `DITERO_IMAGE_TAG=0.1.0-beta.4` and follow the
+Compose defaults to `0.1.0-beta.4`. Set `DITERO_IMAGE_TAG=nightly` to opt into
+development builds. Follow the
 [Compose setup](README.md#run-it-docker-compose). Extract the whole archive: bundled
 PostgreSQL needs the adjacent initialization scripts. Helm instructions and required
 Secret keys are in the [chart guide](deploy/helm/ditero/README.md).
 
 ## Release procedure
+
+Create the GitHub environment `production`, restrict its deployment branches and tags,
+and move the Docker Hub and Android signing secrets there from repository secrets.
+Repository secrets remain usable until moved; environment secrets take precedence.
+
 
 Review affected operator and client instructions using the
 [documentation impact checks](docs/MAINTENANCE.md). Static checks do not establish
@@ -124,7 +130,8 @@ Run `python3 -I scripts/docs-release.py` after committing the complete assessmen
 Missing history, a changed epoch tag or unavailable tooling blocks publication.
 
 1. Update `release.json` with the version and a strictly increasing Android version
-   code. Align Helm chart metadata, Helm/Kustomize app/Zero image tags, and current
+   code. Run `python3 scripts/release.py sync-compose` to update both Compose image
+   defaults. Align Helm chart metadata, Helm/Kustomize app/Zero image tags, and current
    version/image examples in both packaged deployment guides with that version
    before tagging. Release packaging checks reject mismatched guide examples,
    including both tag-matched Kustomize image names and replacement tags.
@@ -162,12 +169,12 @@ is the complete artifact-set indicator.
 
 ## Signing configuration
 
-Configure repository Actions secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` for
+Configure Actions secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` for
 Docker Hub. GHCR uses the workflow token and container signing uses OIDC. An explicit
 `DITERO_DOCKERHUB_ENABLED=false` repository variable permits a GHCR-only release; the
 release notes disclose that omission.
 
-Android release builds require these repository Actions secrets:
+Android release builds require these Actions secrets:
 
 - `DITERO_ANDROID_KEYSTORE_BASE64`: base64-encoded retained private keystore.
 - `DITERO_ANDROID_KEYSTORE_PASSWORD`: keystore password.

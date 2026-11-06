@@ -13,7 +13,7 @@ const installed = execFileSync("apk", ["info", "-v"], { encoding: "utf8" })
 	.trim()
 	.split("\n");
 const selected = lock.packages.filter((x) => x.architecture === arch);
-if (selected.length !== 26)
+if (selected.length !== 27)
 	throw Error("complete architecture closure required");
 for (const pkg of selected) {
 	const current = installed.find(

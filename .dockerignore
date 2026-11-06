@@ -23,6 +23,11 @@ AGENTS.md
 docs
 
 # Editor / OS cruft
+.codex
+.claude
+.cursor
+.opencode
+.mcp.json
 .idea
 .vscode
 .DS_Store
