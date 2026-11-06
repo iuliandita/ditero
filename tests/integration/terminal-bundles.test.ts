@@ -214,12 +214,17 @@ async function cli(
 		}
 	}
 }
-async function mcp(secret = token) {
+async function mcp(secret = token, allowWrites = false) {
 	const transport = new StdioClientTransport({
 		command: bundlePath(packaged.extracted, "ditero-mcp"),
 		args: ["--allow-loopback-http"],
 		cwd: packaged.extracted,
-		env: { PATH: packaged.path, DITERO_URL: origin, DITERO_TOKEN: secret },
+		env: {
+			PATH: packaged.path,
+			DITERO_URL: origin,
+			DITERO_TOKEN: secret,
+			...(allowWrites ? { DITERO_MCP_ALLOW_WRITES: "1" } : {}),
+		},
 		stderr: "pipe",
 	});
 	transport.stderr?.on("data", (chunk) => {
@@ -310,7 +315,7 @@ test("packaged bundle MCP stdio uses inspected due, commits once after lost resp
 		"update task set due_at=$1,rrule='FREQ=DAILY' where id=$2",
 		[due, task],
 	);
-	const client = await mcp();
+	const client = await mcp(token, true);
 	const observed = await client.callTool({
 		name: "list_tasks",
 		arguments: { listId: list },
@@ -352,12 +357,18 @@ test("packaged bundle MCP stdio uses inspected due, commits once after lost resp
 	expect(wires[0]).toEqual(wires[1]);
 }, 30_000);
 test("packaged bundle MCP stdio rejects strict inputs before HTTP and rechecks revoked authority", async () => {
-	const client = await mcp();
+	const readOnly = await mcp();
 	const args = {
 		taskId: task,
 		requestId: randomUUID(),
 		completion: { listId: list, expectedDueAt: null },
 	};
+	await expect(
+		readOnly.callTool({ name: "complete_task", arguments: args }),
+	).rejects.toThrow("Tool complete_task disabled");
+	expect(wires).toHaveLength(0);
+	expect(await counts()).toEqual({ history: 0, karma: 0, receipts: 0 });
+	const client = await mcp(token, true);
 	let refused = false;
 	try {
 		refused =
@@ -502,7 +513,7 @@ test("packaged CLI and MCP plan/create/replay use real API and one explicit rece
 			])
 		).rows[0].count,
 	).toBe(1);
-	const client = await mcp();
+	const client = await mcp(token, true);
 	expect(client.getServerVersion()).toMatchObject({
 		name: "ditero",
 		version: release.version,
