@@ -45,12 +45,20 @@ and the 403 response for foreign attachment downloads; current downloads return
 ## Runtime role and key-grant upgrade
 
 Migration `0092_database_role_boundaries` binds every new membership key to the
-recipient's actual membership, user and workspace. Request updates can change
+recipient's actual membership, user and workspace, and requires the caller as
+granter even for self-grants. Request updates can change
 only `state`, `granted_at` and `failure_reason`; a trigger enforces this even
 when a custom or inherited role retains table-wide UPDATE. Existing rows are
-preserved. The migration also removes PUBLIC execution of the bounded focus
-expiry function and grants execution to `ditero_runtime`, when that role exists.
-It narrows that role's request UPDATE grant to the three fulfilment columns.
+preserved. Membership-key updates can change only `enc`, `ciphertext` and
+`recipient_public_key`, matching identity rotation. The named runtime role also
+receives column-level UPDATE grants on both tables.
+
+The migration removes PUBLIC execution of the bounded focus expiry function.
+It automatically grants execution to every existing non-superuser role with
+DELETE on `public.focus_interval_start`, including custom runtime role names
+and roles receiving that privilege through inheritance. Read-only roles do not
+receive it. The built-in entrypoints migrate and then start the server, so this
+preserves existing cleanup authority without an intervening manual grant.
 
 Before upgrading Compose or Helm, stop app and Zero writers and back up the
 coordinated PostgreSQL, attachment and replica recovery set with the original
@@ -59,25 +67,32 @@ scripts do not rerun on retained database volumes; this migration applies the
 changes to existing databases as well as fresh installs. Deployment logins and
 Zero publications are unchanged. Helm does not provision database roles.
 
-For a custom runtime role name, run the following as the migration owner after
-migration and before restarting the application, substituting that role name:
+For a runtime role created after migration, or a custom role whose previous
+grants did not include DELETE on `public.focus_interval_start`, grant cleanup
+execution before deploying the updated application. Adapt these commands to the
+runtime role name and run them as the migration owner:
 
 ```sql
-revoke update on public.key_grant_request from ditero_runtime;
+revoke update on public.key_grant_request, public.membership_key from ditero_runtime;
 grant update (state, granted_at, failure_reason)
   on public.key_grant_request to ditero_runtime;
+grant update (enc, ciphertext, recipient_public_key)
+  on public.membership_key to ditero_runtime;
 grant execute on function public.prune_focus_intervals() to ditero_runtime;
 ```
 
-The same explicit grants are required if the runtime role is created after the
-migration. Do not restore a blanket UPDATE grant over existing tables. Check
-inherited and PUBLIC grants too; PostgreSQL privileges are additive.
+Do not restore blanket UPDATE grants over existing tables. Check inherited and
+PUBLIC grants too; PostgreSQL privileges are additive. Startup verifies cleanup
+EXECUTE access and names the exact GRANT to run when it is missing. A later
+pruning failure is logged independently and does not prevent reminder scanning.
 
 Production boot now rejects membership in any role with `SUPERUSER`, `BYPASSRLS`,
 `CREATEROLE` or `REPLICATION`, including indirect and NOINHERIT memberships. It
 also rejects direct ownership or owner membership for every RLS-enabled table,
-including private schemas. Review and remove unintended grants before restart;
-do not disable the check to accommodate operator drift. See PostgreSQL's
+including private schemas. Hosted database consoles may automatically enroll new
+logins in provider administration roles, including roles with CREATEROLE. Check
+memberships before upgrading, and remove unintended grants before restart; do
+not disable the check to accommodate operator drift. See PostgreSQL's
 [role membership rules](https://www.postgresql.org/docs/18/role-membership.html).
 
 Verify startup, a recipient's key request, co-member fulfilment and scheduler

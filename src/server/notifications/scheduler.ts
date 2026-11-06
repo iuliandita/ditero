@@ -1041,7 +1041,11 @@ export function startScheduler(
 		async () => {
 			try {
 				await withLeaderLock(pool, SCHEDULER_LOCK_KEY, async (client) => {
-					await pruneFocusIntervals(client);
+					try {
+						await pruneFocusIntervals(client);
+					} catch (error) {
+						console.error("scheduler: focus interval pruning failed:", error);
+					}
 					// Left undefined when the seam is not armed, so the production
 					// enqueue path keeps short-circuiting on an absent option rather
 					// than awaiting a live no-op closure every transaction.

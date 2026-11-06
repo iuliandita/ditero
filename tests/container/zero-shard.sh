@@ -175,6 +175,16 @@ grant_access=$(psql_as ditero_runtime "$DITERO_RUNTIME_DB_PASSWORD" --command "
  and not has_column_privilege('key_grant_request', 'user_id', 'UPDATE')
  and not has_column_privilege('key_grant_request', 'workspace_id', 'UPDATE')
  and not has_column_privilege('key_grant_request', 'requested_version', 'UPDATE')
+ and has_column_privilege('membership_key', 'enc', 'UPDATE')
+ and has_column_privilege('membership_key', 'ciphertext', 'UPDATE')
+ and has_column_privilege('membership_key', 'recipient_public_key', 'UPDATE')
+ and not has_column_privilege('membership_key', 'id', 'UPDATE')
+ and not has_column_privilege('membership_key', 'membership_id', 'UPDATE')
+ and not has_column_privilege('membership_key', 'user_id', 'UPDATE')
+ and not has_column_privilege('membership_key', 'workspace_id', 'UPDATE')
+ and not has_column_privilege('membership_key', 'key_version', 'UPDATE')
+ and not has_column_privilege('membership_key', 'granted_by', 'UPDATE')
+ and not has_column_privilege('membership_key', 'created_at', 'UPDATE')
  and has_function_privilege('public.prune_focus_intervals()', 'EXECUTE')")
 [ "$grant_access" = "t" ] || { echo "runtime key-grant or pruning privileges are incorrect" >&2; exit 1; }
 public_execute=$(psql_as postgres "$POSTGRES_PASSWORD" --command "

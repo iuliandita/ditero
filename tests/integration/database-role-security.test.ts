@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { verifyRuntimeDatabaseRole } from "../../src/db/runtime-role.ts";
@@ -50,7 +51,9 @@ beforeAll(async () => {
 			`create role "${role}" nosuperuser nocreatedb nocreaterole noinherit nobypassrls`,
 		);
 	}
-	await admin.query(`grant usage on schema public to "${runtimeRole}"`);
+	await admin.query(
+		`grant usage on schema public to "${runtimeRole}", "${outsiderRole}"`,
+	);
 	// Deliberately retain broad grants to exercise the trigger as well as RLS.
 	await admin.query(
 		`grant select, insert, update, delete on membership_key, key_grant_request to "${runtimeRole}"`,
@@ -83,6 +86,11 @@ beforeAll(async () => {
 	await admin.query(
 		`insert into key_grant_request (id, membership_id, user_id, workspace_id, requested_version) values ($1, $2, $3, $4, 1)`,
 		[request, `${bob}-member`, bob, workspace],
+	);
+	await admin.query(
+		`insert into membership_key (id, membership_id, user_id, workspace_id, key_version, enc, ciphertext, recipient_public_key, granted_by)
+   values ($1, $2, $3, $4, 100, 'enc', 'ciphertext', 'pk', $3)`,
+		[`${alice}-wrap`, `${alice}-member`, alice, workspace],
 	);
 });
 
@@ -171,6 +179,68 @@ describe("key-grant database boundaries", () => {
 		).rejects.toMatchObject({ code: "42501" });
 	});
 
+	test("a self-grant must name the caller as granter", async () => {
+		await expect(
+			asAlice((client) =>
+				client.query(
+					`insert into membership_key (id, membership_id, user_id, workspace_id, key_version, enc, ciphertext, recipient_public_key, granted_by)
+    values ($1, $2, $3, $4, 1, 'enc', 'ciphertext', 'pk', $5)`,
+					[randomUUID(), `${alice}-member`, alice, workspace, bob],
+				),
+			),
+		).rejects.toThrow(/row-level security/);
+		await asAlice(async (client) => {
+			expect(
+				(
+					await client.query(
+						`insert into membership_key (id, membership_id, user_id, workspace_id, key_version, enc, ciphertext, recipient_public_key, granted_by)
+     values ($1, $2, $3, $4, 1, 'enc', 'ciphertext', 'pk', $3) returning granted_by`,
+						[randomUUID(), `${alice}-member`, alice, workspace],
+					)
+				).rows,
+			).toEqual([{ granted_by: alice }]);
+		});
+	});
+
+	test.each([
+		["id", "changed"],
+		["membership_id", `${bob}-member`],
+		["user_id", bob],
+		["workspace_id", otherWorkspace],
+		["key_version", 101],
+		["granted_by", bob],
+		["created_at", new Date(0)],
+	])("cannot change membership key %s through a broad table grant", async (column, value) => {
+		await expect(
+			asAlice((client) =>
+				client.query(`update membership_key set ${column}=$1 where id=$2`, [
+					value,
+					`${alice}-wrap`,
+				]),
+			),
+		).rejects.toThrow("membership key identity is immutable");
+	});
+
+	test("identity rotation can still replace its own wrap columns", async () => {
+		await asAlice(async (client) => {
+			expect(
+				(
+					await client.query(
+						`update membership_key set enc='new-enc', ciphertext='new-ciphertext', recipient_public_key='new-pk'
+     where id=$1 returning enc, ciphertext, recipient_public_key`,
+						[`${alice}-wrap`],
+					)
+				).rows,
+			).toEqual([
+				{
+					enc: "new-enc",
+					ciphertext: "new-ciphertext",
+					recipient_public_key: "new-pk",
+				},
+			]);
+		});
+	});
+
 	test("a co-member can still fulfil the request", async () => {
 		await asAlice(async (client) => {
 			expect(
@@ -188,7 +258,10 @@ describe("key-grant database boundaries", () => {
 test("only explicitly authorized roles can prune, and runtime can prune expired rows", async () => {
 	await expect(
 		outsider.query("select public.prune_focus_intervals()"),
-	).rejects.toMatchObject({ code: "42501" });
+	).rejects.toMatchObject({
+		code: "42501",
+		message: "permission denied for function prune_focus_intervals",
+	});
 	const id = randomUUID();
 	await admin.query(
 		`insert into server_private.focus_interval_clock (user_id, interval_id, started_at) values ($1, $2, now() - interval '15 days')`,
@@ -225,6 +298,21 @@ describe("runtime boot privilege inspection", () => {
 		await expect(verifyRuntimeDatabaseRole(runtime)).resolves.toBeUndefined();
 	});
 
+	test("rejects missing prune execution with the exact repair grant", async () => {
+		try {
+			await admin.query(
+				`revoke execute on function public.prune_focus_intervals() from "${runtimeRole}"`,
+			);
+			await expect(verifyRuntimeDatabaseRole(runtime)).rejects.toThrow(
+				`GRANT EXECUTE ON FUNCTION public.prune_focus_intervals() TO "${runtimeRole}";`,
+			);
+		} finally {
+			await admin.query(
+				`grant execute on function public.prune_focus_intervals() to "${runtimeRole}"`,
+			);
+		}
+	});
+
 	test.each([
 		"superuser",
 		"bypassrls",
@@ -234,7 +322,7 @@ describe("runtime boot privilege inspection", () => {
 		try {
 			await admin.query(`alter role "${runtimeRole}" ${attribute}`);
 			await expect(verifyRuntimeDatabaseRole(runtime)).rejects.toThrow(
-				/can bypass row-level security/,
+				`Runtime database role ${runtimeRole} has forbidden attributes: ${attribute.toUpperCase()}`,
 			);
 		} finally {
 			await admin.query(`alter role "${runtimeRole}" no${attribute}`);
@@ -252,7 +340,7 @@ describe("runtime boot privilege inspection", () => {
 			await admin.query(`grant "${privilegedRole}" to "${intermediaryRole}"`);
 			await admin.query(`grant "${intermediaryRole}" to "${runtimeRole}"`);
 			await expect(verifyRuntimeDatabaseRole(runtime)).rejects.toThrow(
-				/can bypass row-level security/,
+				`${privilegedRole} (${attribute.toUpperCase()})`,
 			);
 		} finally {
 			await admin.query(`revoke "${intermediaryRole}" from "${runtimeRole}"`);
@@ -278,7 +366,7 @@ describe("runtime boot privilege inspection", () => {
 			if (path === "inherited")
 				await admin.query(`grant "${privilegedRole}" to "${runtimeRole}"`);
 			await expect(verifyRuntimeDatabaseRole(runtime)).rejects.toThrow(
-				/can bypass row-level security/,
+				`RLS tables: public.role_probe_${suffix} (owner ${path === "direct" ? runtimeRole : privilegedRole})`,
 			);
 		} finally {
 			if (path === "inherited")
@@ -286,4 +374,66 @@ describe("runtime boot privilege inspection", () => {
 			await admin.query(`drop table ${table}`);
 		}
 	});
+});
+
+test("migration preserves custom runtime cleanup authority without granting read-only roles", async () => {
+	const client = await admin.connect();
+	const customRole = `custom_cleanup_${suffix}`;
+	const readerRole = `cleanup_reader_${suffix}`;
+	try {
+		await client.query("begin");
+		await client.query(
+			`create role "${customRole}" nosuperuser nocreaterole noinherit nobypassrls`,
+		);
+		await client.query(
+			`create role "${readerRole}" nosuperuser nocreaterole noinherit nobypassrls`,
+		);
+		await client.query(
+			`grant usage on schema public to "${customRole}", "${readerRole}"`,
+		);
+		await client.query(
+			`grant delete on public.focus_interval_start to "${customRole}"`,
+		);
+		await client.query(
+			`grant select on public.focus_interval_start to "${readerRole}"`,
+		);
+		await client.query(
+			"drop function public.guard_key_grant_request_update() cascade",
+		);
+		await client.query(
+			"drop function if exists public.guard_membership_key_update() cascade",
+		);
+		const migration = await readFile(
+			new URL(
+				"../../drizzle/0092_database_role_boundaries.sql",
+				import.meta.url,
+			),
+			"utf8",
+		);
+		await client.query(migration);
+		expect(
+			(
+				await client.query(
+					`select has_function_privilege($1, 'public.prune_focus_intervals()', 'EXECUTE') as custom,
+           has_function_privilege($2, 'public.prune_focus_intervals()', 'EXECUTE') as reader`,
+					[customRole, readerRole],
+				)
+			).rows,
+		).toEqual([{ custom: true, reader: false }]);
+		await client.query(`set local role "${customRole}"`);
+		expect(
+			(
+				await client.query(
+					"select rolsuper, rolbypassrls from pg_roles where rolname=current_user",
+				)
+			).rows,
+		).toEqual([{ rolsuper: false, rolbypassrls: false }]);
+		expect(
+			(await client.query("select public.prune_focus_intervals() as removed"))
+				.rows[0].removed,
+		).toBeTypeOf("number");
+	} finally {
+		await client.query("rollback");
+		client.release();
+	}
 });
