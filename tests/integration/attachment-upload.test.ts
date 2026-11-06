@@ -8,6 +8,7 @@ import {
 	assertAttachmentTransition,
 	expireAttachmentReservations,
 } from "../../src/server/attachments/state.ts";
+import { attachmentSweep } from "../../src/server/attachments/sweep.ts";
 import type { Guards, Session } from "../../src/server/guards.ts";
 import {
 	BlobNotFoundError,
@@ -643,6 +644,112 @@ describe("attachment delete", () => {
 });
 
 describe("attachment upload and finalize", () => {
+	test.each([
+		["content", upload],
+		["thumbnail", uploadThumbnail],
+	] as const)("keeps the %s transfer exclusive through completion", async (kind, transfer) => {
+		const id = `att-exclusive-${kind}`;
+		await reserve(id, { declaredBytes: 4, thumbnailDeclaredBytes: 4 });
+		if (kind === "thumbnail") await upload(id, new Uint8Array(4));
+		const pause = store.pauseNextPut();
+		const response = transfer(id, new Uint8Array(4));
+		await pause.started.promise;
+		try {
+			expect((await transfer(id, new Uint8Array(4))).status).toBe(409);
+			expect((await finalize(id)).status).toBe(409);
+		} finally {
+			pause.release.resolve();
+		}
+		expect((await response).status).toBe(200);
+		if (kind === "content") await uploadThumbnail(id, new Uint8Array(4));
+		expect((await finalize(id)).status).toBe(200);
+	});
+
+	test.each([
+		["content", upload],
+		["thumbnail", uploadThumbnail],
+	] as const)("cleans a canceled %s transfer without touching a replacement after GC", async (kind, transfer) => {
+		const id = `att-canceled-${kind}`;
+		await reserve(id, { declaredBytes: 4, thumbnailDeclaredBytes: 4 });
+		if (kind === "thumbnail") await upload(id, new Uint8Array(4));
+		const pause = store.pauseNextPut();
+		const response = transfer(id, new Uint8Array(4));
+		await pause.started.promise;
+		let replacement: string | undefined;
+		try {
+			expect((await abort(id)).status).toBe(200);
+			await pool.query(
+				"update attachment set reservation_expires_at=$2 where id=$1",
+				[id, NOW],
+			);
+			expect(await attachmentSweep(pool, store, { now: NOW })).toMatchObject({
+				deleted: 1,
+				failed: 0,
+			});
+			expect((await reserve(id, { declaredBytes: 4 })).status).toBe(200);
+			expect((await upload(id, new Uint8Array(4))).status).toBe(200);
+			expect((await finalize(id)).status).toBe(200);
+			replacement = (await row(id))?.storage_key;
+		} finally {
+			pause.release.resolve();
+		}
+		expect((await response).status).toBe(409);
+		expect(await row(id)).toMatchObject({
+			state: "committed",
+			storage_key: replacement,
+		});
+		expect([...store.objects.keys()]).toEqual([replacement]);
+	});
+	test.each([
+		"content",
+		"thumbnail",
+	] as const)("releases the database client while the %s body is pending", async (kind) => {
+		const id = `att-pending-${kind}`;
+		await reserve(id, { declaredBytes: 4, thumbnailDeclaredBytes: 4 });
+		if (kind === "thumbnail") await upload(id, new Uint8Array(4));
+		const transferPool = new Pool({ connectionString: databaseURL, max: 1 });
+		const transferApp = new Elysia().use(
+			attachmentRoutes(transferPool, guards, store, { now: () => NOW }),
+		);
+		const pending = Promise.withResolvers<void>();
+		let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
+		let pulls = 0;
+		const body = new ReadableStream<Uint8Array>(
+			{
+				start(value) {
+					controller = value;
+				},
+				pull(value) {
+					if (pulls++ === 0) value.enqueue(new Uint8Array(1));
+					else pending.resolve();
+				},
+			},
+			{ highWaterMark: 0 },
+		);
+		const response = transferApp.handle(
+			new Request(
+				`http://localhost/api/attachments/${id}/${kind === "content" ? "upload" : "thumbnail"}`,
+				{
+					method: "POST",
+					headers: { "x-test-user": "upload-owner" },
+					body,
+					duplex: "half",
+				} as RequestInit,
+			),
+		);
+		try {
+			await pending.promise;
+			expect(transferPool.totalCount).toBe(1);
+			expect(transferPool.idleCount).toBe(1);
+			await expect(
+				transferPool.query("select 1 as available"),
+			).resolves.toMatchObject({ rows: [{ available: 1 }] });
+		} finally {
+			controller?.close();
+			await response;
+			await transferPool.end();
+		}
+	});
 	test("records observed bytes and hash, then moves to uploading", async () => {
 		const payload = new TextEncoder().encode("ciphertext");
 		expect(

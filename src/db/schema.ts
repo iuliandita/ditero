@@ -503,6 +503,7 @@ export const attachment = pgTable(
 		thumbnailCiphertextSha256: text("thumbnail_ciphertext_sha256"),
 		storageKey: text("storage_key").notNull(),
 		thumbnailStorageKey: text("thumbnail_storage_key"),
+		uploadToken: text("upload_token"),
 		uploadedBy: text("uploaded_by")
 			.notNull()
 			.references(() => user.id),

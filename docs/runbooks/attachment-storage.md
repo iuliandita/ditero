@@ -27,7 +27,10 @@ the application user. A missing, read-only or unwritable directory fails startup
 with its path and error code (for example `ENOENT`, `EROFS` or `EACCES`). Provision
 the directory and its UID/GID permissions before enabling the feature. The probe
 does not create the directory or change ownership. Storage errors during later
-uploads log their error codes without filenames or other plaintext metadata.
+uploads log their error codes without filenames or other plaintext metadata. Each upload claims
+an exclusive transfer token in a short transaction, releases the database client while streaming,
+and rechecks current access and reservation state before recording the observed bytes and hash.
+Interrupted transfers remain subject to reservation expiry and garbage collection.
 
 Use `DITERO_ATTACHMENT_STORAGE_DRIVER=s3` for an S3-compatible bucket. Clear
 `DITERO_ATTACHMENT_FS_PATH`, then set `DITERO_ATTACHMENT_S3_BUCKET` and
