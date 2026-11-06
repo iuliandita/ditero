@@ -245,6 +245,16 @@ export async function removeMembershipWithActivation(
 		intent === "leave",
 	);
 	const { workspaceId, targetUserId, replacementUserId } = authority;
+	const dependents = await query(
+		tx,
+		`select m.id from managed_account a join membership m on m.user_id=a.user_id
+		where a.guardian_id=$1 and m.workspace_id=$2 limit 1`,
+		[targetUserId, workspaceId],
+	);
+	if (dependents.length)
+		throw new Error(
+			"remove managed accounts from this workspace before removing their guardian",
+		);
 	await lockPaged(
 		tx,
 		`select id from list where workspace_id=$1 and ($2::text is null or id>$2) order by id limit ${PAGE} for update`,
@@ -323,6 +333,29 @@ export async function removeMembershipWithActivation(
 		`update task_notification_recipient r set active=false
 		where r.task_id=any($1::text[])`,
 		[affectedTaskIds],
+	);
+	await query(
+		tx,
+		`update notification_outbox o set status='abandoned',claimed_at=null,claimed_by=null
+		where o.recipient_user_id=$2 and o.status in ('queued','sending')
+		and (exists (select 1 from task t join list l on l.id=t.list_id
+		where t.id=o.payload->>'taskId' and l.workspace_id=$1)
+		or exists (select 1 from reminder_state s join task t on t.id=s.task_id
+		join list l on l.id=t.list_id where s.id=o.reminder_state_id and l.workspace_id=$1))`,
+		[workspaceId, targetUserId],
+	);
+	await query(
+		tx,
+		`update reminder_state s set status='expired',next_attempt_at=null,deferred_until=null
+		from task t,list l where s.task_id=t.id and t.list_id=l.id
+		and l.workspace_id=$1 and s.recipient_user_id=$2 and s.status in ('pending','deferred')`,
+		[workspaceId, targetUserId],
+	);
+	await query(
+		tx,
+		`update inbound_webhook set revoked_at=now()
+		where workspace_id=$1 and user_id=$2 and revoked_at is null`,
+		[workspaceId, targetUserId],
 	);
 	await query(tx, "select set_config('ditero.activation_scope','',true)");
 	await query(

@@ -282,3 +282,24 @@ GC column. Rolling back the server restores the preceding quota and deletion rul
 rejected grants blocking retries again.
 Rollback does not restore a discarded wrap; use a fresh key request or a coordinated
 database-plus-blob backup when restoring earlier state, accepting loss of later writes.
+
+## Membership cleanup policy upgrade
+
+Migration 0092 adds read and revoke policies for workspace administrators during
+membership cleanup. Existing webhook bindings remain immutable. No stored data
+or credential format changes.
+
+Upgrade: back up PostgreSQL, stop app and Zero writers, and apply migrations with
+the migration role before starting the updated server. Keep schema ownership and
+runtime grants as described in [database roles](database-roles.md).
+
+Backup: include webhook revocation times and notification state in the coordinated
+database backup. No additional secrets or export steps are needed.
+
+Rollback: retain the additive policies when running the preceding server. Previous
+server versions do not perform this membership cleanup. Restoring an earlier
+backup also restores its earlier notification and webhook state; review pending
+work and revoke departed members' webhooks before accepting traffic.
+
+Client versions: existing browser and native clients can use the updated server.
+Guardians must remove their managed accounts from a workspace before departing.
