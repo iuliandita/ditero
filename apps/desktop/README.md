@@ -440,3 +440,11 @@ core's limitations. A successful installer build alone does not prove complete
 desktop application delivery.
 
 Quick add voice dictation is unavailable in the desktop app: the shared interface detects the native bridge and shows an explanation instead of the control, and no native speech plugin exists. Use the browser; see the [voice capture guide](../../docs/runbooks/voice-capture.md).
+
+File, archive export and E2E bridge operations require a verified current native
+session before dispatch. Restored vault credentials alone do not authorize these
+operations; complete `session.read` first. The existing offline evidence policy
+still governs successful offline verification. Requests remain named operations
+bound to the captured server, account, session and page. This does not change
+saved-file permissions or request-fence recovery. Unit and web checks do not
+verify native application behavior, credential-store integration or OS dialogs.
