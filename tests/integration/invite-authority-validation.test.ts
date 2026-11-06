@@ -430,3 +430,94 @@ test.each([
 		);
 	}
 });
+
+test("guardian refusal and departure preserve invite reservations and scoped cleanup", async () => {
+	expect(
+		(
+			await runtime.query(
+				"select rolsuper,rolbypassrls from pg_roles where rolname=current_user",
+			)
+		).rows[0],
+	).toEqual({ rolsuper: false, rolbypassrls: false });
+	const pending = await make("admin", true);
+	const reserved = await make("member", true, true);
+	await claimFastInvite(
+		runtime,
+		reserved.token,
+		"joiner",
+		"joiner@example.test",
+	);
+	await admin.query(`insert into "user"(id,name,email) values ('child','Child','child@managed.invalid');
+		insert into managed_account(id,user_id,guardian_id) values ('managed','child','creator');
+		insert into membership(id,user_id,workspace_id,role) values ('child-seat','child','ws','member');
+		insert into inbound_webhook(id,user_id,list_id,workspace_id,name,secret_hash,hint,expires_at)
+		values ('00000000-0000-4000-8000-000000000031','creator','list','ws','Hook',repeat('c',64),'test',now()+interval '1 day');
+		insert into notification_outbox(id,recipient_user_id,channel_kind,payload,idempotency_key,status,next_attempt_at)
+		values ('creator-notice','creator','email','{"kind":"assign","taskId":"task"}','creator-notice','queued',now()+interval '1 hour'),
+		('owner-notice','owner','email','{"kind":"assign","taskId":"task"}','owner-notice','queued',now()+interval '1 hour');`);
+	await expect(change("remove")).rejects.toThrow(
+		"[code:guardian_has_managed_members]",
+	);
+	expect(
+		(await admin.query("select status from invite where id=$1", [pending.id]))
+			.rows[0].status,
+	).toBe("pending");
+	expect(
+		(await admin.query("select id from membership where id='mc'")).rows,
+	).toHaveLength(1);
+	expect(
+		(await admin.query("select revoked_at from inbound_webhook")).rows[0]
+			.revoked_at,
+	).toBeNull();
+	expect(
+		(
+			await admin.query(
+				"select status from notification_outbox where id='creator-notice'",
+			)
+		).rows[0].status,
+	).toBe("queued");
+	await admin.query("delete from membership where id='child-seat'");
+	await change("remove");
+	expect(
+		(await admin.query("select id from membership where id='mc'")).rows,
+	).toEqual([]);
+	expect(
+		(await admin.query("select status from invite where id=$1", [pending.id]))
+			.rows[0].status,
+	).toBe("revoked");
+	expect(
+		(
+			await admin.query("select status,uses from invite where id=$1", [
+				reserved.id,
+			])
+		).rows[0],
+	).toEqual({ status: "pending", uses: 0 });
+	expect(
+		(await admin.query("select revoked_at from inbound_webhook")).rows[0]
+			.revoked_at,
+	).toBeInstanceOf(Date);
+	expect(
+		(
+			await admin.query(
+				"select status from notification_outbox where id='creator-notice'",
+			)
+		).rows[0].status,
+	).toBe("abandoned");
+	expect(
+		(
+			await admin.query(
+				"select status from notification_outbox where id='owner-notice'",
+			)
+		).rows[0].status,
+	).toBe("queued");
+	await expect(
+		finalizeFastInvite(runtime, reserved.token, "joiner", "fallback"),
+	).resolves.toMatchObject({ workspaceId: "ws" });
+	expect(
+		(
+			await admin.query(
+				"select user_id from task_assignee where task_id='task'",
+			)
+		).rows,
+	).toEqual([{ user_id: "joiner" }]);
+});
