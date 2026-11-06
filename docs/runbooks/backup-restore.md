@@ -255,3 +255,11 @@ lease when the database is reachable; otherwise retry after its lease expires. A
 server treats the timestamped token as an opaque token, so drain unfinished transfers before
 rollback as described above. Storage inventory reconciliation must account for streams that
 finish after GC removes their row; see the attachment-storage runbook before removing orphans.
+
+## Browser account binding
+
+After this client upgrade, reload browser tabs. Token refresh refuses a different
+account and asks for sign-in again without deleting pending offline edits. Native
+clients retain their opaque host handles. Backup and rollback procedures are
+unchanged: no persisted format or database migration is introduced. Rollback
+removes the additional browser subject and avatar URL checks.

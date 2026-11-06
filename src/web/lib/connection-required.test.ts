@@ -19,7 +19,7 @@ const operations = [
 	],
 	["bootstrap", () => browserZeroRuntime.bootstrap()],
 	["config", () => browserZeroRuntime.fetchConfig()],
-	["token", () => browserZeroRuntime.getAuth()],
+	["token", () => browserZeroRuntime.getAuth("user")],
 ] as const;
 
 test.each(

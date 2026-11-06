@@ -137,6 +137,11 @@ after verifying the owner out of band, by deleting the account's `two_factor` ro
 and setting `two_factor_enabled` to false for the user. After a reset, review
 inbound webhooks and channel settings for anything you did not create.
 
+Browser sync tokens must name the account that opened the replica. A refresh for
+another account leaves the original replica in the sign-in-required state and
+never forwards that token to Zero. Member avatars load only from the app origin
+or inline data URLs; other image URLs fall back to initials.
+
 Android and desktop use explicit system-browser consent to obtain a device-bound
 native session. Credentials remain in native storage. After sign-out or session/device
 revocation commits, subsequent HTTP requests (including Zero query and mutation

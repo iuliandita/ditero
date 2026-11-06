@@ -121,7 +121,7 @@ export function AppZeroProvider({
 			await runtime.bootstrap();
 			const [config, token] = await Promise.all([
 				runtime.fetchConfig(),
-				runtime.getAuth(),
+				runtime.getAuth(userID),
 			]);
 			const created = await createAfterZeroRetirement(
 				() => {
@@ -193,7 +193,7 @@ export function AppZeroProvider({
 					});
 					stopAuthRefresh = watchZeroAuth(
 						instance,
-						() => runtime.getAuth(),
+						() => runtime.getAuth(userID),
 						undefined,
 						{
 							onSessionExpired: tracker.setSessionExpired,
