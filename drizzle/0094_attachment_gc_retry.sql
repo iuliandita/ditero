@@ -1,0 +1,1 @@
+ALTER TABLE "attachment" ADD COLUMN "gc_retry_at" timestamp with time zone;

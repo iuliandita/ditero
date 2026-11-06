@@ -332,6 +332,8 @@ beforeEach(async () => {
 		 values ('upload-key', $1, 1, 'wdkc1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', 'upload-owner')`,
 		[WORKSPACE],
 	);
+	await pool.query(`insert into user_key(id,user_id,public_key,state)
+	 values ('upload-identity', 'upload-owner', 'upload-public-key', 'ready')`);
 	await pool.query(
 		`insert into membership_key (id, membership_id, user_id, workspace_id,
 		 key_version, enc, ciphertext, recipient_public_key, granted_by) values
@@ -351,6 +353,39 @@ afterAll(async () => {
 });
 
 describe("attachment reserve", () => {
+	test("counts retained deleted content and thumbnails until GC removes them", async () => {
+		await reserve("att-retained", {
+			declaredBytes: 10,
+			thumbnailDeclaredBytes: 6,
+		});
+		await upload("att-retained", new Uint8Array(10));
+		await uploadThumbnail("att-retained", new Uint8Array(6));
+		await finalize("att-retained");
+		expect((await remove("att-retained")).status).toBe(200);
+		const refused = await reserve("att-retained-over", { declaredBytes: 5 });
+		expect(refused.status).toBe(409);
+		expect(await refused.json()).toEqual({
+			code: "quota-retained-deleted",
+			retainedDeletedBytes: 16,
+			restoreWindowEndsAt: "2026-10-02T12:00:00.000Z",
+			gcPending: false,
+		});
+		expect(store.objects.size).toBe(2);
+		currentNow = new Date(NOW.getTime() + 30 * 24 * 60 * 60_000 + 1);
+		expect(
+			await (
+				await reserve("att-retained-pending", { declaredBytes: 5 })
+			).json(),
+		).toMatchObject({ code: "quota-retained-deleted", gcPending: true });
+		await attachmentSweep(pool, store, {
+			now: currentNow,
+		});
+		expect(store.objects.size).toBe(0);
+		expect(
+			(await reserve("att-retained-after", { declaredBytes: 5 })).status,
+		).toBe(200);
+	});
+
 	test("keeps migration destination IDs out of ordinary reservation", async () => {
 		const id = "migration_2b8dfbb7-36d4-4d4d-9a43-fc9dbb6638eb";
 		expect((await reserve(id)).status).toBe(400);
@@ -569,6 +604,31 @@ describe("attachment reserve", () => {
 });
 
 describe("attachment delete", () => {
+	test("keeps a writable uploader's delete permission after key loss", async () => {
+		await reserve("att-own-key-loss", { declaredBytes: 4 }, "upload-member");
+		await upload("att-own-key-loss", new Uint8Array(4), "upload-member");
+		await finalize("att-own-key-loss", "upload-member");
+		await pool.query("delete from user_key");
+		expect((await remove("att-own-key-loss", "upload-member")).status).toBe(
+			200,
+		);
+	});
+	test("requires admin permission to delete an unrecoverable attachment version", async () => {
+		await reserve("att-unrecoverable", { declaredBytes: 4 });
+		await upload("att-unrecoverable", new Uint8Array(4));
+		await finalize("att-unrecoverable");
+		await pool.query("delete from user_key");
+		expect((await remove("att-unrecoverable", "upload-member")).status).toBe(
+			403,
+		);
+		expect(await row("att-unrecoverable")).toMatchObject({
+			state: "committed",
+		});
+		expect((await remove("att-unrecoverable", "upload-owner")).status).toBe(
+			200,
+		);
+	});
+
 	test("logs a storage upload error code without plaintext metadata or provider details", async () => {
 		expect(
 			(await reserve("att-storage-failure", { declaredBytes: 4 })).status,
@@ -627,7 +687,7 @@ describe("attachment delete", () => {
 	test("re-derives the current write role without revealing rows to outsiders", async () => {
 		await committed("att-delete-role");
 
-		expect((await remove("att-delete-role", "upload-viewer")).status).toBe(404);
+		expect((await remove("att-delete-role", "upload-viewer")).status).toBe(403);
 		expect((await remove("att-delete-role", "upload-outsider")).status).toBe(
 			404,
 		);

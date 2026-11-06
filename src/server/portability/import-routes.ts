@@ -1,6 +1,8 @@
 import { Elysia } from "elysia";
 import type { Pool } from "pg";
 import { z } from "zod";
+import { attachmentStorageConfig } from "../../config/attachment-storage.ts";
+import { e2eEnabled } from "../../config/e2e.ts";
 import { UserContextError } from "../../db/user-context.ts";
 import {
 	parseImportDocument,
@@ -16,9 +18,11 @@ import {
 	ProviderInputError,
 } from "../../domain/portability/providers/input.ts";
 import { PortableExportValidationError } from "../../domain/portability/validate.ts";
+import { AttachmentQuotaError } from "../attachments/quota.ts";
 import type { Guards } from "../guards.ts";
 import { getAttachmentMigrationParents } from "./attachment-migration-parents.ts";
 import {
+	type AttachmentMigrationLimits,
 	attachmentMigrationRecoveryBodySchema,
 	attachmentMigrationReservationBodySchema,
 	getAttachmentMigrationStatus,
@@ -205,6 +209,8 @@ async function handled(run: () => Promise<Response>): Promise<Response> {
 	try {
 		return await run();
 	} catch (error) {
+		if (error instanceof AttachmentQuotaError)
+			return Response.json(error.refusal, { status: 409, headers });
 		if (
 			error instanceof ImportRequestError ||
 			error instanceof ImportPlanStoreError
@@ -325,6 +331,9 @@ export function createAttachmentMigrationHandlers(
 	pool: Pool,
 	activeUsers = createImportAdmission(),
 	strictNative = false,
+	limits: AttachmentMigrationLimits = {
+		quotaBytes: attachmentStorageConfig(process.env).quotaBytes,
+	},
 ) {
 	return {
 		inspect: (request: Request, ownerId: string) =>
@@ -356,6 +365,7 @@ export function createAttachmentMigrationHandlers(
 			}),
 		reserve: (request: Request, ownerId: string) =>
 			handled(async () => {
+				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
 				if (strictNative && new URL(request.url).search)
 					throw new ImportRequestError("invalid-migration-query", 400);
 				if (activeUsers.size >= 2 || activeUsers.has(ownerId))
@@ -396,7 +406,7 @@ export function createAttachmentMigrationHandlers(
 								ownerId: ownerId,
 								jobId: reservationJobId(request),
 							},
-							{ signal: request.signal },
+							{ ...limits, signal: request.signal },
 						),
 					);
 				} finally {
@@ -405,6 +415,7 @@ export function createAttachmentMigrationHandlers(
 			}),
 		recover: (request: Request, ownerId: string) =>
 			handled(async () => {
+				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
 				if (strictNative && new URL(request.url).search)
 					throw new ImportRequestError("invalid-migration-query", 400);
 				if (activeUsers.size >= 2 || activeUsers.has(ownerId))
@@ -444,7 +455,7 @@ export function createAttachmentMigrationHandlers(
 								ownerId: ownerId,
 								jobId: reservationJobId(request),
 							},
-							{ signal: request.signal },
+							{ ...limits, signal: request.signal },
 						),
 					);
 				} finally {
@@ -470,8 +481,14 @@ export function importPlanRoutes(
 	pool: Pool,
 	guards: Guards,
 	activeUsers = createImportAdmission(),
+	limits?: AttachmentMigrationLimits,
 ) {
-	const migration = createAttachmentMigrationHandlers(pool, activeUsers);
+	const migration = createAttachmentMigrationHandlers(
+		pool,
+		activeUsers,
+		false,
+		limits,
+	);
 	return new Elysia()
 		.use(importActivationRoutes(pool, guards))
 		.get(

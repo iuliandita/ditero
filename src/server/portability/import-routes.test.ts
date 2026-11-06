@@ -4,6 +4,7 @@ import type { Pool } from "pg";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { CSV_V1_EXCLUSIONS } from "../../domain/portability/providers/input.ts";
 import type { PortableExportV1 } from "../../domain/portability/v1.ts";
+import { AttachmentQuotaError } from "../attachments/quota.ts";
 import { makeGuards, type Session } from "../guards.ts";
 import { V4ApplyConflict } from "./import-activation.ts";
 
@@ -118,6 +119,7 @@ function request(
 }
 
 beforeEach(() => {
+	vi.stubEnv("DITERO_E2E_ENABLED", "true");
 	vi.clearAllMocks();
 	store.save.mockResolvedValue({
 		id: "saved",
@@ -875,6 +877,21 @@ describe("attachment reservation transport", () => {
 		expect(await response.json()).toEqual({ code: "migration-conflict" });
 		expect((await api.handle(reserveRequest())).status).toBe(200);
 	});
+	test("preserves retained-deleted quota details for attachment reservations", async () => {
+		const refusal = {
+			code: "quota-retained-deleted" as const,
+			retainedDeletedBytes: 400,
+			restoreWindowEndsAt: "2026-12-01T12:00:00.000Z",
+			gcPending: false,
+		};
+		reservations.reserve.mockRejectedValueOnce(
+			new AttachmentQuotaError(refusal),
+		);
+		const response = await app().handle(reserveRequest());
+		expect(response.status).toBe(409);
+		expect(await response.json()).toEqual(refusal);
+		expect(response.headers.get("cache-control")).toBe("no-store");
+	});
 	test("one per owner and two total share existing apply budget", async () => {
 		let release!: (value: unknown) => void;
 		reservations.reserve.mockImplementationOnce(
@@ -1092,7 +1109,7 @@ describe("attachment recovery transport", () => {
 				ownerId: "caller",
 				jobId: job,
 			},
-			{ signal: request.signal },
+			{ quotaBytes: 10 * 1024 * 1024 * 1024, signal: request.signal },
 		);
 	});
 	test.each([
@@ -1179,4 +1196,44 @@ test("separate browser route instances can share application import admission", 
 	release({ id: "saved", report: { plannerVersion: 4, applySupported: true } });
 	expect((await pending).status).toBe(200);
 	expect(admission.size).toBe(0);
+});
+
+test.each([
+	"attachment-reservations",
+	"attachment-recoveries",
+])("hides migration %s while encryption is disabled", async (action) => {
+	const { expectedRevision: _expectedRevision, ...prepared } =
+		preparedRequest();
+	const body =
+		action === "attachment-reservations"
+			? { ...prepared, expectedRevision: 0 }
+			: {
+					...prepared,
+					retireLive: true,
+					previous: {
+						associationId: "11111111-1111-4111-8111-111111111111",
+						attemptId: "22222222-2222-4222-8222-222222222222",
+						targetAttachmentId:
+							"migration_33333333-3333-4333-8333-333333333333",
+						revision: 1,
+					},
+				};
+	reservations.reserve.mockResolvedValue({ revision: 1 });
+	reservations.recover.mockResolvedValue({ revision: 2 });
+	const api = app();
+	const call = () =>
+		api.handle(
+			reserveRequest(
+				JSON.stringify(body),
+				{},
+				reservationURL.replace("attachment-reservations", action),
+			),
+		);
+	expect((await call()).status).toBe(200);
+	reservations.reserve.mockClear();
+	reservations.recover.mockClear();
+	vi.stubEnv("DITERO_E2E_ENABLED", "false");
+	expect((await call()).status).toBe(404);
+	expect(reservations.reserve).not.toHaveBeenCalled();
+	expect(reservations.recover).not.toHaveBeenCalled();
 });

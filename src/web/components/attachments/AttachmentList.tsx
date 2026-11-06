@@ -15,10 +15,13 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
-import { isPreviewable } from "../../../domain/attachment.ts";
+import {
+	isPreviewable,
+	mayDeleteAttachment,
+} from "../../../domain/attachment.ts";
 import { StreamError } from "../../../domain/e2e/stream.ts";
 import { randomId } from "../../../domain/random-id.ts";
-import { ADMIN_ROLES, type Role, WRITE_ROLES } from "../../../domain/role.ts";
+import { type Role, WRITE_ROLES } from "../../../domain/role.ts";
 import { m } from "../../../paraglide/messages.js";
 import { getLocale } from "../../../paraglide/runtime.js";
 import { queries } from "../../../zero/queries.ts";
@@ -28,6 +31,7 @@ import {
 	fetchMyGrants,
 	type MyAttachmentGrant,
 } from "../../lib/e2e/attachment-api.ts";
+import { attachmentQuotaMessage } from "../../lib/e2e/attachment-quota-message.ts";
 import { attachmentSizeLabel } from "../../lib/e2e/attachment-size.ts";
 import {
 	type DecryptedAttachmentMetadata,
@@ -435,9 +439,11 @@ export const AttachmentList = forwardRef<
 				gate.reportUploadFailure(caught);
 				updatePending(upload.id, {
 					error:
-						caught instanceof AttachmentUploadError && caught.status === 413
-							? m.attachment_error_server_limit()
-							: m.attachment_error_upload_failed(),
+						caught instanceof AttachmentUploadError && caught.retainedQuota
+							? attachmentQuotaMessage(caught.retainedQuota)
+							: caught instanceof AttachmentUploadError && caught.status === 413
+								? m.attachment_error_server_limit()
+								: m.attachment_error_upload_failed(),
 					progress: undefined,
 				});
 			}
@@ -644,10 +650,11 @@ export const AttachmentList = forwardRef<
 	): RowAction[] {
 		const downloading = rowProgress.has(row.id);
 		const readable = state === "ready" || state === "locked";
-		const mayDelete =
-			state === "unrecoverable"
-				? role !== null && ADMIN_ROLES.has(role)
-				: canWrite;
+		const mayDelete = mayDeleteAttachment(
+			role,
+			row.uploadedBy === zero.userID,
+			state !== "unrecoverable",
+		);
 		return [
 			{
 				id: "open",

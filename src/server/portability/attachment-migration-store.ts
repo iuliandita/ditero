@@ -5,7 +5,8 @@ import { z } from "zod";
 import { storageKeyFor } from "../../domain/attachment.ts";
 import { type Role, WRITE_ROLES } from "../../domain/role.ts";
 import {
-	attachmentQuotaWouldExceed,
+	AttachmentQuotaError,
+	attachmentQuotaFailure,
 	validateAttachmentWrite,
 } from "../attachments/quota.ts";
 import { e2eBlobSchema } from "../e2e/input.ts";
@@ -355,24 +356,32 @@ async function lockParent(
 	)
 		fail("parent-changed");
 }
+export type AttachmentMigrationLimits = {
+	quotaBytes: number;
+	maxFileBytes?: number;
+};
+
 export async function reserveAttachmentMigration(
 	pool: Pool,
 	input: AttachmentMigrationReservation,
-	options: {
-		quotaBytes?: number;
+	options: AttachmentMigrationLimits & {
 		reservationTtlMs?: number;
 		now?: () => Date;
 		signal?: AbortSignal;
-	} = {},
+	},
 ) {
 	const parsed = requestSchema.safeParse(input);
 	if (!parsed.success) fail("invalid-migration-reservation", 400);
 	const request = parsed.data;
-	const quota = options.quotaBytes ?? 10 * 1024 * 1024 * 1024;
+	const quota = options.quotaBytes;
+	const maxFile = options.maxFileBytes ?? quota;
 	const ttl = options.reservationTtlMs ?? 60 * 60_000;
 	if (
 		!Number.isSafeInteger(quota) ||
 		quota <= 0 ||
+		!Number.isSafeInteger(maxFile) ||
+		maxFile <= 0 ||
+		maxFile > quota ||
 		!Number.isSafeInteger(ttl) ||
 		ttl <= 0
 	)
@@ -487,15 +496,16 @@ export async function reserveAttachmentMigration(
 				);
 				if (!isDeepStrictEqual(before, after)) fail("migration-parent-changed");
 				const v = request.prepared;
-				if (
-					await attachmentQuotaWouldExceed(
-						client,
-						parent.workspaceId,
-						v.declaredBytes + (v.thumbnailDeclaredBytes ?? 0),
-						quota,
-					)
-				)
-					fail("quota-exceeded");
+				const quotaFailure = await attachmentQuotaFailure(
+					client,
+					parent.workspaceId,
+					v.declaredBytes + (v.thumbnailDeclaredBytes ?? 0),
+					quota,
+					(options.now ?? (() => new Date()))(),
+				);
+				if (quotaFailure) throw new AttachmentQuotaError(quotaFailure);
+				if (v.declaredBytes + (v.thumbnailDeclaredBytes ?? 0) > maxFile)
+					fail("file-too-large", 413);
 				const associationId = randomUUID(),
 					attemptId = randomUUID(),
 					now = (options.now ?? (() => new Date()))();
@@ -893,22 +903,25 @@ async function lockRecoveryContext(
 export async function recoverAttachmentMigration(
 	pool: Pool,
 	input: AttachmentMigrationRecovery,
-	options: {
-		quotaBytes?: number;
+	options: AttachmentMigrationLimits & {
 		reservationTtlMs?: number;
 		now?: () => Date;
 		signal?: AbortSignal;
-	} = {},
+	},
 ) {
 	const parsed = recoverySchema.safeParse(input);
 	if (!parsed.success) fail("invalid-migration-recovery", 400);
 	const request = parsed.data;
-	const quota = options.quotaBytes ?? 10 * 1024 * 1024 * 1024;
+	const quota = options.quotaBytes;
+	const maxFile = options.maxFileBytes ?? quota;
 	const ttl = options.reservationTtlMs ?? 60 * 60_000;
 	const now = (options.now ?? (() => new Date()))();
 	if (
 		!Number.isSafeInteger(quota) ||
 		quota <= 0 ||
+		!Number.isSafeInteger(maxFile) ||
+		maxFile <= 0 ||
+		maxFile > quota ||
 		!Number.isSafeInteger(ttl) ||
 		ttl <= 0 ||
 		!Number.isFinite(now.getTime()) ||
@@ -1011,15 +1024,16 @@ export async function recoverAttachmentMigration(
 					checkpoint,
 				);
 				const v = request.prepared;
-				if (
-					await attachmentQuotaWouldExceed(
-						client,
-						parent.workspaceId,
-						v.declaredBytes + (v.thumbnailDeclaredBytes ?? 0),
-						quota,
-					)
-				)
-					fail("quota-exceeded");
+				const quotaFailure = await attachmentQuotaFailure(
+					client,
+					parent.workspaceId,
+					v.declaredBytes + (v.thumbnailDeclaredBytes ?? 0),
+					quota,
+					(options.now ?? (() => new Date()))(),
+				);
+				if (quotaFailure) throw new AttachmentQuotaError(quotaFailure);
+				if (v.declaredBytes + (v.thumbnailDeclaredBytes ?? 0) > maxFile)
+					fail("file-too-large", 413);
 				if (f && ["reserved", "uploading", "aborted"].includes(f.state))
 					await client.query(
 						"update attachment set state='aborted',reservation_expires_at=$2 where id=$1",

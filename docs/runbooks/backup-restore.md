@@ -263,3 +263,22 @@ account and asks for sign-in again without deleting pending offline edits. Nativ
 clients retain their opaque host handles. Backup and rollback procedures are
 unchanged: no persisted format or database migration is introduced. Rollback
 removes the additional browser subject and avatar URL checks.
+
+## Attachment accounting and grant retries
+
+Upgrade web and native server routes together after backing up the coordinated database, blobs
+and original key material. Apply `0094_attachment_gc_retry` after landed migrations 0092 and
+0093 before starting the app; it adds nullable `attachment.gc_retry_at` timestamps without
+changing ciphertext or key formats. Keep the existing transfer token column and role guards.
+Retained soft-deleted files continue to consume workspace quota until GC removes them; migration
+reservations and replacements use the configured quota. Quota refusals identify retained bytes
+and the latest restore window, and updated clients explain pending cleanup. Failed GC rows back
+off for five minutes and sweeps report deletion, failure and deferred counts. A rejected grant
+removes only the recipient's wrap for that request's version, allowing a fresh request.
+
+Existing web and native clients remain compatible; reload browser clients to see the detailed
+quota messages and uploader deletion menu. Application rollback can retain the additive nullable
+GC column. Rolling back the server restores the preceding quota and deletion rules and can leave
+rejected grants blocking retries again.
+Rollback does not restore a discarded wrap; use a fresh key request or a coordinated
+database-plus-blob backup when restoring earlier state, accepting loss of later writes.

@@ -1,5 +1,10 @@
 import type { PoolClient } from "pg";
-import { quotaWouldExceed } from "../../domain/attachment.ts";
+import { attachmentSweepConfig } from "../../config/attachment-sweep.ts";
+import {
+	mayDeleteAttachment,
+	quotaWouldExceed,
+} from "../../domain/attachment.ts";
+import type { RetainedAttachmentQuota } from "../../domain/attachment-quota.ts";
 import { type Role, WRITE_ROLES } from "../../domain/role.ts";
 
 export type AttachmentParentKind = "task" | "comment" | "list";
@@ -102,6 +107,76 @@ export async function hasAttachmentWriteRole(
 	return role !== undefined && WRITE_ROLES.has(role);
 }
 
+export async function attachmentDeleteFailure(
+	client: PoolClient,
+	userId: string,
+	context: Pick<AttachmentContext, "workspaceId" | "keyVersion"> & {
+		uploadedBy: string;
+	},
+): Promise<"not-member" | "attachment-delete-forbidden" | null> {
+	const found = await client.query<{ role: Role; recoverable: boolean }>(
+		`select m.role, exists (
+		 select 1 from membership_key mk
+		 join membership holder on holder.id = mk.membership_id
+		 join user_key uk on uk.user_id = holder.user_id
+		  and uk.retired_at is null and uk.state = 'ready'
+		 where mk.workspace_id = m.workspace_id and mk.key_version = $3
+		 ) as recoverable
+		 from membership m where m.workspace_id = $1 and m.user_id = $2
+		 for share of m`,
+		[context.workspaceId, userId, context.keyVersion],
+	);
+	const seat = found.rows[0];
+	if (!seat) return "not-member";
+	return mayDeleteAttachment(
+		seat.role,
+		context.uploadedBy === userId,
+		seat.recoverable,
+	)
+		? null
+		: "attachment-delete-forbidden";
+}
+
+type QuotaRefusal = { code: "quota-exceeded" } | RetainedAttachmentQuota;
+
+export class AttachmentQuotaError extends Error {
+	readonly code: QuotaRefusal["code"];
+	readonly status = 409;
+	constructor(readonly refusal: QuotaRefusal) {
+		super(refusal.code);
+		this.code = refusal.code;
+	}
+}
+
+export async function attachmentQuotaFailure(
+	client: PoolClient,
+	workspaceId: string,
+	incoming: number,
+	limit: number,
+	now = new Date(),
+): Promise<QuotaRefusal | null> {
+	if (!(await attachmentQuotaWouldExceed(client, workspaceId, incoming, limit)))
+		return null;
+	const retained = await client.query<{ bytes: string; latest: Date | null }>(
+		`select coalesce(sum(coalesce(observed_bytes, declared_bytes) + coalesce(thumbnail_observed_bytes, thumbnail_declared_bytes, 0)), 0)::text as bytes,
+   max(deleted_at) as latest from attachment where workspace_id=$1 and state='deleting'`,
+		[workspaceId],
+	);
+	const row = retained.rows[0];
+	if (!row || Number(row.bytes) === 0) return { code: "quota-exceeded" };
+	const end = row.latest
+		? new Date(
+				row.latest.getTime() + attachmentSweepConfig(process.env).retentionMs,
+			)
+		: null;
+	return {
+		code: "quota-retained-deleted",
+		retainedDeletedBytes: Number(row.bytes),
+		restoreWindowEndsAt: end?.toISOString() ?? null,
+		gcPending: end === null || end <= now,
+	};
+}
+
 export async function attachmentQuotaWouldExceed(
 	client: PoolClient,
 	workspaceId: string,
@@ -115,7 +190,7 @@ export async function attachmentQuotaWouldExceed(
 		`select
 		 coalesce(sum(coalesce(observed_bytes, declared_bytes)
 		   + coalesce(thumbnail_observed_bytes, thumbnail_declared_bytes, 0))
-		   filter (where state = 'committed'), 0)::text
+		   filter (where state in ('committed', 'deleting')), 0)::text
 		   as committed,
 		 coalesce(sum(declared_bytes + coalesce(thumbnail_declared_bytes, 0)) filter
 		   (where state = any($2::attachment_state[])

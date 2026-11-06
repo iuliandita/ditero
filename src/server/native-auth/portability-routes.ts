@@ -1,6 +1,7 @@
 import { Elysia } from "elysia";
 import type { Pool } from "pg";
 import { UserContextError } from "../../db/user-context.ts";
+import type { AttachmentMigrationLimits } from "../portability/attachment-migration-store.ts";
 import {
 	ImportPlanStoreError,
 	listCompletedAttachmentImportJobs,
@@ -15,6 +16,7 @@ import { authenticateNative } from "./session.ts";
 export function nativePortabilityRoutes(deps: {
 	pool: Pool;
 	admission?: Set<string>;
+	attachmentLimits?: AttachmentMigrationLimits;
 	exporter: PortabilityExporter;
 	rateLimit: (request: Request, peerAddress?: string) => Promise<boolean>;
 }): Elysia {
@@ -39,6 +41,7 @@ export function nativePortabilityRoutes(deps: {
 		deps.pool,
 		deps.admission ?? createImportAdmission(),
 		true,
+		deps.attachmentLimits,
 	);
 	const guard =
 		(handler: (request: Request, ownerId: string) => Promise<unknown>) =>

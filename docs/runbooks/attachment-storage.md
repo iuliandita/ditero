@@ -90,14 +90,36 @@ not fall back to buffering the entire file. Canceling after choosing a new desti
 an empty file, but unauthenticated content is never written to it.
 
 `DITERO_ATTACHMENT_QUOTA_BYTES` is a per-workspace ciphertext quota. Accounting includes reserved
-uploads, committed files, and encrypted thumbnails. It is based on bytes observed by the server,
-not the client's declared size.
+uploads, committed files, soft-deleted files retained for restoration, and encrypted thumbnails.
+Reservations count declared bytes; uploaded files count bytes observed by the server. Deleting a
+file frees quota only after garbage collection removes its blobs and database row. Migration
+reservations and replacements use the same configured quota and combined file/thumbnail limit.
+
+When retained deleted files contribute to a quota refusal, upload and archive import show their
+retained byte count and latest restore-window end in the current language. The API returns
+`quota-retained-deleted`, `retainedDeletedBytes`, `restoreWindowEndsAt`, and `gcPending` with
+status 409. The date is the latest window, not a promise that enough space becomes available
+then. After the windows end, the message reports pending cleanup; check the sweep logs if it
+persists. Other files and reservations can still consume quota.
 
 Deletion is soft first. The independently leader-elected sweep removes expired reservations and
 attachments whose retention period has elapsed. Configure its retention, cadence, and bounded
 batch with `DITERO_ATTACHMENT_RETENTION_MS`, `DITERO_ATTACHMENT_SWEEP_MS`, and
 `DITERO_ATTACHMENT_SWEEP_BATCH_SIZE`. Keep the retention period longer than the interval between
 complete database-plus-blob backups. A failed blob deletion leaves the database row for retry.
+Failed rows receive a persisted five-minute retry delay. Each batch considers untried rows before
+previous failures, so one broken object does not starve later candidates. Each sweep logs deleted,
+failed, candidate and deferred counts; repeated failures or growing deferred counts require
+checking storage availability and permissions. Quota remains occupied until deletion succeeds.
+
+A writable uploader can delete their own file even after its keys are lost. Other writable
+members can delete recoverable files; only owners and admins can delete another uploader's
+unrecoverable file. A current member denied an individual deletion receives
+`attachment-delete-forbidden` with status 403. The file menu follows the same rule.
+Deleting a task, comment or list follows that parent's existing authorization and retires all
+its attachments, including unrecoverable files from other uploaders. Those files belong to the
+deleted container and would otherwise be unreachable. The parent deletion transaction checks
+and locks that authorization; individual file deletion does not authorize parent deletion.
 
 ## Backup ordering
 

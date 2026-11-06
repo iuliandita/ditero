@@ -1,3 +1,17 @@
+import { ADMIN_ROLES, type Role, WRITE_ROLES } from "./role.ts";
+
+export function mayDeleteAttachment(
+	role: Role | null,
+	isUploader: boolean,
+	recoverable: boolean,
+): boolean {
+	return (
+		role !== null &&
+		WRITE_ROLES.has(role) &&
+		(recoverable || isUploader || ADMIN_ROLES.has(role))
+	);
+}
+
 export const PREVIEWABLE_TYPES = [
 	"image/png",
 	"image/jpeg",

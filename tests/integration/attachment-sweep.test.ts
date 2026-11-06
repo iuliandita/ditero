@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { Pool } from "pg";
-import { afterAll, beforeEach, describe, expect, test } from "vitest";
+import { afterAll, beforeEach, describe, expect, test, vi } from "vitest";
 import {
 	ATTACHMENT_SWEEP_LOCK_KEY,
 	attachmentSweep,
@@ -171,6 +171,43 @@ const sweep = (overrides: Parameters<typeof attachmentSweep>[2] = {}) =>
 	});
 
 describe("attachment garbage collection", () => {
+	test("backs off failed rows across batches and reports deferred cleanup", async () => {
+		const first = await seedAttachment("sweep-a-stalled", "aborted", {
+			reservationExpiresAt: new Date(NOW.getTime() - 1),
+		});
+		await seedAttachment("sweep-b-progress", "aborted", {
+			reservationExpiresAt: new Date(NOW.getTime() - 1),
+		});
+		store.deleteFailures.add(first.storageKey);
+		const log = vi.spyOn(console, "info").mockImplementation(() => undefined);
+		try {
+			expect(await sweep({ batchSize: 1, onError: () => {} })).toEqual({
+				deleted: 0,
+				failed: 1,
+			});
+			expect(log).toHaveBeenLastCalledWith(
+				"attachments: garbage-collection sweep",
+				expect.objectContaining({ failed: 1, deferred: 1 }),
+			);
+			expect(await sweep({ batchSize: 1 })).toEqual({ deleted: 1, failed: 0 });
+			expect(await attachmentExists("sweep-a-stalled")).toBe(true);
+			expect(await attachmentExists("sweep-b-progress")).toBe(false);
+			store.deleteFailures.clear();
+			expect(
+				await sweep({
+					batchSize: 1,
+					now: new Date(NOW.getTime() + 5 * 60_000),
+				}),
+			).toEqual({ deleted: 1, failed: 0 });
+			expect(log).toHaveBeenLastCalledWith(
+				"attachments: garbage-collection sweep",
+				expect.objectContaining({ deleted: 1, failed: 0, deferred: 0 }),
+			);
+		} finally {
+			log.mockRestore();
+		}
+	});
+
 	test("removes an expired reservation blob before its row", async () => {
 		const { storageKey } = await seedAttachment("sweep-reserved", "reserved", {
 			reservationExpiresAt: new Date(NOW.getTime() - 1),

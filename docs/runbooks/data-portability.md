@@ -372,6 +372,14 @@ metadata. A selection may reach a limit before reaching 64 files.
    not transfer anything; files are re-encrypted for the destination. Blocked files
    show a reason.
 
+Migration reservations and replacements honor `DITERO_ATTACHMENT_QUOTA_BYTES`, including
+encrypted thumbnail bytes and retained deleted files. They also honor the server's combined
+file/thumbnail limit; the archive's 16 MiB limit still applies. With `DITERO_E2E_ENABLED=false`,
+the web and native reservation and recovery endpoints return 404.
+When retained deleted files contribute to a quota refusal, the dialog shows their byte count and
+latest restore-window end, or explains that cleanup is pending after those windows have ended.
+Deleting more files does not release space until garbage collection succeeds.
+
 ### Uncertain outcomes and recovery
 
 If the server outcome is uncertain, keep the dialog open and select **Check server

@@ -599,7 +599,10 @@ test("parent deletion retires committed task, child and comment files while pres
 	expect((await download("sibling-file")).status).toBe(200);
 	const remainingUsage = await runtime.connect();
 	try {
-		expect(await attachmentQuotaWouldExceed(remainingUsage, "ws", 0, 6)).toBe(
+		expect(await attachmentQuotaWouldExceed(remainingUsage, "ws", 0, 23)).toBe(
+			true,
+		);
+		expect(await attachmentQuotaWouldExceed(remainingUsage, "ws", 0, 24)).toBe(
 			false,
 		);
 	} finally {
@@ -630,4 +633,15 @@ test("parent deletion retires committed task, child and comment files while pres
 	expect(
 		(await admin.query("select id from attachment order by id")).rows,
 	).toEqual([{ id: "sibling-file" }]);
+	const collectedUsage = await runtime.connect();
+	try {
+		expect(await attachmentQuotaWouldExceed(collectedUsage, "ws", 0, 6)).toBe(
+			false,
+		);
+		expect(await attachmentQuotaWouldExceed(collectedUsage, "ws", 1, 6)).toBe(
+			true,
+		);
+	} finally {
+		collectedUsage.release();
+	}
 });

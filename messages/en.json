@@ -2829,5 +2829,7 @@
 	"security_sso_unlink": "Unlink",
 	"security_sso_error_load": "Could not load your linked sign-ins.",
 	"security_sso_error_link": "Could not start linking single sign-on.",
-	"security_sso_error_unlink": "Could not unlink single sign-on."
+	"security_sso_error_unlink": "Could not unlink single sign-on.",
+	"attachment_quota_retained_deleted": "Deleted files still use {bytes}. Their latest restore window ends {date}; space is freed after cleanup.",
+	"attachment_quota_cleanup_pending": "Deleted files still use {bytes}. Their restore windows have ended, but cleanup is pending. Contact your server administrator if this continues."
 }

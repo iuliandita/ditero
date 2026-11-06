@@ -2829,5 +2829,7 @@
 	"security_sso_unlink": "Verknüpfung aufheben",
 	"security_sso_error_load": "Deine verknüpften Anmeldungen konnten nicht geladen werden.",
 	"security_sso_error_link": "Die SSO-Verknüpfung konnte nicht gestartet werden.",
-	"security_sso_error_unlink": "Die SSO-Verknüpfung konnte nicht aufgehoben werden."
+	"security_sso_error_unlink": "Die SSO-Verknüpfung konnte nicht aufgehoben werden.",
+	"attachment_quota_retained_deleted": "Gelöschte Dateien belegen noch {bytes}. Das letzte Wiederherstellungsfenster endet am {date}; der Speicher wird nach der Bereinigung frei.",
+	"attachment_quota_cleanup_pending": "Gelöschte Dateien belegen noch {bytes}. Die Wiederherstellungsfenster sind abgelaufen, aber die Bereinigung steht noch aus. Wende dich an deine Serveradministration, falls das so bleibt."
 }

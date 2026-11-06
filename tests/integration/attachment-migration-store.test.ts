@@ -21,8 +21,8 @@ import { getAttachmentMigrationParents } from "../../src/server/portability/atta
 import {
 	getAttachmentMigrationStatus,
 	inspectAttachmentMigration,
-	recoverAttachmentMigration,
-	reserveAttachmentMigration,
+	recoverAttachmentMigration as recoverStore,
+	reserveAttachmentMigration as reserveStore,
 } from "../../src/server/portability/attachment-migration-store.ts";
 import {
 	exportPortableJson,
@@ -33,10 +33,32 @@ import {
 	type ImportPlanStatus,
 	saveImportPlan,
 } from "../../src/server/portability/import-plan-store.ts";
+import { createAttachmentMigrationHandlers } from "../../src/server/portability/import-routes.ts";
 import {
 	BlobNotFoundError,
 	type BlobStore,
 } from "../../src/server/storage/blob-store.ts";
+
+function reserveAttachmentMigration(
+	pool: Parameters<typeof reserveStore>[0],
+	input: Parameters<typeof reserveStore>[1],
+	options: Partial<Parameters<typeof reserveStore>[2]> = {},
+) {
+	return reserveStore(pool, input, {
+		quotaBytes: 10 * 1024 * 1024 * 1024,
+		...options,
+	});
+}
+function recoverAttachmentMigration(
+	pool: Parameters<typeof recoverStore>[0],
+	input: Parameters<typeof recoverStore>[1],
+	options: Partial<Parameters<typeof recoverStore>[2]> = {},
+) {
+	return recoverStore(pool, input, {
+		quotaBytes: 10 * 1024 * 1024 * 1024,
+		...options,
+	});
+}
 
 const originalE2e = process.env.DITERO_E2E_ENABLED;
 const url = process.env.DATABASE_URL;
@@ -1324,6 +1346,14 @@ test("live recovery requires exact confirmed witness and retains uploaded bytes 
 		).rows[0].n,
 	).toBe(1);
 	expect(await attachmentSweep(admin, transferStore)).toEqual({
+		deleted: 0,
+		failed: 0,
+	});
+	expect(
+		await attachmentSweep(admin, transferStore, {
+			now: new Date(Date.now() + 5 * 60_000 + 1),
+		}),
+	).toEqual({
 		deleted: 1,
 		failed: 0,
 	});
@@ -1807,4 +1837,63 @@ test("uncommitted parent discovery never supplies retained destination after par
 		recoverAttachmentMigration(restricted(), recoveryRequest(f, first, true)),
 	).rejects.toMatchObject({ code: "parent-changed" });
 	expect((await associationRows(first.associationId))[0].revision).toBe(1);
+});
+
+test.each([
+	"reserve",
+	"recover",
+] as const)("migration %s enforces configured quota through the handler", async (action) => {
+	const f = await ready();
+	const first =
+		action === "recover"
+			? await reserveAttachmentMigration(restricted(), f.request)
+			: null;
+	const input = first ? recoveryRequest(f, first, true) : f.request;
+	const { ownerId, jobId, ...body } = input;
+	const handlers = createAttachmentMigrationHandlers(
+		restricted(),
+		new Set(),
+		false,
+		{ quotaBytes: 49 },
+	);
+	const response = await handlers[action](
+		new Request(
+			`http://localhost/api/portability/import/plans/${jobId}/${action === "reserve" ? "attachment-reservations" : "attachment-recoveries"}`,
+			{
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			},
+		),
+		ownerId,
+	);
+	expect(response.status).toBe(409);
+	expect(await response.json()).toEqual({ code: "quota-exceeded" });
+	expect(
+		(await admin.query("select count(*)::int n from attachment")).rows[0].n,
+	).toBe(first ? 1 : 0);
+});
+
+test.each([
+	"reserve",
+	"recover",
+] as const)("migration %s enforces the configured combined file limit", async (action) => {
+	const f = await ready();
+	if (action === "reserve") {
+		await expect(
+			reserveAttachmentMigration(restricted(), f.request, {
+				quotaBytes: 1000,
+				maxFileBytes: 49,
+			}),
+		).rejects.toMatchObject({ code: "file-too-large", status: 413 });
+	} else {
+		const first = await reserveAttachmentMigration(restricted(), f.request);
+		await expect(
+			recoverAttachmentMigration(
+				restricted(),
+				recoveryRequest(f, first, true),
+				{ quotaBytes: 1000, maxFileBytes: 49 },
+			),
+		).rejects.toMatchObject({ code: "file-too-large", status: 413 });
+	}
 });

@@ -336,10 +336,17 @@ export async function submitGrant(
 
 	const active = await client.query(
 		`select 1 from workspace_key
-		 where workspace_id = $1 and version = $2 and active`,
+		 where workspace_id = $1 and version = $2 and active for key share`,
 		[request.workspace_id, request.requested_version],
 	);
 	if (active.rowCount !== 1) return { ok: false, reason: "inactive-version" };
+
+	const locked = await client.query(
+		`select 1 from key_grant_request where id = $1
+		 and state in ('key_pending', 'ready') for update`,
+		[input.requestId],
+	);
+	if (locked.rowCount !== 1) return { ok: false, reason: "no-request" };
 
 	const existing = await client.query<{ enc: string; ciphertext: string }>(
 		"select enc, ciphertext from membership_key where membership_id = $1 and key_version = $2",
@@ -411,13 +418,36 @@ export async function markGrantFailed(
 	requestId: string,
 	reason: string,
 ): Promise<boolean> {
-	const updated = await client.query(
+	const recipient = await client.query(
+		'select id from "user" where id = $1 and deleted_at is null for key share',
+		[recipientId],
+	);
+	if (recipient.rowCount !== 1) return false;
+	await lockIdentityShared(client, [recipientId]);
+	const updated = await client.query<{
+		membership_id: string;
+		workspace_id: string;
+		requested_version: number;
+	}>(
 		`update key_grant_request
 		 set state = 'failed', failure_reason = $3
-		 where id = $1 and user_id = $2 and state in ('key_pending', 'ready')`,
+		 where id = $1 and user_id = $2 and state in ('key_pending', 'ready')
+		 returning membership_id, workspace_id, requested_version`,
 		[requestId, recipientId, reason],
 	);
-	return updated.rowCount === 1;
+	const request = updated.rows[0];
+	if (!request) return false;
+	await client.query(
+		`delete from membership_key where membership_id = $1 and user_id = $2
+		 and workspace_id = $3 and key_version = $4`,
+		[
+			request.membership_id,
+			recipientId,
+			request.workspace_id,
+			request.requested_version,
+		],
+	);
+	return true;
 }
 
 /**

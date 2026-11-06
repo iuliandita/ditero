@@ -13,6 +13,7 @@ import type {
 	MigrationBinding,
 	MigrationParentPage,
 } from "../../lib/e2e/attachment-migration-api.ts";
+import { attachmentQuotaMessage } from "../../lib/e2e/attachment-quota-message.ts";
 import { useKeyring } from "../../lib/e2e/KeyringProvider.tsx";
 import { browserE2eRuntime } from "../../lib/e2e/runtime.ts";
 import { UnlockDialog } from "../e2e/UnlockDialog.tsx";
@@ -459,8 +460,9 @@ export function AttachmentArchiveImportDialog({
 		setChosenOrdinal(null);
 		onClose();
 	}
-	const liveStatus =
-		state.stage === "retired"
+	const liveStatus = state.retainedQuota
+		? attachmentQuotaMessage(state.retainedQuota)
+		: state.stage === "retired"
 			? m.archive_import_reopen()
 			: state.stage === "complete"
 				? m.archive_import_complete()

@@ -1,11 +1,26 @@
 import { describe, expect, it } from "vitest";
 import {
 	isPreviewable,
+	mayDeleteAttachment,
 	PREVIEWABLE_TYPES,
 	quotaWouldExceed,
 	sanitiseFilename,
 	storageKeyFor,
 } from "./attachment.ts";
+
+describe("mayDeleteAttachment", () => {
+	it.each([
+		["member", true, false, true],
+		["member", false, false, false],
+		["member", false, true, true],
+		["admin", false, false, true],
+		["owner", false, false, true],
+		["viewer", true, true, false],
+		[null, true, true, false],
+	] as const)("checks role %s, uploader %s and recoverable %s", (role, own, recoverable, allowed) => {
+		expect(mayDeleteAttachment(role, own, recoverable)).toBe(allowed);
+	});
+});
 
 describe("sanitiseFilename", () => {
 	it("strips path separators", () => {
