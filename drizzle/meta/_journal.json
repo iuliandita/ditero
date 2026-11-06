@@ -645,6 +645,13 @@
       "when": 1793874992370,
       "tag": "0091_habit_completed_by",
       "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "7",
+      "when": 1793979974366,
+      "tag": "0092_database_role_boundaries",
+      "breakpoints": true
     }
   ]
 }

@@ -30,13 +30,13 @@
 			"note": "Preserve the Better Auth 1.7.12 upgrade, JWT/provider-account migrations, explicit provider linking, nonce validation, verified-email admission and scoped Apple origin checks. Reset atomically consumes its token, writes the password, verifies the mailbox and retires sessions, native authority, access tokens, feeds, passkeys, provider links and pending account proofs while retaining TOTP and backup codes. Enforce the enrolled local factor on every sign-in path, including social/OIDC/SAML callbacks, passkeys and native system-browser flows. Reuse the plugin challenge, provisional-session deletion and reset invalidation. Provider MFA and remembered-device cookies cannot substitute. Native grants retain their ID and stay unapproved until successful factor completion and explicit consent; no bridge permissions or credential formats change. Upgrade server/web together and reload sign-in pages; rollback loses this protection."
 		},
 		"compatibility": {
-			"sourceDigest": "9f3b42b57e1325f123ab9ee0955ad09c580db6e09d043e197f0deef49ba88b88",
-			"docs": ["docs/runbooks/backup-restore.md"],
-			"note": "Migration 0091 adds nullable habit_log.completed_by referencing the user with ON DELETE SET NULL. Existing logs remain unattributed. Direct and reminder completion derive the actor from authenticated context; duplicate ticks preserve the original attribution and Karma award. Membership removal preserves attribution; account deletion explicitly clears the actor while preserving the occurrence and anonymized user row. The actor index and validated foreign key match the generated schema.",
-			"upgrade": "Back up the coordinated recovery set, stop app and Zero writers and apply migration 0091 with the migration role before starting the updated app and Zero. No backfill or role-policy change is required.",
-			"backup": "Include habit logs and their nullable attribution in the regular coordinated PostgreSQL recovery set, with the existing attachment ciphertext and secrets.",
-			"rollback": "Retain the additive nullable column, index and foreign key when running the preceding app. Before upgrading again, stop writers and clear completed_by on all logs to remove stale attribution from the rollback window. A pre-upgrade backup restore discards later completions.",
-			"clientVersions": "Reload browser clients and update native clients to display attribution. Existing clients retain one shared tick per habit per day, and the updated server sets the caller even for older completion requests."
+			"sourceDigest": "1fd20f0dbb631c838349913c4f309e520c20810f439020d325dd01936d55278b",
+			"docs": ["docs/runbooks/database-roles.md"],
+			"note": "Migration 0092 binds membership-key inserts to the actual recipient membership, limits request updates to fulfilment columns with a trigger for broad custom grants, and restricts focus pruning to explicitly authorized roles. Runtime startup checks privileged role memberships and ownership of all RLS tables. Deployment logins and Zero publications are unchanged.",
+			"upgrade": "Stop app and Zero writers, back up the coordinated recovery set, and apply 0092 using the migration owner. The named runtime receives the column and pruning grants in the migration. Custom runtime names need the documented one-time grants before restart. Review privileged memberships before boot.",
+			"backup": "Preserve the existing coordinated PostgreSQL, encrypted attachment, replica and original-secret recovery set. No encrypted-data conversion or row rewrite occurs.",
+			"rollback": "Keep the migration, column grants and function ACL when rolling back the app; the preceding writers use the same fulfilment columns and pruning function. Restoring the coordinated backup discards newer changes.",
+			"clientVersions": "Existing browser and native clients remain compatible; no client schema or storage format changes."
 		},
 		"clients": {
 			"sourceDigest": "9e440d49e6f7aff5f7588c9a2af8fc981c6308406af74aa088714980d766f668",

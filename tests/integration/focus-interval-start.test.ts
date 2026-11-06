@@ -95,6 +95,9 @@ beforeAll(async () => {
 	await admin.query(
 		`grant select,insert,update on server_private.focus_interval_clock to "${role}"`,
 	);
+	await admin.query(
+		`grant execute on function public.prune_focus_intervals() to "${role}"`,
+	);
 	for (const id of [A, B])
 		await admin.query(
 			`insert into "user"(id,name,email,email_verified) values($1,'Focus fixture',$2,true)

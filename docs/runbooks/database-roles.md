@@ -9,7 +9,7 @@ slots/WAL senders, and direct connections. The bundled stack uses PostgreSQL 18.
 Use three database logins:
 
 - A migration owner that owns the database schema but is not a superuser.
-- A runtime login with DML privileges but no ownership, superuser, owner membership, or `BYPASSRLS`.
+- A runtime login with DML privileges but no RLS-table ownership, privileged role membership, `SUPERUSER`, `BYPASSRLS`, `CREATEROLE`, or `REPLICATION`.
 - A direct Zero login with the replication and schema privileges required by Zero.
 
 Create the owner and runtime roles before the first migration. As a database administrator, adapt and run:
@@ -41,6 +41,51 @@ this fix. Existing coordinated database/blob backups and client versions remain
 compatible. Application rollback can restore the former TEMP requirement
 and the 403 response for foreign attachment downloads; current downloads return
 404 for both foreign and missing IDs. Rollback needs no data conversion.
+
+## Runtime role and key-grant upgrade
+
+Migration `0092_database_role_boundaries` binds every new membership key to the
+recipient's actual membership, user and workspace. Request updates can change
+only `state`, `granted_at` and `failure_reason`; a trigger enforces this even
+when a custom or inherited role retains table-wide UPDATE. Existing rows are
+preserved. The migration also removes PUBLIC execution of the bounded focus
+expiry function and grants execution to `ditero_runtime`, when that role exists.
+It narrows that role's request UPDATE grant to the three fulfilment columns.
+
+Before upgrading Compose or Helm, stop app and Zero writers and back up the
+coordinated PostgreSQL, attachment and replica recovery set with the original
+secrets. Apply migrations with the existing migration owner. Initialization
+scripts do not rerun on retained database volumes; this migration applies the
+changes to existing databases as well as fresh installs. Deployment logins and
+Zero publications are unchanged. Helm does not provision database roles.
+
+For a custom runtime role name, run the following as the migration owner after
+migration and before restarting the application, substituting that role name:
+
+```sql
+revoke update on public.key_grant_request from ditero_runtime;
+grant update (state, granted_at, failure_reason)
+  on public.key_grant_request to ditero_runtime;
+grant execute on function public.prune_focus_intervals() to ditero_runtime;
+```
+
+The same explicit grants are required if the runtime role is created after the
+migration. Do not restore a blanket UPDATE grant over existing tables. Check
+inherited and PUBLIC grants too; PostgreSQL privileges are additive.
+
+Production boot now rejects membership in any role with `SUPERUSER`, `BYPASSRLS`,
+`CREATEROLE` or `REPLICATION`, including indirect and NOINHERIT memberships. It
+also rejects direct ownership or owner membership for every RLS-enabled table,
+including private schemas. Review and remove unintended grants before restart;
+do not disable the check to accommodate operator drift. See PostgreSQL's
+[role membership rules](https://www.postgresql.org/docs/18/role-membership.html).
+
+Verify startup, a recipient's key request, co-member fulfilment and scheduler
+expiry through the runtime login. No client format or encrypted-data conversion
+is involved; existing web and native client versions remain compatible. On app
+rollback, retain the migration, column grants and function ACL. The previous
+writers already use only the permitted columns and scheduler function. Restore
+the coordinated backup only if required; restoration discards newer changes.
 
 ## Better Auth 1.7 upgrade
 
@@ -207,7 +252,11 @@ create publication ditero_public for tables in schema public
 ```
 
 The schema publication requires an administrator/superuser and includes future
-tables in `public`. Zero creates its own internal publication and CDC/CVR schemas;
+tables in `public`. This includes authentication and key tables excluded from
+the browser schema: RLS does not restrict the replication login or remove those
+rows from the replica and its backups. Treat Zero storage and backup credentials
+as privileged database access. Zero creates its own internal publication and
+CDC/CVR schemas;
 database `CREATE` permits that lifecycle. `REPLICATION` permits logical decoding
 and `BYPASSRLS` permits complete initial snapshots. This is a privileged service
 login, never the application runtime login or a browser credential. Providers must
