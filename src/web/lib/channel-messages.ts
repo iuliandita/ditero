@@ -31,6 +31,8 @@ const ERROR_MESSAGES: Record<ChannelErrorCode, () => string> = {
 	rate_limited: m.channel_error_rate_limited,
 	policy: m.channel_error_policy,
 	transport: m.channel_error_transport,
+	email_unconfirmed: m.channel_email_verification_required,
+	email_budget: m.channel_email_budget,
 };
 
 // The enum is closed by the Postgres type, so this map is total and the raw
@@ -60,6 +62,7 @@ const WARNING_MESSAGES: Record<ChannelWarning, () => string> = {
 	channel_unavailable: m.channel_save_not_implemented,
 	app_mode_no_public_url: m.channel_mode_app_degraded,
 	email_smtp_missing: m.channel_email_unavailable,
+	email_public_url_missing: m.channel_email_public_url_missing,
 	email_delivery_paused: m.channel_email_delivery_paused,
 	telegram_webhook_unreachable: m.channel_telegram_webhook_unreachable,
 };
@@ -85,6 +88,10 @@ const SAVE_ERROR_MESSAGES: Record<string, () => string> = {
 	app_mode_unsupported: m.channel_save_app_mode_unsupported,
 	email_unsupported: m.channel_save_email_unsupported,
 	rate_limited: m.channel_save_rate_limited,
+	email_budget: m.channel_email_budget,
+	email_public_url_missing: m.channel_email_public_url_missing,
+	outbound_url_policy: m.channel_outbound_url_policy,
+	owner_unavailable: m.channel_owner_unavailable,
 };
 
 export function channelSaveErrorMessage(code: string): string {

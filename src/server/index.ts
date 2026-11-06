@@ -91,6 +91,7 @@ import {
 import { ackRoutes } from "./notifications/routes.ts";
 import { startScheduler } from "./notifications/scheduler.ts";
 import { slackInteractionRoutes } from "./notifications/slack-interactions.ts";
+import { warnNotificationChannelState } from "./notifications/startup.ts";
 import { startTelegramPoller } from "./notifications/telegram-poll.ts";
 import { telegramWebhookRoutes } from "./notifications/telegram-webhook.ts";
 import { startWorker } from "./notifications/worker.ts";
@@ -701,6 +702,7 @@ if (import.meta.main) {
 	if (mailConfig(process.env) === null) {
 		console.log("ditero: no DITERO_SMTP_HOST, email channel disabled");
 	}
+	await warnNotificationChannelState(db);
 	// A replica can be run purely as a request server, with the notification
 	// scan/drain/poll loops off (DITERO_BACKGROUND_JOBS=0). The pipeline is
 	// leader-elected and multi-replica by design, so this changes nothing about

@@ -42,8 +42,7 @@ cannot stall the scan.
    characters. It is encrypted at rest and never returned to the browser; the
    form shows a masked placeholder instead.
 5. **Send test** — bounded to a burst of 5 with one refill per minute per user.
-   Failures are reported as one of three categories (unreachable, rejected,
-   timed out); the raw provider response is never shown, because it can contain
+   Failures identify unreachable, rejected, timed-out, or disallowed destinations; the raw provider response is never shown, because it can contain
    your URL or token.
 
 Pick a **high-entropy topic name** and set a token. An ntfy topic with no access
@@ -82,22 +81,32 @@ use the test message's acknowledgement control to verify the return path too.
 Settings supplies the Discord and Slack interactions URLs for provider setup.
 App mode is refused without `DITERO_PUBLIC_URL` or a usable `BETTER_AUTH_URL`.
 Discord and Slack webhook URLs require HTTPS on the default port.
-Email configuration is refused when SMTP or the public base URL is unavailable. SMTP settings and secrets
+Enabling or testing email is refused when SMTP or the public base URL is unavailable; disabling or removing a stored channel remains available. SMTP settings and secrets
 are documented in [.env.example](../.env.example).
 
 Email channels remain pending after saving. Use **Send test**, then open the link
 in the delivered message to confirm the destination. SMTP acceptance is shown as
 sent; recipient confirmation is required before reminders, escalations or events
-can be queued or delivered, including previously queued mail. Changing the address
+can be queued or delivered. Previously queued mail is discarded if its address
+is still unconfirmed when the worker processes it; confirming later does not
+recover those discarded messages. Changing the address
 clears that proof and invalidates outstanding verification links. Existing email
-channels without recipient confirmation must complete this step too.
+channels without recipient confirmation must complete this step too. Startup logs
+the number of affected enabled channels; Settings and reminder warnings explain
+how to confirm the address, even if another channel is working.
 
 Verification and scheduled email share a persistent per-user budget: a burst of
 20 sends, refilling one per minute. The separate test-send budget still applies.
-Changing addresses or restarting a replica does not reset it. A depleted budget
-returns a retryable 429 to the worker with a 60-second delay, subject to the normal
-attempt limit; heavy mail traffic can therefore end in retry exhaustion.
+Changing addresses or restarting a replica does not reset it. Failed SMTP sends do
+not consume this budget. Sends for one owner are serialized across replicas, and
+charges commit only after SMTP acceptance. A depleted budget defers queued mail
+for 60 seconds without consuming a delivery attempt; provider failures still use
+the normal retry ladder. Test sends report the exhausted mail budget before
+changing the stored destination or creating a verification link.
 
+The stricter HTTPS/port policy above applies to notification channels. Native
+UnifiedPush endpoints and the operator-configured relay retain their existing
+HTTPS and address policies, including HTTPS listeners on nonstandard ports.
 
 ## Native system notices
 
@@ -350,3 +359,24 @@ phone in do-not-disturb, or the drop paths above will each cost you reminders.
 Do not use Ditero as the only thing standing between someone and a missed dose.
 Use a dedicated pill dispenser, a pharmacy service, or a device intended for the
 purpose, and treat Ditero as a convenience on top.
+
+## Upgrading channel delivery safeguards
+
+Apply migration `0097` with the migration role before starting the updated app.
+It follows landed migrations 0092 through 0096 without changing their SQL or
+ledger entries. It adds the `email_unconfirmed` and `email_budget` channel error categories. Deploy
+the updated server and web UI together, and reload open browser and native web
+views so they recognize the new categories and confirmation warnings.
+
+The enum additions can remain during rollback. Before starting an older UI, clear
+these new health codes with the migration role:
+
+```sql
+UPDATE notification_channel
+SET last_error_code = NULL, last_error_at = NULL
+WHERE last_error_code::text IN ('email_unconfirmed', 'email_budget');
+```
+
+For encrypted channel credentials, also follow the rollback instructions in
+[Encryption Operations](runbooks/encryption.md); older versions pass v2 envelopes
+through as plaintext rather than decrypting them.

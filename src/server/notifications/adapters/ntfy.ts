@@ -112,6 +112,7 @@ export const ntfyAdapter: ChannelAdapter = {
 				body: payload.body.slice(0, BODY_MAX),
 				signal: AbortSignal.any([ctx.signal, deadline.signal]),
 				allowedPrivateCIDRs: ctx.allowedPrivateCIDRs,
+				channelPolicy: true,
 				maxResponseBytes: RESPONSE_MAX_BYTES,
 			});
 			if (response.ok) return { ok: true, status: response.status };

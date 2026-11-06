@@ -38,6 +38,8 @@ const PERMANENT_STATUS: Record<ChannelErrorCode, number> = {
 	rate_limited: 400,
 	policy: 400,
 	transport: 400,
+	email_unconfirmed: 400,
+	email_budget: 400,
 };
 
 function body(payload: ChannelPayload): string {

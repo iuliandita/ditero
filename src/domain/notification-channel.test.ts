@@ -50,6 +50,15 @@ const CREDENTIALS = [
 
 describe("channelConfigSchema", () => {
 	it.each([
+		"http://user:pass@ntfy.example.test",
+		"https://user:pass@ntfy.example.test",
+	])("rejects URL credentials at save: %s", (serverUrl) => {
+		expect(
+			channelConfigSchema.ntfy.safeParse({ serverUrl, topic: "alerts" })
+				.success,
+		).toBe(false);
+	});
+	it.each([
 		["discord", "http://discord.com/api/webhooks/1/secret"],
 		["discord", "https://discord.com:8443/api/webhooks/1/secret"],
 		["slack", "http://hooks.slack.com/services/T/B/secret"],

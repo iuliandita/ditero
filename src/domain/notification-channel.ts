@@ -7,7 +7,9 @@ export const MASKED = "***";
 
 function isHttpUrl(value: string): boolean {
 	try {
-		const protocol = new URL(value).protocol;
+		const url = new URL(value);
+		if (url.username || url.password) return false;
+		const protocol = url.protocol;
 		return protocol === "http:" || protocol === "https:";
 	} catch {
 		return false;

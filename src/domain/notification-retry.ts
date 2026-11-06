@@ -27,7 +27,8 @@ export type RetryClass =
 	| "throttled"
 	| "exhausted"
 	| "unexpected-status"
-	| "policy";
+	| "policy"
+	| "email_budget";
 
 // User-safe channel-health categories. Closed by construction (a Postgres enum
 // backs the column) so a provider error body -- which can carry the bot token or
@@ -40,11 +41,14 @@ export const CHANNEL_ERROR_CODES = [
 	"rate_limited",
 	"policy",
 	"transport",
+	"email_unconfirmed",
+	"email_budget",
 ] as const;
 export type ChannelErrorCode = (typeof CHANNEL_ERROR_CODES)[number];
 
 export type RetryDecision =
 	| { kind: "done"; retryClass: RetryClass }
+	| { kind: "defer"; delayMs: number; retryClass: "email_budget" }
 	| { kind: "retry"; delayMs: number; retryClass: RetryClass }
 	| { kind: "permanent"; retryClass: RetryClass };
 
@@ -124,6 +128,8 @@ export function classifyRetry(
 	}
 
 	if (result.ok) return { kind: "done", retryClass: "ok" };
+	if (result.errorCode === "email_budget")
+		return { kind: "defer", delayMs: 60_000, retryClass: "email_budget" };
 	if (result.policyRejected) return { kind: "permanent", retryClass: "policy" };
 
 	const status = result.status;

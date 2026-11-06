@@ -326,7 +326,7 @@ Notification channel URLs are supplied by users, so every outbound send goes thr
 
 **Address policy.** Each DNS answer for the target host is checked before the request. Anything that is not a public unicast address is refused unless an operator explicitly allows it. Some ranges are never allowable, no matter what is configured: loopback, `0.0.0.0/8`, link-local `169.254.0.0/16` (which covers cloud instance metadata), CGNAT `100.64.0.0/10`, multicast, limited broadcast, IPv6 loopback/unspecified/link-local/multicast, and the IPv6 transition encodings (`64:ff9b::/96`, `64:ff9b:1::/48`, `2001::/32`, `2002::/16`) that can hide a private IPv4 payload inside an apparently-unicast literal. URL credentials and non-HTTP(S) protocols are refused outright, redirects are not followed, and responses are size-capped.
 
-**Transport policy.** Public targets require HTTPS and port 80 or 443. Only
+**Transport policy.** Notification-channel public targets require HTTPS and port 80 or 443. Only
 operator-allowlisted private targets may use HTTP or other ports. The private
 allowlist grants every instance user access to those listeners; HTTP provides no
 transport encryption. Each DNS answer must satisfy both policies. Discord and
@@ -358,8 +358,9 @@ the old key.
 Email destinations must redeem a verification capability before either fan-out
 or delivery permits notification mail. An address change clears verification and
 invalidates old links transactionally. Verification and scheduled mail share a
-persistent per-user token bucket (20 sends, refilling one per minute), in addition
-to the test-send limit. SMTP acceptance alone does not verify an email channel.
+persistent per-user token bucket (20 successful sends, refilling one per minute),
+in addition to the test-send limit. Exhaustion defers queued mail without spending
+a delivery attempt; failed SMTP sends do not consume mail capacity. SMTP acceptance alone does not verify an email channel.
 
 ## Acknowledge Capabilities
 

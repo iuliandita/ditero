@@ -41,6 +41,7 @@ import {
 	emailBudgetKey,
 } from "../../src/server/notifications/email-budget.ts";
 import { loadChannels } from "../../src/server/notifications/recipients.ts";
+import { warnNotificationChannelState } from "../../src/server/notifications/startup.ts";
 import { startSmtpSink } from "../support/smtp-sink.ts";
 
 const databaseURL = process.env.DATABASE_URL;
@@ -1014,7 +1015,7 @@ describe("email recipient proof and mail budget", () => {
 		expect((await loadChannels(db, [USER])).get(USER)).toBeUndefined();
 		expect(await send(queued, new AbortController().signal)).toMatchObject({
 			ok: false,
-			policyRejected: true,
+			errorCode: "email_unconfirmed",
 		});
 		expect(stub.sent).toEqual([]);
 		const tested = await testChannel(db, USER, body, {
@@ -1044,7 +1045,7 @@ describe("email recipient proof and mail budget", () => {
 		expect((await loadChannels(db, [USER])).get(USER)).toBeUndefined();
 		expect(await send(queued, new AbortController().signal)).toMatchObject({
 			ok: false,
-			policyRejected: true,
+			errorCode: "email_unconfirmed",
 		});
 		expect(stub.sent).toHaveLength(2);
 	});
@@ -1123,14 +1124,33 @@ describe("email recipient proof and mail budget", () => {
 		expect(results.filter((r) => !r.ok)).toEqual([
 			{
 				ok: false,
-				status: 429,
-				retryAfterSec: 60,
+				errorCode: "email_budget",
 				error: "email: notification mail budget exhausted",
 			},
 		]);
+
+		const beforeChannels = await listChannels(db, USER);
+		const beforeCapabilities = await pool.query(
+			"select id from ack_capability where recipient_user_id=$1 order by id",
+			[USER],
+		);
 		await expect(
-			testChannel(db, USER, body, { env, adapters: { email: stub.adapter } }),
-		).rejects.toMatchObject({ code: "rate_limited", status: 429 });
+			testChannel(
+				db,
+				USER,
+				{ ...body, config: { address: "changed@example.test" } },
+				{ env, adapters: { email: stub.adapter } },
+			),
+		).rejects.toMatchObject({ code: "email_budget", status: 429 });
+		expect(await listChannels(db, USER)).toEqual(beforeChannels);
+		expect(
+			(
+				await pool.query(
+					"select id from ack_capability where recipient_user_id=$1 order by id",
+					[USER],
+				)
+			).rows,
+		).toEqual(beforeCapabilities.rows);
 		expect(stub.sent).toHaveLength(EMAIL_SEND_CAPACITY);
 		const budget = await pool.query(
 			"select tokens from rate_bucket where key=$1",
@@ -1138,4 +1158,198 @@ describe("email recipient proof and mail budget", () => {
 		);
 		expect(budget.rows[0].tokens).toBe(0);
 	});
+});
+
+describe("notification upgrade and save safeguards", () => {
+	const env = {
+		...process.env,
+		DITERO_PUBLIC_URL: "https://app.example.test",
+		DITERO_SMTP_HOST: "smtp.example.test",
+		DITERO_SMTP_FROM: "ditero@example.test",
+	};
+	const email = {
+		kind: "email",
+		config: { address: "recipient@example.test" },
+	};
+	it("does not charge failed verification or scheduled SMTP sends", async () => {
+		const failed = stubAdapter(
+			{ ok: false, status: 503, error: "smtp temporarily unavailable" },
+			"email",
+		);
+		await testChannel(db, USER, email, {
+			env,
+			adapters: { email: failed.adapter },
+		});
+		expect(
+			(
+				await pool.query("select tokens from rate_bucket where key=$1", [
+					emailBudgetKey(USER),
+				])
+			).rows[0].tokens,
+		).toBe(EMAIL_SEND_CAPACITY);
+		const accepted = stubAdapter({ ok: true, status: 250 }, "email");
+		await testChannel(db, USER, email, {
+			env,
+			adapters: { email: accepted.adapter },
+		});
+		await redeemAckCapability(db, tokenFrom(accepted.ackUrls[0]), "capability");
+		const send = createSendFn({
+			database: db,
+			allowedPrivateCIDRs: [],
+			deadlineMs: 1000,
+			ackBaseUrl: null,
+			adapters: { email: failed.adapter },
+		});
+		await send(
+			{
+				id: "failed-mail",
+				reminderStateId: null,
+				recipientUserId: USER,
+				channelKind: "email",
+				payload: { kind: "assign", taskTitle: "Task" },
+				attempts: 0,
+			},
+			new AbortController().signal,
+		);
+		expect(
+			(
+				await pool.query("select tokens from rate_bucket where key=$1", [
+					emailBudgetKey(USER),
+				])
+			).rows[0].tokens,
+		).toBe(EMAIL_SEND_CAPACITY - 1);
+	});
+	it("allows disabling stored email after the public URL is removed", async () => {
+		await saveChannel(db, USER, email, env);
+		const noUrl: NodeJS.ProcessEnv = { ...env };
+		delete noUrl.DITERO_PUBLIC_URL;
+		delete noUrl.BETTER_AUTH_URL;
+		await expect(
+			saveChannel(db, USER, { kind: "email", enabled: false }, noUrl),
+		).resolves.toMatchObject({ enabled: false });
+		await expect(
+			saveChannel(db, USER, { kind: "email", enabled: true }, noUrl),
+		).rejects.toMatchObject({ code: "email_public_url_missing" });
+	});
+	it("shares the owner lock with an active user context and rejects missing owners distinctly", async () => {
+		const reader = await pool.connect();
+		const writer = await pool.connect();
+		try {
+			await reader.query("begin");
+			await reader.query('select id from "user" where id=$1 for key share', [
+				USER,
+			]);
+			await writer.query("set lock_timeout='500ms'");
+			await expect(
+				saveChannel(drizzle(writer, { schema: tables }), USER, {
+					kind: "ntfy",
+					config: CONFIG,
+				}),
+			).resolves.toMatchObject({ kind: "ntfy" });
+		} finally {
+			await reader.query("rollback");
+			reader.release();
+			await writer.query("set lock_timeout=0");
+			writer.release();
+		}
+		await expect(
+			saveChannel(db, "missing-owner", email, env),
+		).rejects.toMatchObject({ code: "owner_unavailable", status: 403 });
+	});
+	it.each([
+		"http://93.184.216.34",
+		"https://93.184.216.34:8443",
+	])("rejects disallowed channel URL at save: %s", async (serverUrl) => {
+		await expect(
+			saveChannel(db, USER, { kind: "ntfy", config: { ...CONFIG, serverUrl } }),
+		).rejects.toMatchObject({ code: "outbound_url_policy" });
+	});
+	it("saves an operator-approved private HTTP listener and explains policy rejection on test", async () => {
+		await expect(
+			saveChannel(
+				db,
+				USER,
+				{
+					kind: "ntfy",
+					config: { ...CONFIG, serverUrl: "http://10.20.30.40:8443" },
+				},
+				{ ...env, DITERO_NOTIFY_ALLOWED_PRIVATE_CIDRS: "10.20.30.40/32" },
+			),
+		).resolves.toMatchObject({ kind: "ntfy" });
+		const stub = stubAdapter({
+			ok: false,
+			policyRejected: true,
+			error: "blocked",
+		});
+		await expect(
+			testChannel(
+				db,
+				USER,
+				{ kind: "ntfy", config: CONFIG },
+				{ adapters: { ntfy: stub.adapter } },
+			),
+		).resolves.toEqual({ ok: false, reason: "outbound_url_policy" });
+	});
+	it("logs upgrade counts for unconfirmed email and unbound legacy channel rows", async () => {
+		await saveChannel(db, USER, email, env);
+		const key = process.env.DITERO_ENCRYPTION_KEY;
+		if (!key) throw new Error("encryption key required");
+		await db.insert(tables.notificationChannel).values({
+			id: randomUUID(),
+			userId: USER,
+			kind: "ntfy",
+			config: {
+				...CONFIG,
+				token: encryptField(
+					TOKEN,
+					"notification-channel:ntfy:token",
+					createFieldKeyRing({ current: key }),
+				),
+			},
+		});
+		const warnings: string[] = [];
+		await warnNotificationChannelState(db, (message) => warnings.push(message));
+		expect(warnings).toHaveLength(2);
+		expect(warnings[0]).toContain("1 enabled email channel");
+		expect(warnings[1]).toContain("1 channel(s) still use unbound");
+	});
+});
+
+it("does not persist a changed address or capability when mail capacity is exhausted", async () => {
+	const env = {
+		...process.env,
+		DITERO_PUBLIC_URL: "https://app.example.test",
+		DITERO_SMTP_HOST: "smtp.example.test",
+		DITERO_SMTP_FROM: "ditero@example.test",
+	};
+	await saveChannel(
+		db,
+		USER,
+		{ kind: "email", config: { address: "original@example.test" } },
+		env,
+	);
+	await pool.query(
+		"insert into rate_bucket (key,tokens,refilled_at) values ($1,0,now())",
+		[emailBudgetKey(USER)],
+	);
+	const before = await listChannels(db, USER);
+	const stub = stubAdapter({ ok: true, status: 250 }, "email");
+	await expect(
+		testChannel(
+			db,
+			USER,
+			{ kind: "email", config: { address: "changed@example.test" } },
+			{ env, adapters: { email: stub.adapter } },
+		),
+	).rejects.toBeInstanceOf(ChannelError);
+	expect(await listChannels(db, USER)).toEqual(before);
+	expect(
+		(
+			await pool.query(
+				"select id from ack_capability where recipient_user_id=$1",
+				[USER],
+			)
+		).rows,
+	).toEqual([]);
+	expect(stub.sent).toEqual([]);
 });

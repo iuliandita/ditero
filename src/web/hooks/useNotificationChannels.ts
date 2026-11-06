@@ -5,6 +5,7 @@ import { m } from "../../paraglide/messages.js";
 import { queries } from "../../zero/queries.ts";
 import {
 	type ChannelCapabilities,
+	channelDeliveryStatus,
 	DEFAULT_CAPABILITIES,
 	type InteractionsUrls,
 } from "../components/settings/channel-form.ts";
@@ -39,18 +40,12 @@ export type TestResult =
 // (config is omitted at the drizzle-zero layer, enabled/verified_at are not).
 // Deliberately not the API hook above: the reminder chip renders per task row
 // and must not fire an HTTP request each time.
-export function useChannelDeliveryStatus(): { allUnverified: boolean } {
+export function useChannelDeliveryStatus(): {
+	allUnverified: boolean;
+	unconfirmedEmail: boolean;
+} {
 	const [rows] = useQuery(queries.notificationChannels.mine());
-	return useMemo(() => {
-		const enabled = rows.filter((r) => r.enabled);
-		return {
-			allUnverified:
-				enabled.length > 0 &&
-				enabled.every(
-					(r) => (r.kind === "email" ? r.ackVerifiedAt : r.verifiedAt) == null,
-				),
-		};
-	}, [rows]);
+	return useMemo(() => channelDeliveryStatus(rows), [rows]);
 }
 
 async function post(path: string, body: unknown): Promise<Response> {
@@ -150,7 +145,13 @@ export function useNotificationChannels(): {
 				? data.verifiedAt === null
 					? { state: "sent", at: data.sentAt }
 					: { state: "verified", at: data.verifiedAt }
-				: { state: "failed", reason: data.reason };
+				: {
+						state: "failed",
+						reason:
+							data.reason === "outbound_url_policy"
+								? channelSaveErrorMessage(data.reason)
+								: data.reason,
+					};
 		},
 		[reload],
 	);

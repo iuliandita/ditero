@@ -42,12 +42,13 @@ export class OutboundPolicyError extends Error {
 	}
 }
 
-type Resolver = {
+export type Resolver = {
 	resolve4: (hostname: string) => Promise<string[]>;
 	resolve6: (hostname: string) => Promise<string[]>;
 };
 
 type SafeFetchOptions = {
+	channelPolicy?: boolean;
 	method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 	headers?: HeadersInit;
 	body?: string | Uint8Array;
@@ -247,7 +248,7 @@ export async function safeFetch(
 		url.hostname,
 		deps.resolver,
 		options.allowedPrivateCIDRs,
-		url,
+		options.channelPolicy ? url : undefined,
 	);
 	const requestFn =
 		deps.requestFn ?? (url.protocol === "https:" ? httpsRequest : httpRequest);

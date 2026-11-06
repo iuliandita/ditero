@@ -319,7 +319,7 @@ export async function completeDelivery(
 				? "failed"
 				: "queued";
 	const nextAttemptAt =
-		decision.kind === "retry"
+		decision.kind === "retry" || decision.kind === "defer"
 			? sql`now() + ${interval(decision.delayMs)}`
 			: sql`next_attempt_at`;
 
@@ -327,7 +327,7 @@ export async function completeDelivery(
 		const { rowCount } = await tx.execute(sql`
 			update notification_outbox
 			set status = ${status}::outbox_status,
-				attempts = ${attemptNo},
+				attempts = ${decision.kind === "defer" ? row.attempts : attemptNo},
 				next_attempt_at = ${nextAttemptAt},
 				claimed_at = null,
 				claimed_by = null
@@ -339,14 +339,15 @@ export async function completeDelivery(
 			);
 			return { applied: false, decision };
 		}
-		await tx.insert(tables.deliveryAttempt).values({
-			id: randomUUID(),
-			outboxId: row.id,
-			attemptNo,
-			providerStatus: result.status ?? null,
-			retryClass: decision.retryClass,
-			error: result.ok ? null : sanitizeError(result.error),
-		});
+		if (decision.kind !== "defer")
+			await tx.insert(tables.deliveryAttempt).values({
+				id: randomUUID(),
+				outboxId: row.id,
+				attemptNo,
+				providerStatus: result.status ?? null,
+				retryClass: decision.retryClass,
+				error: result.ok ? null : sanitizeError(result.error),
+			});
 		await recordChannelHealth(
 			tx,
 			row,
@@ -509,7 +510,11 @@ export async function workerTick(
 		}
 		if (!outcome.applied) summary.fenced++;
 		else if (outcome.decision.kind === "done") summary.sent++;
-		else if (outcome.decision.kind === "retry") summary.retried++;
+		else if (
+			outcome.decision.kind === "retry" ||
+			outcome.decision.kind === "defer"
+		)
+			summary.retried++;
 		else summary.failed++;
 	});
 	return summary;

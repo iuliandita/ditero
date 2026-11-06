@@ -48,10 +48,10 @@ describe("channelCapabilities", () => {
 		).toBe(true);
 	});
 
-	it("requires SMTP and a public URL for email verification", () => {
+	it("reports missing public URL separately from SMTP", () => {
 		expect(channelCapabilities(SMTP)).toMatchObject({
 			ackBaseUrl: false,
-			email: false,
+			email: true,
 		});
 		expect(
 			channelCapabilities({ DITERO_PUBLIC_URL: "https://x.example" }),

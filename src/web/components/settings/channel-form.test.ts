@@ -551,3 +551,26 @@ describe("email verification health", () => {
 		});
 	});
 });
+
+describe("email upgrade repair", () => {
+	it("warns about any unconfirmed email even when another channel works", async () => {
+		const { channelDeliveryStatus } = await import("./channel-form.ts");
+		const pending = stored("email", { address: "recipient@example.test" }, T0);
+		const working = stored("ntfy", { topic: "alerts" }, T0);
+		expect(channelDeliveryStatus([pending, working])).toEqual({
+			allUnverified: false,
+			unconfirmedEmail: true,
+		});
+		expect(
+			channelDeliveryStatus([{ ...pending, enabled: false }, working])
+				.unconfirmedEmail,
+		).toBe(false);
+	});
+	it("names a missing public URL and keeps the stored row editable", () => {
+		const row = stored("email", { address: "recipient@example.test" });
+		const unavailable = rowUnavailable("email", caps({ ackBaseUrl: false }));
+		expect(unavailable).toBe("email_public_url_missing");
+		expect(rowWarnings("email", caps({ ackBaseUrl: false }), row)).toEqual([]);
+		expect(rowFrozen(unavailable, row)).toBe(false);
+	});
+});

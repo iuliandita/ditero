@@ -422,6 +422,7 @@ export const slackAdapter: ChannelAdapter = {
 				body: outbound.body,
 				signal: AbortSignal.any([ctx.signal, deadline.signal]),
 				allowedPrivateCIDRs: ctx.allowedPrivateCIDRs,
+				channelPolicy: true,
 				maxResponseBytes: RESPONSE_MAX_BYTES,
 			});
 

@@ -24,8 +24,12 @@ bun run security:encrypt-channel-configs
    This also upgrades legacy plaintext and unbound notification-channel fields to
    the owner-bound envelope. Keep legacy reads and both keys available until the
    backfill and actual delivery have been verified. An older application version
-   cannot read the new channel envelope; use matching application/database backups
-   for rollback.
+   does not recognize the new channel envelope and passes its ciphertext through
+   as a plaintext credential, causing silent delivery failures. For rollback,
+   restore matching application/database backups with their original keys, or
+   re-save every affected channel with its original plaintext credentials in the
+   older version, then test delivery. Never copy a v2 ciphertext into a credential
+   field. Startup warns while unbound legacy channel rows remain.
 
    Skipping this can leave credentials under the old key and make them unreadable
    after its retirement. The reported count totals only rewritten rows across the

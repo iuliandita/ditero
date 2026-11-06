@@ -23,7 +23,11 @@ import {
 	decryptChannelConfig,
 	encryptChannelConfig,
 } from "../../security/channel-config.ts";
-import type { safeFetch } from "../../security/safe-http.ts";
+import {
+	OutboundPolicyError,
+	resolvePinnedTarget,
+	type safeFetch,
+} from "../../security/safe-http.ts";
 import { resolveRecipientLocale } from "../recipient-locale.ts";
 import { discordAdapter } from "./adapters/discord.ts";
 import { emailAdapter } from "./adapters/email.ts";
@@ -40,11 +44,7 @@ import {
 	VERIFY_TTL_MS,
 } from "./capability.ts";
 import { DISCORD_INTERACTIONS_PATH } from "./discord-interactions.ts";
-import {
-	EMAIL_SEND_CAPACITY,
-	EMAIL_SEND_REFILL_PER_SEC,
-	emailBudgetKey,
-} from "./email-budget.ts";
+import { EmailBudgetExhausted, withEmailBudget } from "./email-budget.ts";
 import { SLACK_INTERACTIONS_PATH } from "./slack-interactions.ts";
 
 type Database = NodePgDatabase<typeof tables>;
@@ -56,12 +56,12 @@ async function lockChannelOwner(
 	userId: string,
 ): Promise<void> {
 	const { rowCount } = await tx.execute(sql`select id from "user"
-		where id = ${userId} and deleted_at is null for update`);
+		where id = ${userId} and deleted_at is null for no key update`);
 	if (rowCount !== 1)
 		throw new ChannelError(
-			"no_stored_config",
+			"owner_unavailable",
 			"channel owner is unavailable",
-			400,
+			403,
 		);
 }
 
@@ -101,7 +101,11 @@ export type ChannelErrorCodeOut =
 	| "no_stored_config"
 	| "app_mode_unsupported"
 	| "email_unsupported"
-	| "rate_limited";
+	| "rate_limited"
+	| "email_budget"
+	| "email_public_url_missing"
+	| "outbound_url_policy"
+	| "owner_unavailable";
 
 export class ChannelError extends Error {
 	constructor(
@@ -119,7 +123,8 @@ export class ChannelError extends Error {
 export type TestFailure =
 	| "Could not reach the server"
 	| "Server rejected the request"
-	| "Request timed out";
+	| "Request timed out"
+	| "outbound_url_policy";
 
 export type ChannelView = {
 	kind: ChannelKind;
@@ -194,13 +199,15 @@ function requireInteractiveSupport(
 // page, and silently never deliver. Refused at save with the setting to fix.
 function requireMailSupport(kind: ChannelKind, env: NodeJS.ProcessEnv): void {
 	if (kind !== "email") return;
-	if (!isMailConfigured(env) || ackBaseUrl(env) === null) {
+	if (!isMailConfigured(env)) {
+		throw new ChannelError("email_unsupported", "email needs SMTP", 400);
+	}
+	if (ackBaseUrl(env) === null)
 		throw new ChannelError(
-			"email_unsupported",
-			"email needs SMTP and a public base URL for recipient verification",
+			"email_public_url_missing",
+			"email recipient confirmation needs a public base URL",
 			400,
 		);
-	}
 }
 
 function canonical(config: Record<string, unknown>): string {
@@ -261,7 +268,7 @@ export function channelCapabilities(
 	return {
 		available: Object.keys(IMPLEMENTED) as ChannelKind[],
 		ackBaseUrl: base,
-		email: isMailConfigured(env) && base,
+		email: isMailConfigured(env),
 		telegramTransport: transport,
 		// A webhook cannot be registered without a public origin to register, so
 		// the operator has selected a transport this deployment cannot run.
@@ -314,8 +321,8 @@ async function upsertChannel(
 ): Promise<{ view: ChannelView; config: Record<string, unknown> }> {
 	const input = requireConfig(body);
 	const kind = requireKind(input.kind);
-	requireMailSupport(kind, env);
 	const enabled = input.enabled === undefined ? true : input.enabled === true;
+	if (enabled) requireMailSupport(kind, env);
 	const previous = await storedConfig(database, userId, kind, env);
 
 	// `config` omitted means "flip enabled only": the settings toggle must not
@@ -362,7 +369,36 @@ async function upsertChannel(
 	if (!parsed.success) {
 		throw new ChannelError("invalid_config", "invalid channel config", 400);
 	}
+
 	const config = parsed.data as Record<string, unknown>;
+	if (kind === "ntfy") {
+		const url = new URL(config.serverUrl as string);
+		if (
+			url.protocol !== "https:" ||
+			(url.port && url.port !== "80" && url.port !== "443")
+		) {
+			try {
+				await resolvePinnedTarget(
+					url.hostname,
+					undefined,
+					notifyAllowedPrivateCIDRs(env.DITERO_NOTIFY_ALLOWED_PRIVATE_CIDRS),
+					url,
+				);
+			} catch (error) {
+				if (error instanceof OutboundPolicyError)
+					throw new ChannelError(
+						"outbound_url_policy",
+						"Use HTTPS on port 80 or 443, or ask the operator to allow this private listener",
+						400,
+					);
+				throw new ChannelError(
+					"invalid_config",
+					"Notification destination did not resolve",
+					400,
+				);
+			}
+		}
+	}
 	requireInteractiveSupport(config, env);
 	const stored = encryptChannelConfig(
 		kind,
@@ -458,7 +494,9 @@ function classify(result: {
 	ok: boolean;
 	status?: number;
 	error?: string;
+	policyRejected?: boolean;
 }): TestFailure {
+	if (result.policyRejected) return "outbound_url_policy";
 	if (result.status !== undefined) return "Server rejected the request";
 	if (result.error && /abort|timed? ?out/i.test(result.error)) {
 		return "Request timed out";
@@ -518,82 +556,98 @@ export async function testChannel(
 			429,
 		);
 	}
-	const { view, config, ackUrl } = await database.transaction(async (tx) => {
-		await lockChannelOwner(tx, userId);
-		const channel = await upsertChannel(tx, userId, body, env);
-		const ackUrl = await mintVerifyCapability(
-			tx,
-			userId,
-			channel.view.kind,
-			ackBaseUrl(env),
-		);
-		return { ...channel, ackUrl };
-	});
-	if (
-		view.kind === "email" &&
-		!(await takeRateToken(
-			database,
-			emailBudgetKey(userId),
-			EMAIL_SEND_CAPACITY,
-			EMAIL_SEND_REFILL_PER_SEC,
-		))
-	) {
-		throw new ChannelError(
-			"rate_limited",
-			"notification mail budget exhausted",
-			429,
-		);
-	}
-	const adapter = (deps.adapters ?? IMPLEMENTED)[view.kind];
-	if (!adapter)
-		throw new ChannelError("not_implemented", "channel not available yet", 400);
+	const kind = requireKind(requireConfig(body).kind);
+	requireMailSupport(kind, env);
+	const run = async (database: ChannelDatabase) => {
+		const { view, config, ackUrl } = await database.transaction(async (tx) => {
+			await lockChannelOwner(tx, userId);
+			const channel = await upsertChannel(tx, userId, body, env);
+			const ackUrl = await mintVerifyCapability(
+				tx,
+				userId,
+				channel.view.kind,
+				ackBaseUrl(env),
+			);
+			return { ...channel, ackUrl };
+		});
+		const adapter = (deps.adapters ?? IMPLEMENTED)[view.kind];
+		if (!adapter)
+			throw new ChannelError(
+				"not_implemented",
+				"channel not available yet",
+				400,
+			);
 
-	// Minted before the send so the test message carries a real, single-use
-	// Acknowledge button: in an interactive mode the outbound leg is exactly the
-	// half that can succeed while the button was silently dropped.
-	// The caller is the recipient here, so their stored preference is the one
-	// the test message renders in -- including the ack button the adapter adds.
-	const locale = await resolveRecipientLocale(database, userId);
-	const timing = workerTiming(env);
-	const controller = new AbortController();
-	const timer = setTimeout(() => controller.abort(), timing.adapterDeadlineMs);
-	let result: { ok: boolean; status?: number; error?: string };
-	try {
-		result = await adapter.send(
-			config,
-			{
-				title: notify_test_title({}, { locale }),
-				body: notify_test_body({}, { locale }),
-				urgent: false,
-				ackUrl,
-				locale,
-			},
-			{
-				allowedPrivateCIDRs: notifyAllowedPrivateCIDRs(
-					env.DITERO_NOTIFY_ALLOWED_PRIVATE_CIDRS,
+		// Minted before the send so the test message carries a real, single-use
+		// Acknowledge button: in an interactive mode the outbound leg is exactly the
+		// half that can succeed while the button was silently dropped.
+		// The caller is the recipient here, so their stored preference is the one
+		// the test message renders in -- including the ack button the adapter adds.
+		const locale = await resolveRecipientLocale(database, userId);
+		const timing = workerTiming(env);
+		const controller = new AbortController();
+		const timer = setTimeout(
+			() => controller.abort(),
+			timing.adapterDeadlineMs,
+		);
+		let result: {
+			ok: boolean;
+			status?: number;
+			error?: string;
+			policyRejected?: boolean;
+		};
+		try {
+			result = await adapter.send(
+				config,
+				{
+					title: notify_test_title({}, { locale }),
+					body: notify_test_body({}, { locale }),
+					urgent: false,
+					ackUrl,
+					locale,
+				},
+				{
+					allowedPrivateCIDRs: notifyAllowedPrivateCIDRs(
+						env.DITERO_NOTIFY_ALLOWED_PRIVATE_CIDRS,
+					),
+					deadlineMs: timing.adapterDeadlineMs,
+					signal: controller.signal,
+					fetch: deps.fetch,
+				},
+			);
+		} finally {
+			clearTimeout(timer);
+		}
+
+		if (!result.ok) return { ok: false as const, reason: classify(result) };
+
+		const sentAt = Date.now();
+		if (view.kind === "email")
+			return { ok: true as const, verifiedAt: null, sentAt };
+		const verifiedAt = new Date(sentAt);
+		await database
+			.update(tables.notificationChannel)
+			.set({ verifiedAt })
+			.where(
+				and(
+					eq(tables.notificationChannel.userId, userId),
+					eq(tables.notificationChannel.kind, view.kind),
 				),
-				deadlineMs: timing.adapterDeadlineMs,
-				signal: controller.signal,
-				fetch: deps.fetch,
-			},
-		);
-	} finally {
-		clearTimeout(timer);
+			);
+
+		return { ok: true as const, verifiedAt: verifiedAt.getTime(), sentAt };
+	};
+	try {
+		return kind === "email"
+			? await withEmailBudget(database, userId, run)
+			: await run(database);
+	} catch (error) {
+		if (error instanceof EmailBudgetExhausted)
+			throw new ChannelError(
+				"email_budget",
+				"notification mail budget exhausted",
+				429,
+			);
+		throw error;
 	}
-
-	if (!result.ok) return { ok: false, reason: classify(result) };
-
-	const sentAt = Date.now();
-	if (view.kind === "email") return { ok: true, verifiedAt: null, sentAt };
-	const verifiedAt = new Date(sentAt);
-	await database
-		.update(tables.notificationChannel)
-		.set({ verifiedAt })
-		.where(
-			and(
-				eq(tables.notificationChannel.userId, userId),
-				eq(tables.notificationChannel.kind, view.kind),
-			),
-		);
-	return { ok: true, verifiedAt: verifiedAt.getTime(), sentAt };
 }

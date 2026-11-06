@@ -18,3 +18,5 @@ In Arabic, link underlines use a larger offset so they clear the letters. Text p
 Standard retains the base hierarchy. Comfortable and Large enlarge the rem scale, completion marks, tap targets, and spacing together. High contrast is independent of reading size and theme. Long names and metadata reflow in the larger presets.
 
 Priority flags carry semantic color; ordinary priority text uses foreground so it stays readable on both resting and hover surfaces. Spatial overlay animation is removed when reduced motion is requested.
+
+Notification channel health and repair guidance use the metadata scale with wrapping. Keep recipient-confirmation instructions as complete localized sentences. SMTP acceptance is labeled as sent; only recipient confirmation labels an email channel verified. See [Notifications](notifications.md) for the delivery states.

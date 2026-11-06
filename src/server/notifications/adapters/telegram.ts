@@ -167,6 +167,7 @@ export const telegramAdapter: ChannelAdapter = {
 				body,
 				signal: AbortSignal.any([ctx.signal, deadline.signal]),
 				allowedPrivateCIDRs: ctx.allowedPrivateCIDRs,
+				channelPolicy: true,
 				maxResponseBytes: RESPONSE_MAX_BYTES,
 			});
 

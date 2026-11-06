@@ -154,3 +154,8 @@ do not generate new keys or reenroll accounts to bypass a configuration problem.
 Then verify a real attachment download and client decryption. Follow the full
 [Backup and Restore](backup-restore.md) procedure and read [E2E Key Loss](e2e-key-loss.md) for the
 separate user-key boundary.
+
+When upgrading notification channels alongside attachment storage, follow the
+[notification upgrade and rollback guidance](backup-restore.md#notification-channel-safeguards-upgrade).
+Migration 0097 changes channel health codes only; attachment recovery still needs
+the coordinated database, blobs and original keys described above.

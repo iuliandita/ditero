@@ -337,7 +337,11 @@ describe("outbound TLS and port policy", () => {
 	])("rejects public target %s before opening a socket", async (url) => {
 		const { calls, requestFn } = fakeTransport();
 		await expect(
-			safeFetch(url, {}, { resolver: publicResolver, requestFn }),
+			safeFetch(
+				url,
+				{ channelPolicy: true },
+				{ resolver: publicResolver, requestFn },
+			),
 		).rejects.toBeInstanceOf(OutboundPolicyError);
 		expect(calls).toHaveLength(0);
 	});
@@ -352,7 +356,13 @@ describe("outbound TLS and port policy", () => {
 			"fd00::/8",
 		]);
 		expect(
-			(await safeFetch(url, { allowedPrivateCIDRs }, { requestFn })).ok,
+			(
+				await safeFetch(
+					url,
+					{ allowedPrivateCIDRs, channelPolicy: true },
+					{ requestFn },
+				)
+			).ok,
 		).toBe(true);
 		expect(calls).toHaveLength(1);
 	});
@@ -366,7 +376,10 @@ describe("outbound TLS and port policy", () => {
 			await expect(
 				safeFetch(
 					url,
-					{ allowedPrivateCIDRs: parseTrustedProxyCIDRs(["192.168.1.0/24"]) },
+					{
+						channelPolicy: true,
+						allowedPrivateCIDRs: parseTrustedProxyCIDRs(["192.168.1.0/24"]),
+					},
 					{
 						resolver: {
 							resolve4: async () => ["192.168.1.20", "93.184.216.34"],
@@ -379,4 +392,15 @@ describe("outbound TLS and port policy", () => {
 			expect(calls).toHaveLength(0);
 		}
 	});
+});
+
+test.each([
+	"https://distributor.example.test:8443/push",
+	"https://relay.example.test:8443/v1/send",
+])("retains the native transport policy for %s", async (url) => {
+	const { calls, requestFn } = fakeTransport();
+	await expect(
+		safeFetch(url, {}, { resolver: publicResolver, requestFn }),
+	).resolves.toMatchObject({ ok: true });
+	expect(calls[0].url.port).toBe("8443");
 });

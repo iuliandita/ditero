@@ -872,3 +872,43 @@ describe("capacity and pruning", () => {
 		expect((await tick()).pruned).toBe(1);
 	});
 });
+
+test("mail budget deferral preserves attempts and retries after capacity refills", async () => {
+	const id = await seedOutbox("budget-deferred", {
+		attempts: MAX_ATTEMPTS - 1,
+		channelKind: "email",
+	});
+	let row = (await claimBatch(db, 1, A))[0];
+	const denied = await completeDelivery(
+		db,
+		row,
+		{ ok: false, errorCode: "email_budget", error: "mail capacity exhausted" },
+		A,
+	);
+	expect(denied).toMatchObject({
+		applied: true,
+		decision: { kind: "defer", retryClass: "email_budget", delayMs: 60000 },
+	});
+	expect(await outbox(id)).toMatchObject({
+		status: "queued",
+		attempts: MAX_ATTEMPTS - 1,
+		claimedBy: null,
+	});
+	expect((await outbox(id)).nextAttemptAt.getTime()).toBeGreaterThan(
+		Date.now() + 55000,
+	);
+	expect(await attemptsFor(id)).toEqual([]);
+	await db
+		.update(tables.notificationOutbox)
+		.set({ nextAttemptAt: new Date(Date.now() - 1000) })
+		.where(eq(tables.notificationOutbox.id, id));
+	row = (await claimBatch(db, 1, B))[0];
+	expect(await completeDelivery(db, row, ok, B)).toMatchObject({
+		applied: true,
+		decision: { kind: "done" },
+	});
+	expect(await outbox(id)).toMatchObject({
+		status: "sent",
+		attempts: MAX_ATTEMPTS,
+	});
+});
