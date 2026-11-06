@@ -787,6 +787,35 @@ test("account deletion keeps shared history and replay identity accessible to th
 
 test("connection loss between content and ledger rolls back the entire batch and permits retry", async () => {
 	const job = await save();
+	const planned = (
+		await admin.query<{ id: string; list_id: string; title: string }>(
+			`select target_id as id, payload->>'listId' as list_id, payload->>'title' as title
+			 from import_item where job_id=$1 and collection='tasks' and disposition='ensure'`,
+			[job.id],
+		)
+	).rows;
+	expect(planned).toHaveLength(1);
+	const taskRows = async () =>
+		(
+			await admin.query(
+				"select id,list_id,title from task where id=any($1::text[]) order by id",
+				[["hia-task", ...planned.map((task) => task.id)]],
+			)
+		).rows;
+	const ledgerRows = async () =>
+		(
+			await admin.query(
+				`select h.collection,h.target_id from import_history_ledger h
+				 join import_item i on i.collection=h.collection::text and i.target_id=h.target_id
+				 where i.job_id=$1 order by h.collection,h.target_id`,
+				[job.id],
+			)
+		).rows;
+	const original = [
+		{ id: "hia-task", list_id: "hia-list", title: "Original task" },
+	];
+	expect(await taskRows()).toEqual(original);
+	expect(await ledgerRows()).toEqual([]);
 	const blocker = await admin.connect();
 	const blockerPid = (
 		await blocker.query<{ pid: number }>("select pg_backend_pid() as pid")
@@ -844,10 +873,8 @@ test("connection loss between content and ledger rolls back the entire batch and
 		);
 		await admin.query("drop function hia_pause_ledger()");
 	}
-	expect((await counts()).ledger).toBe(0);
-	expect(
-		(await admin.query("select count(*)::int as n from task")).rows[0].n,
-	).toBe(1);
+	expect(await taskRows()).toEqual(original);
+	expect(await ledgerRows()).toEqual([]);
 	expect(
 		(
 			await admin.query("select job_id from import_run where job_id=$1", [
@@ -855,6 +882,15 @@ test("connection loss between content and ledger rolls back the entire batch and
 			])
 		).rowCount,
 	).toBe(0);
-	await finish(job);
-	expect((await counts()).ledger).toBe(3);
+	const run = await finish(job);
+	const committedTasks = await taskRows();
+	expect(committedTasks).toHaveLength(2);
+	expect(committedTasks).toEqual(
+		expect.arrayContaining([...original, ...planned]),
+	);
+	const committedLedger = await ledgerRows();
+	expect(committedLedger).toHaveLength(3);
+	expect(await apply(job)).toEqual(run);
+	expect(await taskRows()).toEqual(committedTasks);
+	expect(await ledgerRows()).toEqual(committedLedger);
 });
