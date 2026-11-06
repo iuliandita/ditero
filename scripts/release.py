@@ -87,6 +87,19 @@ def deployment_guides(version: str) -> None:
                 raise ValueError(f"Packaged deployment guide {name} does not match release.json")
 
 
+def compose_version(version: str, update: bool = False) -> None:
+    path = ROOT / "deploy/docker/docker-compose.yml"
+    source = path.read_text()
+    pattern = r"\$\{DITERO_IMAGE_TAG:-[^}]+\}"
+    updated, count = re.subn(pattern, lambda _: f"${{DITERO_IMAGE_TAG:-{version}}}", source)
+    if count != 2:
+        raise ValueError("Expected two Compose image tag defaults")
+    if update:
+        path.write_text(updated)
+    elif updated != source:
+        raise ValueError("Compose image tags do not match release.json")
+
+
 def deployment(output: Path) -> None:
     version = metadata()["version"]
     chart = ROOT / "deploy/helm/ditero"
@@ -104,6 +117,7 @@ def deployment(output: Path) -> None:
         if not re.search(rf"(?m)^\s+image: ghcr\.io/iuliandita/ditero:{re.escape(version + suffix)}\s*$", manifest):
             raise ValueError("Kustomize image tags do not match release.json")
     deployment_guides(version)
+    compose_version(version)
     output.mkdir(parents=True, exist_ok=True)
     subprocess.run(["helm", "package", "deploy/helm/ditero", "--version", version, "--app-version", version, "--destination", str(output)], cwd=ROOT, check=True)
     files = ("docker-compose.yml", "postgres-init.sh", "postgres-healthcheck.sh", "secret-file.sh")
@@ -515,11 +529,13 @@ Verify downloads with `sha256sum -c SHA256SUMS.txt`. Checksums verify downloaded
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["prepare", "deployment", "publish", "check", "clients", "standalone-candidate"])
+    parser.add_argument("command", choices=["prepare", "deployment", "publish", "check", "clients", "standalone-candidate", "sync-compose"])
     parser.add_argument("--output", type=Path, default=Path("release-downloads"))
     parser.add_argument("--allow-dirty", action="store_true", help="accept client bundles built from modified source (local qualification only)")
     args = parser.parse_args()
-    if args.command == "check":
+    if args.command == "sync-compose":
+        compose_version(metadata()["version"], update=True)
+    elif args.command == "check":
         print(metadata()["version"])
     elif args.command == "clients":
         version = metadata()["version"]

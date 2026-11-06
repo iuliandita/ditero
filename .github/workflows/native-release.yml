@@ -17,13 +17,13 @@ on:
         default: 1
     secrets:
       DITERO_ANDROID_KEYSTORE_BASE64:
-        required: true
+        required: false
       DITERO_ANDROID_KEYSTORE_PASSWORD:
-        required: true
+        required: false
       DITERO_ANDROID_KEY_ALIAS:
-        required: true
+        required: false
       DITERO_ANDROID_KEY_PASSWORD:
-        required: true
+        required: false
 
 permissions:
   contents: read
@@ -172,6 +172,7 @@ jobs:
           retention-days: 7
 
   android:
+    environment: production
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     defaults:

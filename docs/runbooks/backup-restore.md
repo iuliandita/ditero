@@ -27,7 +27,9 @@
 6. Encrypt the backup set, record checksums and a shared backup-set identifier, and test restoration
    on an isolated instance.
 
-For bundled Compose, choose a new output filename and run from the repository root:
+For bundled Compose, record the deployed `DITERO_IMAGE_TAG` with the backup so the
+matching release can be selected during recovery. Choose a new output filename and
+run from the repository root:
 
 ```sh
 (

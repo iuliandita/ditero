@@ -33,7 +33,7 @@ release version. The app and Zero images also bake the commit into the
 `/health` and the Kustomize Zero init container compares. Do not set it in
 deployment configuration. A build without it reports `revision: null`.
 
-Compose uses `DITERO_IMAGE_TAG` for the app and defaults Zero to that tag with
+Compose defaults `DITERO_IMAGE_TAG` to `0.1.0-beta.4` for the app and defaults Zero to that tag with
 `-zero` appended. For a commit-pinned nightly pair, set both `DITERO_IMAGE_TAG`
 and `DITERO_ZERO_IMAGE_TAG`: for example, `nightly-<commit>` and
 `nightly-zero-<commit>`. Release pairs keep the default suffix convention.
