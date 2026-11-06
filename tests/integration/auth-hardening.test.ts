@@ -302,6 +302,38 @@ describe("authentication hardening schema", () => {
 			.where(eq(tables.user.email, "totp-integration@test.invalid"));
 		expect(savedUser.twoFactorEnabled).toBe(true);
 
+		const [credential] = await db
+			.select()
+			.from(tables.account)
+			.where(eq(tables.account.userId, savedUser.id));
+		const linkedId = crypto.randomUUID();
+		await db.insert(tables.account).values({
+			id: linkedId,
+			userId: savedUser.id,
+			providerId: "oidc-fixture",
+			accountId: "linked-subject",
+		});
+		const unlink = await send("/unlink-account", { accountId: credential.id });
+		expect(unlink.status).toBe(403);
+		expect(await unlink.json()).toMatchObject({
+			code: "CREDENTIAL_UNLINK_REFUSED",
+		});
+		for (const path of [
+			"/two-factor/disable",
+			"/two-factor/generate-backup-codes",
+			"/two-factor/get-totp-uri",
+		])
+			expect((await send(path, {})).status).toBe(400);
+		expect(
+			await db
+				.select()
+				.from(tables.account)
+				.where(eq(tables.account.id, credential.id)),
+		).toHaveLength(1);
+		expect(
+			(await send("/unlink-account", { accountId: linkedId })).status,
+		).toBe(200);
+
 		await send("/sign-out", {});
 		cookies.clear();
 		const signIn = await send("/sign-in/email", {

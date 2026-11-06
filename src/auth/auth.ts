@@ -207,6 +207,24 @@ export const auth = betterAuth({
 	hooks: {
 		before: createAuthMiddleware(async (context) => {
 			if (context.path === "/reset-password") assertPasswordResetScope();
+			if (context.path === "/unlink-account") {
+				const session = await getSessionFromCtx(context);
+				if (!session) throw new APIError("UNAUTHORIZED");
+				const accounts = await context.context.internalAdapter.findAccounts(
+					session.user.id,
+				);
+				if (
+					accounts.some(
+						(account) =>
+							account.id === context.body?.accountId &&
+							account.providerId === "credential",
+					)
+				)
+					throw new APIError("FORBIDDEN", {
+						code: "CREDENTIAL_UNLINK_REFUSED",
+						message: "The password credential cannot be unlinked",
+					});
+			}
 			if (context.path === "/sign-in/sso") return guardSsoStart(context);
 			if (context.path !== "/sign-up/email") return;
 			if (!context.body || typeof context.body !== "object") return;
