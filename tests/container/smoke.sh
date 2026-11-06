@@ -54,7 +54,44 @@ cleanup() {
   docker rm -fv "$app" "$database" >/dev/null 2>&1 || true
   docker network rm "$network" >/dev/null 2>&1 || true
 }
-trap cleanup EXIT INT TERM
+stage=setup
+finish() {
+  status=$?
+  if [ "$status" -ne 0 ]; then
+    echo "container smoke failed during $stage (exit $status)" >&2
+    docker inspect --format 'running={{.State.Running}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}}' "$app" >&2 || true
+    docker logs --tail 100 "$app" >&2 || true
+  fi
+  cleanup
+  exit "$status"
+}
+trap finish EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+http_probe() {
+  {
+    cat <<'JS'
+async function smokeFetch(path, init = {}) {
+  const method = init.method ?? "GET";
+  const started = performance.now();
+  console.error(`request: ${method} ${path}`);
+  try {
+    const response = await fetch(`http://localhost:3000${path}`, {
+      ...init,
+      signal: AbortSignal.timeout(Number(process.env.SMOKE_FETCH_TIMEOUT_MS)),
+    });
+    console.error(`response: ${method} ${path} ${response.status} ${Math.round(performance.now() - started)}ms`);
+    return response;
+  } catch (error) {
+    console.error(`request failed: ${method} ${path} ${error.name} ${Math.round(performance.now() - started)}ms`);
+    throw error;
+  }
+}
+JS
+    cat
+  } | docker exec -i --env SMOKE_FETCH_TIMEOUT_MS="${1:-10000}" "$app" bun -
+}
 
 docker network create "$network" >/dev/null
 docker run --detach --name "$database" --network "$network" \
@@ -88,8 +125,10 @@ docker run --detach --name "$app" --network "$network" \
   --env DITERO_SCHEDULER_TICK_MS=1000 \
   "$image" >/dev/null
 
+stage=readiness
+echo "container smoke: $stage"
 attempt=0
-until docker exec "$app" bun -e '
+until http_probe 1000 <<'JS' >/dev/null 2>&1
   const required = [
     "content-security-policy",
     "strict-transport-security",
@@ -99,11 +138,12 @@ until docker exec "$app" bun -e '
     "permissions-policy",
   ];
   for (const path of ["/health", "/"]) {
-    const response = await fetch(`http://localhost:3000${path}`);
+    const response = await smokeFetch(path);
     if (!response.ok) process.exit(1);
     if (required.some((name) => !response.headers.has(name))) process.exit(1);
   }
-' >/dev/null 2>&1; do
+JS
+do
   attempt=$((attempt + 1))
   if [ "$attempt" -ge 60 ]; then
     docker logs "$app" >&2
@@ -113,15 +153,17 @@ until docker exec "$app" bun -e '
 done
 
 # Exercise PID 1, actual database loss/recovery, and Docker's default stop budget.
-docker exec "$app" bun -e '
+stage=signup
+echo "container smoke: $stage"
+http_probe <<'JS'
   const args = (await Bun.file("/proc/1/cmdline").text()).split("\0");
   if (!args[0].endsWith("bun") || args[1] !== "src/server/index.ts") throw new Error("Bun is not PID 1");
-  const response = await fetch("http://localhost:3000/api/auth/sign-up/email", {
+  const response = await smokeFetch("/api/auth/sign-up/email", {
     method: "POST", headers: { "content-type": "application/json", origin: "http://localhost:3000" },
     body: JSON.stringify({ name: "Lifecycle", email: "lifecycle@example.com", password: "lifecycle-fixture-password" }),
   });
   if (!response.ok) throw new Error(`Signup failed: ${response.status}`);
-'
+JS
 docker exec -i "$database" psql -U postgres -d ditero -v ON_ERROR_STOP=1 >/dev/null <<'SQL'
 insert into list (id, workspace_id, owner_id, title, sort_key)
 select 'lifecycle-list', w.id, u.id, 'Lifecycle', 'a0'
@@ -139,20 +181,28 @@ wait_reminder() {
     sleep 1
   done
 }
+stage=reminder-before-restart
+echo "container smoke: $stage"
 wait_reminder lifecycle-before
 started=$(docker inspect --format '{{.State.StartedAt}}' "$app")
+stage=database-restart
+echo "container smoke: $stage"
 docker stop "$database" >/dev/null
 sleep 3
 test "$(docker inspect --format '{{.State.Running}}' "$app")" = true
-docker exec "$app" bun -e 'if (!(await fetch("http://localhost:3000/health")).ok) process.exit(1)'
+http_probe <<'JS'
+if (!(await smokeFetch("/health")).ok) process.exit(1);
+JS
 if [ -n "$expected_revision" ]; then
-  docker exec --env EXPECTED="$expected_revision" "$app" bun -e '
-    const body = await (await fetch("http://localhost:3000/health")).json();
-    if (body.revision !== process.env.EXPECTED) {
-      console.error(JSON.stringify(body));
-      process.exit(1);
-    }
-  '
+  actual_revision=$(http_probe <<'JS'
+    const body = await (await smokeFetch("/health")).json();
+    console.log(body.revision);
+JS
+  )
+  if [ "$actual_revision" != "$expected_revision" ]; then
+    echo "health revision differs from expected revision" >&2
+    exit 1
+  fi
 fi
 docker start "$database" >/dev/null
 attempt=0
@@ -165,16 +215,22 @@ docker exec -i "$database" psql -U postgres -d ditero -v ON_ERROR_STOP=1 >/dev/n
 insert into task (id, list_id, title, sort_key, due_at, reminder_time)
 values ('lifecycle-after', 'lifecycle-list', 'Lifecycle', 'a1', now(), to_char(now() at time zone 'UTC','HH24:MI'));
 SQL
+stage=reminder-after-restart
+echo "container smoke: $stage"
 wait_reminder lifecycle-after
-docker exec "$app" bun -e '
-  const response = await fetch("http://localhost:3000/api/auth/sign-in/email", {
+stage=recovered-signin
+echo "container smoke: $stage"
+http_probe <<'JS'
+  const response = await smokeFetch("/api/auth/sign-in/email", {
     method: "POST", headers: { "content-type": "application/json", origin: "http://localhost:3000" },
     body: JSON.stringify({ email: "lifecycle@example.com", password: "lifecycle-fixture-password" }),
   });
   if (!response.ok) throw new Error(`Recovered sign-in failed: ${response.status}`);
-'
+JS
 test "$(docker inspect --format '{{.State.StartedAt}}' "$app")" = "$started"
 echo 'database restart: process survived and reminder scans/requests recovered'
+stage=shutdown
+echo "container smoke: $stage"
 stop_started=$(date +%s)
 docker stop "$app" >/dev/null
 test "$(docker inspect --format '{{.State.ExitCode}}' "$app")" = 0
@@ -182,10 +238,15 @@ stop_elapsed=$(($(date +%s) - stop_started))
 echo "docker stop: ${stop_elapsed}s, exit 0"
 test "$stop_elapsed" -lt 9
 
+stage=startup-controls
+echo "container smoke: $stage"
 # The startup controls stop the app and rotate its auth secret, so they run last.
 docker start "$app" >/dev/null
 attempt=0
-until docker exec "$app" bun -e 'if (!(await fetch("http://localhost:3000/health")).ok) process.exit(1)' >/dev/null 2>&1; do
+until http_probe 1000 <<'JS' >/dev/null 2>&1
+if (!(await smokeFetch("/health")).ok) process.exit(1);
+JS
+do
   attempt=$((attempt + 1))
   if [ "$attempt" -ge 60 ]; then docker logs "$app" >&2; exit 1; fi
   sleep 1

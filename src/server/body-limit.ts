@@ -6,6 +6,13 @@ import {
 
 const KIB = 1024;
 const MIB = KIB * KIB;
+const authBodies = new WeakMap<Request, Uint8Array<ArrayBuffer>>();
+
+export function admittedAuthRequest(request: Request): Request {
+	const body = authBodies.get(request);
+	// Bun 1.3.14 stalls header-rewritten requests after their clone is drained.
+	return body ? new Request(request, { body }) : request;
+}
 
 export function requestBodyLimit(request: Request): number | null {
 	const path = new URL(request.url).pathname;
@@ -94,6 +101,11 @@ export async function enforceRequestBodyLimit({
 	if (request.signal.aborted) abort();
 	let bytes = 0;
 	let reads = 0;
+	const chunks: Uint8Array[] | undefined = new URL(
+		request.url,
+	).pathname.startsWith("/api/auth/")
+		? []
+		: undefined;
 	try {
 		while (!stopped) {
 			const { done, value } = await reader.read();
@@ -104,8 +116,18 @@ export async function enforceRequestBodyLimit({
 			}
 			bytes += value.byteLength;
 			if (bytes > limit || ++reads > 65_536) stop(413);
+			else chunks?.push(value);
 		}
 		if (stopped) return reject(stopped);
+		if (chunks) {
+			const body = new Uint8Array(bytes);
+			let offset = 0;
+			for (const chunk of chunks) {
+				body.set(chunk, offset);
+				offset += chunk.byteLength;
+			}
+			authBodies.set(request, body);
+		}
 	} catch {
 		stop(400);
 		return reject(stopped);

@@ -5,7 +5,8 @@
 // spawned by the test, prints its port, echoes back the bytes the verifier saw.
 import { Elysia } from "elysia";
 import { verifySlackSignature } from "../../domain/channel-signature.ts";
-import { enforceRequestBodyLimit } from "../body-limit.ts";
+import { admittedAuthRequest, enforceRequestBodyLimit } from "../body-limit.ts";
+import { sanitizeAuthRequest } from "../client-ip.ts";
 import { RAW_BODY_ROUTE_CONFIG, rawBodyHandler } from "./raw-body.ts";
 
 let seen = "";
@@ -45,6 +46,17 @@ for (const path of [
 		RAW_BODY_ROUTE_CONFIG,
 	);
 }
+app.all("/api/auth/*", async ({ request, server }) => {
+	const authRequest = sanitizeAuthRequest(
+		admittedAuthRequest(request),
+		server?.requestIP(request)?.address,
+		[],
+	);
+	return Response.json({
+		body: await authRequest.json(),
+		peer: authRequest.headers.get("x-ditero-client-ip"),
+	});
+});
 app.listen(0);
 
 console.log(`port:${app.server?.port}`);

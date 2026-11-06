@@ -50,7 +50,7 @@ import { withZeroUserContext } from "../zero/task-activation.ts";
 import { accountDeletionRoutes } from "./account-deletion.ts";
 import { attachmentRoutes } from "./attachments/routes.ts";
 import { startAttachmentSweep } from "./attachments/sweep.ts";
-import { enforceRequestBodyLimit } from "./body-limit.ts";
+import { admittedAuthRequest, enforceRequestBodyLimit } from "./body-limit.ts";
 import { resolveClientRateKey, trustedProxyCIDRsFromEnv } from "./client-ip.ts";
 import { ctxFromAuthHeader } from "./ctx.ts";
 import { lookupUsers } from "./discovery.ts";
@@ -340,7 +340,10 @@ const routes = new Elysia({ serve: { maxRequestBodySize: 128 * 1024 * 1024 } })
 	.get("/api/config", () => publicConfig(process.env, ssoProviders()))
 	// Better Auth catch-all: serves JWKS (GET) and all auth POSTs.
 	.all("/api/auth/*", ({ request, server }) =>
-		handleAuthRequest(request, server?.requestIP(request)?.address),
+		handleAuthRequest(
+			admittedAuthRequest(request),
+			server?.requestIP(request)?.address,
+		),
 	)
 	.post(
 		"/api/bootstrap",

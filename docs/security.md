@@ -18,7 +18,9 @@ for SAML assertion callbacks. Ordinary JSON has a 1 MiB cap and a five-second id
 read timeout. Authenticated Zero pushes retain the transport's larger limit so an
 offline queue can drain. Uploads, imports and signed notification callbacks use
 their dedicated readers and admission rules. Early body refusals retain the
-deployment's security headers and CORS policy.
+deployment's security headers and CORS policy. Auth dispatch reuses the bounded
+bytes across header sanitization so fixed-length and chunked bodies remain readable
+on the packaged Bun runtime; peer identity still comes from the original request.
 
 ## Authentication
 
