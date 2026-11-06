@@ -12,14 +12,14 @@
 			"note": "Document environment secrets, the Compose release default and the version synchronization command."
 		},
 		"configuration": {
-			"sourceDigest": "e5036d1231449ca0ab92b39983d3f5cbc9fd95966668caa29efd9450af7c1419",
+			"sourceDigest": "ef96609890d04dfd810856781f0d5e1e50bc1f7547ff6f177d0dcd38148f4b1e",
 			"docs": ["docs/runbooks/deployment-settings.md"],
-			"note": "Document the released Compose image default and the explicit nightly selection."
+			"note": "Document the released Compose image default and the explicit nightly selection. The auth and all-in-one URL settings accept HTTP(S) origins without credentials, paths, queries or fragments and normalize trailing slashes. Empty auth settings fall back to the public URL. Other settings retain their meanings."
 		},
 		"deployment": {
-			"sourceDigest": "19597c1ad4e137a5e30c94049fcaacffe832bf29a28b9bcf97212e1ed59cdf4a",
-			"docs": ["docs/runbooks/backup-restore.md"],
-			"note": "Record the deployed Compose image tag for recovery; the default now follows the released version and image packages, including musl, are pinned."
+			"sourceDigest": "6e0418799009b04d7d4a35fb7d8c954c8e1c7f751edacdf3e8b1552fd854677d",
+			"docs": ["deploy/docker/aio/README.md"],
+			"note": "Record the deployed Compose image tag for recovery; the default now follows the released version and image packages, including musl, are pinned. The all-in-one wrapper validates public URLs as origins and normalizes trailing slashes. Remove paths, queries and fragments before upgrading. No image topology, credential format or storage migration changes."
 		},
 		"native": {
 			"sourceDigest": "4a2ea01f62d7dc760f626627657e949f114b9660ded02fe193187108325e2099",
@@ -27,9 +27,9 @@
 			"note": "Refuse Capacitor file, content and HTTP proxy resources for every WebView request, clear exported Activity task affinity and explicitly exclude native session and push preferences from Android cloud backup and device transfer. Preserve the release-only manifest guard and trusted-server choice of HTTPS sync origin. Source/build checks do not qualify Android runtime behavior. Require a verified current native session before dispatching file, archive export or E2E bridge operations. Restored vault credentials alone cannot authorize them before session.read. Existing offline proof, request-fence recovery, captured ownership and private saved-file permissions remain unchanged. Unit and web checks do not qualify installed native runtime behavior."
 		},
 		"authentication": {
-			"sourceDigest": "92d74c62e6f182efc981e76afc764ffce75aeb580ee699ab167d537dc5e396fc",
+			"sourceDigest": "5bd6546472b2ba7d524a72bb720ddf2e164919b2c57b589cb7922eec9c2a4d9c",
 			"docs": ["docs/runbooks/native-authentication.md"],
-			"note": "Preserve the Better Auth 1.7.12 upgrade, JWT/provider-account migrations, explicit provider linking, nonce validation, verified-email admission and scoped Apple origin checks. Reset atomically consumes its token, writes the password, verifies the mailbox and retires sessions, native authority, access tokens, feeds, passkeys, provider links and pending account proofs while retaining TOTP and backup codes. Enforce the enrolled local factor on every sign-in path, including social/OIDC/SAML callbacks, passkeys and native system-browser flows. Reuse the plugin challenge, provisional-session deletion and reset invalidation. Provider MFA and remembered-device cookies cannot substitute. Native grants retain their ID and stay unapproved until successful factor completion and explicit consent; no bridge permissions or credential formats change. Upgrade server/web together and reload sign-in pages; rollback loses this protection. The password credential remains linked so password-protected account settings keep their password requirement. Other provider accounts can still be unlinked. No credential format or native handoff changes."
+			"note": "Preserve the Better Auth 1.7.12 upgrade, JWT/provider-account migrations, explicit provider linking, nonce validation, verified-email admission and scoped Apple origin checks. Reset atomically consumes its token, writes the password, verifies the mailbox and retires sessions, native authority, access tokens, feeds, passkeys, provider links and pending account proofs while retaining TOTP and backup codes. Enforce the enrolled local factor on every sign-in path, including social/OIDC/SAML callbacks, passkeys and native system-browser flows. Reuse the plugin challenge, provisional-session deletion and reset invalidation. Provider MFA and remembered-device cookies cannot substitute. Native grants retain their ID and stay unapproved until successful factor completion and explicit consent; no bridge permissions or credential formats change. Upgrade server/web together and reload sign-in pages; rollback loses this protection. The password credential remains linked so password-protected account settings keep their password requirement. Other provider accounts can still be unlinked. No credential format or native handoff changes. Password changes retain passkeys and provider links while retiring other sessions, access tokens, feeds and pending proofs transactionally, replacing the initiating cookie without returning its token and leaving email verification unchanged. SAML requires browser-bound RelayState unless IdP-initiated sign-in is enabled. Bootstrap counts soft-deleted accounts; auth requires a configured origin in production. E2E rate limits require test mode; detached reset mail uses a hashed recipient budget without changing responses. No storage or native bridge changes."
 		},
 		"compatibility": {
 			"sourceDigest": "b3a352ec06b0f3564b0850b2b590ee06c51f31cadee9070bf0c3ce2eceb5ebec",

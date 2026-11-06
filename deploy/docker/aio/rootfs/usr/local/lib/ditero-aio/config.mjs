@@ -378,7 +378,10 @@ function absoluteHttpUrl(name, value, { required }) {
 	if (url.username !== "" || url.password !== "") {
 		fail(`${name} must not contain credentials`);
 	}
-	return value;
+	if (url.pathname !== "/" || url.search || url.hash) {
+		fail(`${name} must not contain a path, query or fragment`);
+	}
+	return url.origin;
 }
 
 function scanUnsupported(env) {

@@ -449,8 +449,43 @@ describe("assertion verification", () => {
 		);
 	});
 
+	test.each([
+		false,
+		true,
+	])("requires RelayState with browser cookie present=%s", async (withCookie) => {
+		const app = await boot("open", {
+			BETTER_AUTH_URL: "https://tasks.example.test",
+		});
+		const flow = await beginFlow(app);
+		const assertion = await idp.respond(flow);
+		const cookie = `ditero.saml_bind=${flow.relayState}`;
+		const refused = await postAcs(
+			app,
+			flow.acs,
+			assertion,
+			null,
+			withCookie ? cookie : undefined,
+		);
+		expect(refused.headers.get("location")).toContain(
+			"sso_missing_relay_state",
+		);
+		expect(hasSession(refused)).toBe(false);
+		expect(await userCount()).toBe(0);
+		const accepted = await postAcs(
+			app,
+			flow.acs,
+			assertion,
+			flow.relayState,
+			cookie,
+		);
+		expect(hasSession(accepted)).toBe(true);
+	});
+
 	test("accepts an IdP-initiated response only when the operator enabled it", async () => {
-		const app = await boot("open", { DITERO_SAML_ALLOW_IDP_INITIATED: "true" });
+		const app = await boot("open", {
+			DITERO_SAML_ALLOW_IDP_INITIATED: "true",
+			BETTER_AUTH_URL: "https://tasks.example.test",
+		});
 		const flow = await beginFlow(app);
 		const response = await postAcs(
 			app,
@@ -459,8 +494,11 @@ describe("assertion verification", () => {
 			null,
 		);
 		expect(hasSession(response)).toBe(true);
-		const location = new URL(response.headers.get("location") ?? "", ORIGIN);
-		expect(location.origin).toBe(ORIGIN);
+		const location = new URL(
+			response.headers.get("location") ?? "",
+			app.origin,
+		);
+		expect(location.origin).toBe(app.origin);
 		expect(location.pathname).toBe("/");
 	});
 

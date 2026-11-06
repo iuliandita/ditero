@@ -74,6 +74,17 @@ async function seedWorkspaceOwner() {
 }
 
 describe("bootstrap registration", () => {
+	test("a soft-deleted first account does not reopen bootstrap registration", async () => {
+		await seedWorkspaceOwner();
+		await db
+			.update(tables.user)
+			.set({ deletedAt: new Date() })
+			.where(eq(tables.user.id, "seed-owner"));
+		const response = await signup("replacement@test.invalid");
+		expect(response.status).toBe(403);
+		expect(await db.select().from(tables.user)).toHaveLength(1);
+	});
+
 	test("commits exactly one concurrent first signup", async () => {
 		const responses = await Promise.all([
 			signup("first@test.invalid"),

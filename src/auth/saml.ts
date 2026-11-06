@@ -61,6 +61,7 @@ export type ResolvedSaml = {
 	// Only over https: a SameSite=None cookie needs Secure, and the callback is a
 	// cross-site POST that carries nothing else from the browser that began it.
 	bindBrowser: boolean;
+	allowIdpInitiated: boolean;
 	allowDeprecatedAlgorithms: boolean;
 	options: SSOOptions;
 };
@@ -464,6 +465,7 @@ export async function resolveSaml(
 		displayName: settings.displayName,
 		emailInvites: settings.emailInvites,
 		bindBrowser: settings.baseURL.startsWith("https:"),
+		allowIdpInitiated: settings.allowIdpInitiated,
 		allowDeprecatedAlgorithms: settings.allowDeprecatedAlgorithms,
 		options: {},
 	};

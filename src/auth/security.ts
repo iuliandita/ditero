@@ -13,6 +13,10 @@ export function signInRateKey(clientIP: string, email: string): string {
 		.digest("hex")}`;
 }
 
+export function passwordResetRateKey(email: string): string {
+	return `auth:password-reset:${createHash("sha256").update(email.trim().toLowerCase()).digest("hex")}`;
+}
+
 // Read only a bounded clone; Better Auth still needs the original body.
 export async function readSignInEmail(
 	request: Request,
@@ -98,10 +102,7 @@ export function authRateLimitOptions() {
 	};
 	// Relax the signup/signin ceiling under the e2e harness only: its multi-context
 	// matrix signs up many users per minute from one loopback IP.
-	// Gated on DITERO_E2E, not NODE_ENV=test — the security unit test and the
-	// auth-hardening integration test both run under NODE_ENV=test and assert the
-	// strict limits, so keying off NODE_ENV would break them.
-	if (process.env.DITERO_E2E === "1") {
+	if (process.env.NODE_ENV === "test" && process.env.DITERO_E2E === "1") {
 		options.customRules["/sign-in/email"] = { window: 60, max: 1000 };
 		options.customRules["/sign-up/email"] = { window: 60, max: 1000 };
 		// The views e2e resolves the signed-in user via a get-session round-trip;

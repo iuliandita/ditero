@@ -1,6 +1,7 @@
 // Better Auth's mail path end to end: the real handler, a real Postgres and a
 // real SMTP server on a real socket.
 import { createServer, type Server, type Socket } from "node:net";
+import { like } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import {
@@ -48,6 +49,9 @@ beforeEach(async () => {
 	await db.delete(tables.user);
 	// /request-password-reset is capped at 3/300s per IP; this file makes more.
 	await db.delete(tables.rateLimit);
+	await db
+		.delete(tables.rateBucket)
+		.where(like(tables.rateBucket.key, "auth:password-reset:%"));
 	for (const key of SMTP_KEYS) delete process.env[key];
 });
 
@@ -232,4 +236,95 @@ describe("password reset is not a user-enumeration oracle", () => {
 			rows.some((row) => row.identifier.startsWith("reset-password:")),
 		).toBe(true);
 	});
+});
+
+it.each([
+	"ada@example.test",
+	"unknown@example.test",
+])("keeps reset responses uniform for a flooded recipient %s", async (email) => {
+	const sink = await useSink();
+	expect((await signup("ada@example.test")).status).toBe(200);
+	await vi.waitFor(() => expect(sink.messages).toHaveLength(1));
+	const bodies: string[] = [];
+	for (let attempt = 0; attempt < 6; attempt++) {
+		const response = await handleAuthRequest(
+			new Request("http://localhost:3000/api/auth/request-password-reset", {
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					origin: "http://localhost:5173",
+				},
+				body: JSON.stringify({
+					email: attempt === 5 ? email.toUpperCase() : email,
+				}),
+			}),
+			`198.51.100.${attempt + 1}`,
+		);
+		expect(response.status).toBe(200);
+		expect(response.headers.get("retry-after")).toBeNull();
+		bodies.push(await response.text());
+	}
+	expect(new Set(bodies).size).toBe(1);
+	const known = email === "ada@example.test";
+	if (known) await vi.waitFor(() => expect(sink.messages).toHaveLength(4));
+	const buckets = await db
+		.select()
+		.from(tables.rateBucket)
+		.where(like(tables.rateBucket.key, "auth:password-reset:%"));
+	expect(buckets).toHaveLength(known ? 1 : 0);
+	if (known) {
+		expect(buckets[0].key).not.toContain(email);
+		expect(Number(buckets[0].tokens)).toBeLessThan(1);
+	}
+}, 30_000);
+
+it("does not charge reset mail budgets before origin, body and per-IP validation", async () => {
+	const sink = await useSink();
+	expect((await signup("ada@example.test")).status).toBe(200);
+	await vi.waitFor(() => expect(sink.messages).toHaveLength(1));
+	for (const [origin, body] of [
+		[
+			"https://other.example.test",
+			JSON.stringify({ email: "ada@example.test" }),
+		],
+		["http://localhost:5173", "{"],
+	]) {
+		const response = await handleAuthRequest(
+			new Request("http://localhost:3000/api/auth/request-password-reset", {
+				method: "POST",
+				headers: { "content-type": "application/json", origin },
+				body,
+			}),
+			"198.51.100.10",
+		);
+		expect(response.ok).toBe(false);
+	}
+	expect(
+		await db
+			.select()
+			.from(tables.rateBucket)
+			.where(like(tables.rateBucket.key, "auth:password-reset:%")),
+	).toHaveLength(0);
+	// Exhaust the IP budget with unknown recipients, then request the known one.
+	for (let attempt = 0; attempt < 3; attempt++)
+		expect(
+			(
+				await post("/api/auth/request-password-reset", {
+					email: "unknown@example.test",
+				})
+			).status,
+		).toBe(200);
+	expect(
+		(
+			await post("/api/auth/request-password-reset", {
+				email: "ada@example.test",
+			})
+		).status,
+	).toBe(429);
+	expect(
+		await db
+			.select()
+			.from(tables.rateBucket)
+			.where(like(tables.rateBucket.key, "auth:password-reset:%")),
+	).toHaveLength(0);
 });

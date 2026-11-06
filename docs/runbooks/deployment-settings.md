@@ -39,3 +39,24 @@ and `DITERO_ZERO_IMAGE_TAG`: for example, `nightly-<commit>` and
 `nightly-zero-<commit>`. Release pairs keep the default suffix convention.
 Always select matching app and Zero revisions; changing either tag does not
 restore a database or roll back its migrations.
+
+Run source deployments with `NODE_ENV=production`, as the shipped images do.
+Production startup requires `BETTER_AUTH_URL` or `DITERO_PUBLIC_URL` as an HTTP
+or HTTPS origin without credentials, a path, a query or a fragment.
+Empty values are treated as unset. The all-in-one wrapper applies the same origin
+validation. `BETTER_AUTH_URL` takes precedence for auth; otherwise auth uses
+`DITERO_PUBLIC_URL`. Outside production, the default is `http://localhost:3000`.
+The request Host never chooses the auth origin. A soft-deleted account still
+counts toward bootstrap registration, so deleting the first account does not
+reopen registration. If the sole owner deleted their account, an operator can
+temporarily set `DITERO_REGISTRATION_MODE=open`, restart, register the replacement
+owner, then restore `DITERO_REGISTRATION_MODE=bootstrap` and restart. Keep access
+restricted during that recovery window.
+
+Auth rate-limit relaxation requires both `NODE_ENV=test` and `DITERO_E2E=1`.
+Password-reset mail shares a recipient budget across client IPs: three messages
+initially, with one token replenished every 100 seconds. Exhausting that budget
+suppresses mail without changing the uniform successful response for known and
+unknown addresses. Origin, body and per-IP checks run before charging it. Budget
+checks and mail delivery remain detached from the request; recipient keys are
+normalized and hashed.

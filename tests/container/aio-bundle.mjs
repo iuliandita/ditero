@@ -75,6 +75,24 @@ const api = {
 	PUBLIC_ZERO_URL: "https://sync.example.com",
 };
 check(() => {
+	for (const suffix of ["/path", "/?query=1", "/#fragment"])
+		assert.throws(
+			() =>
+				buildConfiguration("api", {
+					...api,
+					BETTER_AUTH_URL: `https://example.com${suffix}`,
+				}),
+			/BETTER_AUTH_URL.*path, query or fragment/,
+		);
+	assert.equal(
+		buildConfiguration("api", {
+			...api,
+			BETTER_AUTH_URL: "https://example.com/",
+		}).env.BETTER_AUTH_URL,
+		"https://example.com",
+	);
+});
+check(() => {
 	const config = buildConfiguration("postgres", pg);
 	assert.equal(config.env.PGDATABASE, "postgres");
 	assert.equal(config.env.PGUSER, "ditero_pgadmin");

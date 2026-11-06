@@ -108,7 +108,10 @@ environment or a private Compose `.env` beside this guide. These values contain
 paths and public origins; credential values must stay in their role files.
 Optional API settings may be added explicitly to the API service environment;
 do not inject a shared environment file into every role. Remote access requires
-operator-managed HTTPS. The shipped port bindings remain loopback-only.
+operator-managed HTTPS. `BETTER_AUTH_URL` and `PUBLIC_ZERO_URL` must be HTTP(S)
+origins without credentials, paths, queries or fragments; a trailing slash is
+normalized away. When upgrading, remove those URL suffixes before restarting.
+The shipped port bindings remain loopback-only.
 
 ## Configuration boundary
 

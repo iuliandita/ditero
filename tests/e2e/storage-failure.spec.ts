@@ -217,9 +217,18 @@ test("desktop: memory fallback retirement waits for server acknowledgement", asy
 }) => {
 	test.setTimeout(90_000);
 	let holding = false;
+	let holdingAcknowledgements = false;
+	const acknowledgements: {
+		socket: WebSocketRoute;
+		message: string | Buffer;
+	}[] = [];
 	const held: { server: WebSocketRoute; message: string | Buffer }[] = [];
 	await page.routeWebSocket(/\/sync\/v\d+\/connect/, (socket) => {
 		const server = socket.connectToServer();
+		server.onMessage((message) => {
+			if (holdingAcknowledgements) acknowledgements.push({ socket, message });
+			else socket.send(message);
+		});
 		socket.onMessage((message) => {
 			const data: unknown = JSON.parse(message.toString());
 			if (holding && Array.isArray(data) && data[0] === "push")
@@ -263,11 +272,25 @@ test("desktop: memory fallback retirement waits for server acknowledgement", asy
 	).toBeVisible();
 	await expect(page.getByTestId("settings-account-email")).toBeVisible();
 	await expect(indicator).toHaveAttribute("data-phase", "storage-failed");
+	holdingAcknowledgements = true;
 	holding = false;
 	for (const { server, message } of held.splice(0)) server.send(message);
 	await expect
 		.poll(() => serverHasTask(queued), { timeout: 30_000 })
 		.toBe(true);
+	// A committed row does not mean this client has received its acknowledgement.
+	await expect.poll(() => acknowledgements.length).toBeGreaterThan(0);
+	await page.getByTestId("sign-out").click();
+	await expect(
+		page.getByRole("alert").filter({ hasText: /Unsynced edits: [1-9]/ }),
+	).toBeVisible();
+	await expect(page.getByTestId("settings-account-email")).toBeVisible();
+	holdingAcknowledgements = false;
+	for (const { socket, message } of acknowledgements.splice(0))
+		socket.send(message);
+	await expect
+		.poll(() => attemptRetirement(page), { timeout: 20_000 })
+		.toMatchObject({ retired: true });
 	await page.getByTestId("sign-out").click();
 	await expect(page.getByTestId("signin")).toBeVisible();
 });

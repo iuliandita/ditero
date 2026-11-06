@@ -5,7 +5,7 @@ import { APIError, betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { jwt } from "better-auth/plugins";
-import { count, isNull } from "drizzle-orm";
+import { count } from "drizzle-orm";
 import { validateAuthSecret } from "../config/auth-secret.ts";
 import { db, pool } from "../db/client.ts";
 import { user } from "../db/schema.ts";
@@ -18,6 +18,7 @@ import {
 import { takeRateToken } from "../server/notifications/capability.ts";
 import { zeroJwtOptions } from "../server/zero-auth.ts";
 import { withAccountConflict } from "./account-conflict.ts";
+import { authBaseURL } from "./base-url.ts";
 import { ensurePersonalWorkspace } from "./bootstrap.ts";
 import { normalizeDisplayName, signupDisplayName } from "./display-name.ts";
 import { withFieldEncryption } from "./encrypted-adapter.ts";
@@ -28,8 +29,10 @@ import { trustedAuthOrigins } from "./origins.ts";
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "./password-policy.ts";
 import {
 	assertPasswordResetScope,
+	CHANGE_PATH,
 	RESET_PATH,
 	resetLinkWithWebCallback,
+	runPasswordChange,
 	runPasswordReset,
 	withPasswordResetTransaction,
 } from "./password-reset.ts";
@@ -64,6 +67,7 @@ import {
 import {
 	authRateLimitOptions,
 	passkeyOptions,
+	passwordResetRateKey,
 	readSignInEmail,
 	requireSameOrigin,
 	SIGN_IN_RATE_CAPACITY,
@@ -78,14 +82,12 @@ type PublicSignUpState = { creating: boolean; error?: APIError };
 const publicSignUp = new AsyncLocalStorage<PublicSignUpState>();
 
 const REGISTRATION_LOCK_KEY = 6_794_321;
+const baseURL = authBaseURL(process.env);
 const registrationMode = resolveRegistrationMode(process.env);
 const signIn = resolveSignInProviders(process.env);
 const providerOptions = providerAuthOptions(signIn);
-const authOrigins = [
-	process.env.BETTER_AUTH_URL ?? "http://localhost:3000",
-	...trustedAuthOrigins(process.env),
-];
-const samlSettings = parseSamlEnv(process.env);
+const authOrigins = [baseURL, ...trustedAuthOrigins(process.env)];
+const samlSettings = parseSamlEnv({ ...process.env, BETTER_AUTH_URL: baseURL });
 const saml = samlSettings ? await resolveSaml(samlSettings) : null;
 if (saml)
 	console.info("SAML single sign-on enabled", {
@@ -147,10 +149,7 @@ async function assertEmailRegistrationAllowed(
 }
 
 async function registeredUserCount(): Promise<number> {
-	const [result] = await db
-		.select({ value: count() })
-		.from(user)
-		.where(isNull(user.deletedAt));
+	const [result] = await db.select({ value: count() }).from(user);
 	return result.value;
 }
 
@@ -170,7 +169,7 @@ export const auth = betterAuth({
 	appName: "Ditero",
 	database: authDatabase,
 	secret: process.env.BETTER_AUTH_SECRET,
-	baseURL: process.env.BETTER_AUTH_URL,
+	baseURL,
 	trustedOrigins: (request) => [
 		...trustedAuthOrigins(process.env),
 		...providerOptions.trustedOrigins(request),
@@ -186,7 +185,10 @@ export const auth = betterAuth({
 		// the live session). password-reset.ts revokes the other credentials.
 		revokeSessionsOnPasswordReset: true,
 		sendResetPassword: async ({ user, url }) => {
-			sendAuthMail("reset", user, resetLinkWithWebCallback(url));
+			sendAuthMail("reset", user, resetLinkWithWebCallback(url), {
+				beforeSend: () =>
+					takeRateToken(db, passwordResetRateKey(user.email), 3, 1 / 100),
+			});
 		},
 	},
 	// requireEmailVerification stays off deliberately. It is the one setting
@@ -206,7 +208,11 @@ export const auth = betterAuth({
 	socialProviders: providerOptions.socialProviders,
 	hooks: {
 		before: createAuthMiddleware(async (context) => {
-			if (context.path === "/reset-password") assertPasswordResetScope();
+			if (
+				context.path === "/reset-password" ||
+				context.path === "/change-password"
+			)
+				assertPasswordResetScope();
 			if (context.path === "/unlink-account") {
 				const session = await getSessionFromCtx(context);
 				if (!session) throw new APIError("UNAUTHORIZED");
@@ -225,6 +231,14 @@ export const auth = betterAuth({
 						message: "The password credential cannot be unlinked",
 					});
 			}
+			if (
+				context.path === "/change-password" &&
+				context.body &&
+				typeof context.body === "object"
+			)
+				return {
+					context: { body: { ...context.body, revokeOtherSessions: true } },
+				};
 			if (context.path === "/sign-in/sso") return guardSsoStart(context);
 			if (context.path !== "/sign-up/email") return;
 			if (!context.body || typeof context.body !== "object") return;
@@ -311,11 +325,8 @@ export const auth = betterAuth({
 		{
 			id: "sign-in-identity-rate-limit",
 			async onRequest(request: Request) {
-				if (
-					request.method === "POST" &&
-					new URL(request.url).pathname.replace(/\/+$/, "") ===
-						"/api/auth/sign-in/email"
-				) {
+				const path = new URL(request.url).pathname.replace(/\/+$/, "");
+				if (request.method === "POST" && path === "/api/auth/sign-in/email") {
 					const email = await readSignInEmail(request);
 					if (email === null)
 						return {
@@ -342,7 +353,10 @@ export const auth = betterAuth({
 									message: "Too many requests. Please try again later.",
 									code: "TOO_MANY_REQUESTS",
 								},
-								{ status: 429, headers: { "retry-after": "12" } },
+								{
+									status: 429,
+									headers: { "retry-after": "12" },
+								},
 							),
 						};
 					}
@@ -352,7 +366,7 @@ export const auth = betterAuth({
 		...providerOptions.plugins,
 		passkey(
 			passkeyOptions({
-				BETTER_AUTH_URL: process.env.BETTER_AUTH_URL,
+				BETTER_AUTH_URL: baseURL,
 				DITERO_PASSKEY_ORIGIN: process.env.DITERO_PASSKEY_ORIGIN,
 				DITERO_PASSKEY_RP_ID: process.env.DITERO_PASSKEY_RP_ID,
 			}),
@@ -464,11 +478,12 @@ async function dispatchAuth(request: Request): Promise<Response> {
 		);
 	if (
 		saml.bindBrowser &&
-		relayState &&
-		bindingCookieValue(request.headers.get("cookie")) !== relayState
+		(relayState
+			? bindingCookieValue(request.headers.get("cookie")) !== relayState
+			: !saml.allowIdpInitiated)
 	)
 		return Response.redirect(
-			`${new URL(saml.acsURL).origin}/?error=sso_browser_mismatch`,
+			`${new URL(saml.acsURL).origin}/?error=${relayState ? "sso_browser_mismatch" : "sso_missing_relay_state"}`,
 			302,
 		);
 	const intent = relayState
@@ -524,6 +539,10 @@ export async function handleAuthRequest(
 	peerAddress?: string,
 ): Promise<Response> {
 	const path = new URL(request.url).pathname.replace(/\/+$/, "");
+	if (request.method === "POST" && path === CHANGE_PATH)
+		return runPasswordChange(() =>
+			handleAuthRequestInternal(request, peerAddress),
+		);
 	if (request.method === "POST" && path === RESET_PATH)
 		return runPasswordReset(() =>
 			handleAuthRequestInternal(request, peerAddress),
