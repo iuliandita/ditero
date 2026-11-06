@@ -12,12 +12,12 @@
 			"note": "Document environment secrets, the Compose release default and the version synchronization command."
 		},
 		"configuration": {
-			"sourceDigest": "5b70e28afef898e42e550ff9214a3fa2a2b9e61b33baf327efbe5c5ebc74dd44",
+			"sourceDigest": "ef96609890d04dfd810856781f0d5e1e50bc1f7547ff6f177d0dcd38148f4b1e",
 			"docs": ["docs/runbooks/deployment-settings.md"],
 			"note": "Document the released Compose image default and the explicit nightly selection. The auth and all-in-one URL settings accept HTTP(S) origins without credentials, paths, queries or fragments and normalize trailing slashes. Empty auth settings fall back to the public URL. Other settings retain their meanings."
 		},
 		"deployment": {
-			"sourceDigest": "6d49975f394d34e5b88125d52626b075db31fe5699231ed42ae475bdcd33fd22",
+			"sourceDigest": "6e0418799009b04d7d4a35fb7d8c954c8e1c7f751edacdf3e8b1552fd854677d",
 			"docs": ["deploy/docker/aio/README.md"],
 			"note": "Record the deployed Compose image tag for recovery; the default now follows the released version and image packages, including musl, are pinned. The all-in-one wrapper validates public URLs as origins and normalizes trailing slashes. Remove paths, queries and fragments before upgrading. No image topology, credential format or storage migration changes."
 		},
