@@ -88,6 +88,23 @@ Never test a restore by pointing it at the production Zero replica or notificati
 Read [E2E Key Loss](e2e-key-loss.md) before treating a successful infrastructure restore as proof
 that encrypted files remain decryptable.
 
+## Attachment transfer upgrade
+
+Migration `0093_attachment_upload_token` adds a nullable server-only transfer token.
+Before upgrade, stop application and Zero writers and take the coordinated database
+and attachment backup above. Apply migrations with the migration role before starting
+the updated app and Zero. Existing attachment rows need no backfill; ciphertext and
+key envelopes retain their formats. Current web and native client versions remain
+compatible without a client update.
+
+Uploads now claim an exclusive token and a fresh opaque storage key before streaming.
+A restart interrupts unfinished transfers; their reservations expire and the normal
+sweep removes their tracked objects. Include tokens and opaque keys in database backups,
+and preserve matching blob snapshots. For application rollback, stop writers and retain
+the additive column, which the preceding server ignores. Let unfinished reservations
+expire before accepting new uploads on the older server. Restore a complete matching
+backup set if a database rollback is required; it discards subsequent writes.
+
 ## Habit completion attribution upgrade
 
 Migration `0091_habit_completed_by` adds a nullable user reference to each habit
@@ -230,3 +247,11 @@ newer focus sessions merely to roll back the application. Older released clients
 without interval IDs keep their legacy logging behavior; interval-ID clients must
 upgrade to send the explicit proof marker for offline completion. Personal focus
 records from legacy/offline clients are not tamper-proof time tracking.
+
+Transfer leases carry a five-minute expiry inside the existing nullable upload token; no
+additional migration is needed. Ordinary storage errors leave transfers retryable, and identical
+thumbnail retries preserve the recorded object. After a completion error the server releases the
+lease when the database is reachable; otherwise retry after its lease expires. A preceding
+server treats the timestamped token as an opaque token, so drain unfinished transfers before
+rollback as described above. Storage inventory reconciliation must account for streams that
+finish after GC removes their row; see the attachment-storage runbook before removing orphans.

@@ -1,0 +1,1 @@
+ALTER TABLE "attachment" ADD COLUMN "upload_token" text;

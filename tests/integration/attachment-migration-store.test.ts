@@ -1287,7 +1287,7 @@ test("live recovery requires exact confirmed witness and retains uploaded bytes 
 	expect(recovered.status.revision).toBe(2);
 	const retired = (
 		await admin.query(
-			"select state,reservation_expires_at from attachment where id=$1",
+			"select state,reservation_expires_at,storage_key from attachment where id=$1",
 			[first.targetAttachmentId],
 		)
 	).rows[0];
@@ -1308,11 +1308,7 @@ test("live recovery requires exact confirmed witness and retains uploaded bytes 
 	} finally {
 		quotaClient.release();
 	}
-	expect(
-		await transferStore.exists(
-			storageKeyFor(targetWorkspace, first.targetAttachmentId as string),
-		),
-	).toBe(true);
+	expect(await transferStore.exists(retired.storage_key)).toBe(true);
 	const failureStore = { ...transferStore };
 	failureStore.delete = async () => {
 		throw new Error("Synthetic failed deletion");
@@ -1331,11 +1327,7 @@ test("live recovery requires exact confirmed witness and retains uploaded bytes 
 		deleted: 1,
 		failed: 0,
 	});
-	expect(
-		await transferStore.exists(
-			storageKeyFor(targetWorkspace, first.targetAttachmentId as string),
-		),
-	).toBe(false);
+	expect(await transferStore.exists(retired.storage_key)).toBe(false);
 	expect(
 		(
 			await admin.query(

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { Elysia } from "elysia";
 import type { Pool, PoolClient } from "pg";
 import { z } from "zod";
@@ -48,6 +49,7 @@ export type AttachmentRouteOptions = {
 
 const DEFAULT_QUOTA_BYTES = 10 * 1024 * 1024 * 1024;
 const DEFAULT_RESERVATION_TTL_MS = 60 * 60_000;
+export const ATTACHMENT_UPLOAD_LEASE_MS = 5 * 60_000;
 
 const identifier = z
 	.string()
@@ -100,6 +102,7 @@ type AttachmentRow = AttachmentContext & {
 	thumbnailStorageKey: string | null;
 	uploadedBy: string;
 	reservationExpiresAt: Date | null;
+	uploadToken: string | null;
 };
 
 type RouteResult = {
@@ -203,12 +206,13 @@ async function attachmentForUpdate(
 		thumbnail_storage_key: string | null;
 		uploaded_by: string;
 		reservation_expires_at: Date | null;
+		upload_token: string | null;
 	}>(
 		`select id, workspace_id, parent_kind, parent_id, key_version, state,
 		 declared_bytes, observed_bytes, ciphertext_sha256,
 		 thumbnail_declared_bytes, thumbnail_observed_bytes,
 		 thumbnail_ciphertext_sha256, storage_key, thumbnail_storage_key,
-		 uploaded_by, reservation_expires_at
+		 uploaded_by, reservation_expires_at, upload_token
 		 from attachment where id = $1 for update`,
 		[id],
 	);
@@ -252,6 +256,7 @@ async function attachmentForUpdate(
 		thumbnailStorageKey: row.thumbnail_storage_key,
 		uploadedBy: row.uploaded_by,
 		reservationExpiresAt: row.reservation_expires_at,
+		uploadToken: row.upload_token,
 	};
 }
 
@@ -294,7 +299,7 @@ async function abortAttachment(
 	if (row.state !== "aborted") {
 		assertAttachmentTransition(row.state, "aborted");
 		await client.query(
-			`update attachment set state = 'aborted'
+			`update attachment set state = 'aborted', upload_token = null
 			 where id = $1 and state = $2`,
 			[row.id, row.state],
 		);
@@ -315,84 +320,233 @@ function storageKeys(row: AttachmentRow): string[] {
 		: [row.storageKey];
 }
 
+async function validateTransfer(
+	client: PoolClient,
+	row: AttachmentRow,
+	userId: string,
+	now: () => Date,
+): Promise<RouteResult | null> {
+	if (!row.reservationExpiresAt || row.reservationExpiresAt <= now()) {
+		await abortAttachment(client, row);
+		return {
+			response: new Response("Gone", { status: 410 }),
+			cleanupKeys: storageKeys(row),
+		};
+	}
+	const failure = await validateAttachmentWrite(client, userId, row, {
+		lockContext: true,
+	});
+	if (!failure) return null;
+	await abortAttachment(client, row);
+	return {
+		response: errorForInvalidation(failure),
+		cleanupKeys: storageKeys(row),
+	};
+}
+
 async function transferAttachment({
-	client,
+	pool,
 	store,
 	request,
 	userId,
-	row,
-	storageKey,
-	declaredBytes,
+	id,
+	kind,
 	now,
 }: {
-	client: PoolClient;
+	pool: Pool;
 	store: BlobStore;
 	request: Request;
 	userId: string;
-	row: AttachmentRow;
-	storageKey: string;
-	declaredBytes: number;
+	id: string;
+	kind: "content" | "thumbnail";
 	now: () => Date;
-}): Promise<{ bytes: number; sha256: string } | RouteResult> {
-	if (
-		!row.reservationExpiresAt ||
-		row.reservationExpiresAt.getTime() <= now().getTime()
-	) {
-		await abortAttachment(client, row);
+}): Promise<Response | Record<string, unknown>> {
+	const token = `${now().getTime() + ATTACHMENT_UPLOAD_LEASE_MS}_${randomUUID()}`;
+	const claim = await withUserContext(pool, userId, async (client) => {
+		const row = await attachmentForUpdate(client, id);
+		if (!row || row.uploadedBy !== userId) {
+			return { response: new Response("Not Found", { status: 404 }) };
+		}
+		if (
+			(row.uploadToken !== null &&
+				Number(row.uploadToken.split("_")[0]) > now().getTime()) ||
+			(kind === "content"
+				? row.state !== "reserved"
+				: row.state !== "uploading" ||
+					row.observedBytes === null ||
+					row.thumbnailDeclaredBytes === null ||
+					row.thumbnailStorageKey === null)
+		) {
+			return { response: new Response("Conflict", { status: 409 }) };
+		}
+		const invalid = await validateTransfer(client, row, userId, now);
+		if (invalid) return invalid;
+		// Storage keys have independent entropy; they never disclose the transfer token.
+		const key = storageKeyFor(row.workspaceId, randomUUID(), kind);
+		const recordedThumbnail =
+			kind === "thumbnail" && row.thumbnailObservedBytes !== null;
+		const previousKey =
+			kind === "content" ? row.storageKey : row.thumbnailStorageKey;
+		await client.query(
+			`update attachment set upload_token = $2,
+    ${kind === "content" ? "storage_key" : "thumbnail_storage_key"} = $3 where id = $1`,
+			[id, token, recordedThumbnail ? previousKey : key],
+		);
 		return {
-			response: new Response("Gone", { status: 410 }),
-			cleanupKeys: storageKeys(row),
+			key,
+			recordedThumbnail,
+			retiredKey: recordedThumbnail ? null : previousKey,
+			declaredBytes:
+				kind === "content" ? row.declaredBytes : row.thumbnailDeclaredBytes,
 		};
-	}
-	let failure = await validateAttachmentWrite(client, userId, row);
-	if (failure) {
-		await abortAttachment(client, row);
-		return {
-			response: errorForInvalidation(failure),
-			cleanupKeys: storageKeys(row),
-		};
-	}
+	});
+	if ("response" in claim) return cleanupAndReturn(store, claim);
+	if (claim.declaredBytes === null)
+		throw new Error("missing thumbnail declaration");
+	if (claim.retiredKey) await cleanupTransfer(store, [claim.retiredKey]);
 
-	let observed: { bytes: number; sha256: string };
+	// Storage consumes the request with no database client or row lock held.
+	let transfer:
+		| { ok: true; observed: { bytes: number; sha256: string } }
+		| { ok: false; error: unknown };
 	try {
-		observed = await store.put(
-			storageKey,
-			requestBytes(request, declaredBytes),
+		transfer = {
+			ok: true,
+			observed: await store.put(
+				claim.key,
+				requestBytes(request, claim.declaredBytes),
+			),
+		};
+	} catch (error) {
+		transfer = { ok: false, error };
+	}
+	let result: RouteResult;
+	try {
+		result = await withUserContext(
+			pool,
+			userId,
+			async (client): Promise<RouteResult> => {
+				const row = await attachmentForUpdate(client, id);
+				if (
+					!row ||
+					row.uploadedBy !== userId ||
+					row.uploadToken !== token ||
+					(kind === "content"
+						? row.state !== "reserved"
+						: row.state !== "uploading")
+				) {
+					return {
+						response: new Response("Conflict", { status: 409 }),
+						cleanupKeys: [claim.key],
+					};
+				}
+				const invalid = await validateTransfer(client, row, userId, now);
+				if (invalid)
+					return {
+						...invalid,
+						cleanupKeys: [...(invalid.cleanupKeys ?? []), claim.key],
+					};
+				if (!transfer.ok) {
+					if (transfer.error instanceof UploadTooLargeError)
+						await abortAttachment(client, row);
+					else
+						await client.query(
+							"update attachment set upload_token = null where id = $1",
+							[id],
+						);
+					return {
+						response: new Response(
+							transfer.error instanceof UploadTooLargeError
+								? "Payload Too Large"
+								: "Upload failed",
+							{
+								status:
+									transfer.error instanceof UploadTooLargeError ? 413 : 500,
+							},
+						),
+						cleanupKeys:
+							transfer.error instanceof UploadTooLargeError
+								? [...storageKeys(row), claim.key]
+								: [claim.key],
+					};
+				}
+				const { bytes, sha256 } = transfer.observed;
+				if (claim.recordedThumbnail) {
+					await client.query(
+						"update attachment set upload_token = null where id = $1",
+						[id],
+					);
+					return {
+						response:
+							bytes === row.thumbnailObservedBytes &&
+							sha256 === row.thumbnailCiphertextSha256
+								? { id, state: "uploading", bytes, sha256 }
+								: new Response("Conflict", { status: 409 }),
+						cleanupKeys: [claim.key],
+					};
+				}
+				if (kind === "content")
+					assertAttachmentTransition(row.state, "uploading");
+				await client.query(
+					`update attachment set state = 'uploading', upload_token = null,
+				 ${kind === "content" ? "observed_bytes" : "thumbnail_observed_bytes"} = $2,
+				 ${kind === "content" ? "ciphertext_sha256" : "thumbnail_ciphertext_sha256"} = $3
+				 where id = $1`,
+					[id, bytes, sha256],
+				);
+				return { response: { id, state: "uploading", bytes, sha256 } };
+			},
 		);
 	} catch (error) {
-		if (!(error instanceof UploadTooLargeError)) {
-			console.error("attachments: storage upload failed", {
+		try {
+			const canRemove = await withUserContext(pool, userId, async (client) => {
+				const row = await attachmentForUpdate(client, id);
+				if (row?.uploadedBy === userId && row.uploadToken === token) {
+					await client.query(
+						"update attachment set upload_token = null where id = $1",
+						[id],
+					);
+					return true;
+				}
+				// A lost COMMIT reply may already have published the observed object.
+				return !(
+					row &&
+					((row.storageKey === claim.key && row.observedBytes !== null) ||
+						(row.thumbnailStorageKey === claim.key &&
+							row.thumbnailObservedBytes !== null))
+				);
+			});
+			if (canRemove) await cleanupTransfer(store, [claim.key]);
+		} catch (releaseError) {
+			console.error("attachments: transfer lease release failed", {
+				code: storageErrorCode(releaseError),
+			});
+		}
+		throw error;
+	}
+	await cleanupTransfer(store, result.cleanupKeys ?? []);
+	if (!transfer.ok && !(transfer.error instanceof UploadTooLargeError)) {
+		console.error("attachments: storage upload failed", {
+			code: storageErrorCode(transfer.error),
+		});
+		throw transfer.error;
+	}
+	return result.response;
+}
+
+async function cleanupTransfer(
+	store: BlobStore,
+	keys: string[],
+): Promise<void> {
+	for (const key of new Set(keys)) {
+		try {
+			await store.delete(key);
+		} catch (error) {
+			console.error("attachments: transfer cleanup failed", {
 				code: storageErrorCode(error),
 			});
-			throw error;
 		}
-		await abortAttachment(client, row);
-		return {
-			response: new Response("Payload Too Large", { status: 413 }),
-			cleanupKeys: storageKeys(row),
-		};
 	}
-	if (
-		!row.reservationExpiresAt ||
-		row.reservationExpiresAt.getTime() <= now().getTime()
-	) {
-		await abortAttachment(client, row);
-		return {
-			response: new Response("Gone", { status: 410 }),
-			cleanupKeys: storageKeys(row),
-		};
-	}
-	failure = await validateAttachmentWrite(client, userId, row, {
-		lockContext: true,
-	});
-	if (failure) {
-		await abortAttachment(client, row);
-		return {
-			response: errorForInvalidation(failure),
-			cleanupKeys: storageKeys(row),
-		};
-	}
-	return observed;
 }
 
 async function downloadResponse(
@@ -581,64 +735,15 @@ export function attachmentRoutes(
 				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
 				const id = attachmentIdFromPath(request, "upload", prefix);
 				if (!id) return new Response("Bad Request", { status: 400 });
-				try {
-					const result = await withUserContext(
-						pool,
-						session.user.id,
-						async (client): Promise<RouteResult> => {
-							const row = await attachmentForUpdate(client, id);
-							if (!row) {
-								return {
-									response: new Response("Not Found", { status: 404 }),
-								};
-							}
-							if (row.uploadedBy !== session.user.id) {
-								return {
-									response: new Response("Not Found", { status: 404 }),
-								};
-							}
-							if (row.state !== "reserved") {
-								return {
-									response: new Response("Conflict", { status: 409 }),
-								};
-							}
-							const observed = await transferAttachment({
-								client,
-								store,
-								request,
-								userId: session.user.id,
-								row,
-								storageKey: row.storageKey,
-								declaredBytes: row.declaredBytes,
-								now,
-							});
-							if ("response" in observed) return observed;
-
-							assertAttachmentTransition(row.state, "uploading");
-							await client.query(
-								`update attachment
-								 set state = 'uploading', observed_bytes = $2,
-								     ciphertext_sha256 = $3
-								 where id = $1 and state = 'reserved'`,
-								[row.id, observed.bytes, observed.sha256],
-							);
-							return {
-								response: {
-									id: row.id,
-									state: "uploading",
-									bytes: observed.bytes,
-									sha256: observed.sha256,
-								},
-							};
-						},
-					);
-					return await cleanupAndReturn(store, result);
-				} catch (error) {
-					if (error instanceof UploadTooLargeError) {
-						return new Response("Payload Too Large", { status: 413 });
-					}
-					throw error;
-				}
+				return transferAttachment({
+					pool,
+					store,
+					request,
+					userId: session.user.id,
+					id,
+					kind: "content",
+					now,
+				});
 			}),
 			{ parse: "none" },
 		)
@@ -648,62 +753,15 @@ export function attachmentRoutes(
 				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
 				const id = attachmentIdFromPath(request, "thumbnail", prefix);
 				if (!id) return new Response("Bad Request", { status: 400 });
-				try {
-					const result = await withUserContext(
-						pool,
-						session.user.id,
-						async (client): Promise<RouteResult> => {
-							const row = await attachmentForUpdate(client, id);
-							if (!row || row.uploadedBy !== session.user.id) {
-								return {
-									response: new Response("Not Found", { status: 404 }),
-								};
-							}
-							if (
-								row.state !== "uploading" ||
-								row.thumbnailDeclaredBytes === null ||
-								row.thumbnailStorageKey === null
-							) {
-								return {
-									response: new Response("Conflict", { status: 409 }),
-								};
-							}
-							const observed = await transferAttachment({
-								client,
-								store,
-								request,
-								userId: session.user.id,
-								row,
-								storageKey: row.thumbnailStorageKey,
-								declaredBytes: row.thumbnailDeclaredBytes,
-								now,
-							});
-							if ("response" in observed) return observed;
-
-							await client.query(
-								`update attachment
-								 set thumbnail_observed_bytes = $2,
-								     thumbnail_ciphertext_sha256 = $3
-								 where id = $1 and state = 'uploading'`,
-								[row.id, observed.bytes, observed.sha256],
-							);
-							return {
-								response: {
-									id: row.id,
-									state: "uploading",
-									bytes: observed.bytes,
-									sha256: observed.sha256,
-								},
-							};
-						},
-					);
-					return await cleanupAndReturn(store, result);
-				} catch (error) {
-					if (error instanceof UploadTooLargeError) {
-						return new Response("Payload Too Large", { status: 413 });
-					}
-					throw error;
-				}
+				return transferAttachment({
+					pool,
+					store,
+					request,
+					userId: session.user.id,
+					id,
+					kind: "thumbnail",
+					now,
+				});
 			}),
 			{ parse: "none" },
 		)
@@ -751,7 +809,7 @@ export function attachmentRoutes(
 									: new Response("Forbidden", { status: 403 }),
 							};
 						}
-						if (row.state !== "uploading") {
+						if (row.state !== "uploading" || row.uploadToken !== null) {
 							return {
 								response: new Response("Conflict", { status: 409 }),
 							};
