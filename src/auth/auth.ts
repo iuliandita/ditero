@@ -22,7 +22,10 @@ import { authBaseURL } from "./base-url.ts";
 import { ensurePersonalWorkspace } from "./bootstrap.ts";
 import { normalizeDisplayName, signupDisplayName } from "./display-name.ts";
 import { withFieldEncryption } from "./encrypted-adapter.ts";
-import { emailHasRedeemableInvite } from "./invite-bypass.ts";
+import {
+	emailHasRedeemableInvite,
+	emailHasTokenInvite,
+} from "./invite-bypass.ts";
 import { mailUnavailableResponse, sendAuthMail } from "./mail.ts";
 import { assertRegistration } from "./oauth-registration.ts";
 import { trustedAuthOrigins } from "./origins.ts";
@@ -125,6 +128,7 @@ async function assertEmailRegistrationAllowed(
 	email: string,
 	path?: string,
 	emailVerified = false,
+	inviteToken?: string | null,
 ): Promise<void> {
 	if (path?.startsWith(SAML_ACS_PATH)) {
 		const invited =
@@ -144,7 +148,9 @@ async function assertEmailRegistrationAllowed(
 		bypass: registrationBypassActive(),
 		userCount: registeredUserCount,
 		hasInvite: (address) =>
-			emailHasRedeemableInvite(address.toLowerCase(), db, Date.now()),
+			path === undefined || path === "/sign-up/email"
+				? emailHasTokenInvite(address, inviteToken, db, Date.now())
+				: emailHasRedeemableInvite(address.toLowerCase(), db, Date.now()),
 	});
 }
 
@@ -262,7 +268,12 @@ export const auth = betterAuth({
 			);
 			try {
 				// The create hook alone runs only for new accounts, leaking existence.
-				await assertEmailRegistrationAllowed(email);
+				await assertEmailRegistrationAllowed(
+					email,
+					"/sign-up/email",
+					false,
+					context.headers?.get("x-ditero-invite-token"),
+				);
 			} catch (error) {
 				await context.context.password.hash(password);
 				throw registrationAPIError(error);
@@ -303,6 +314,7 @@ export const auth = betterAuth({
 							newUser.email,
 							context?.path,
 							newUser.emailVerified === true,
+							context?.headers?.get("x-ditero-invite-token"),
 						);
 					} catch (error) {
 						throw registrationAPIError(error);

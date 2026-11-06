@@ -143,6 +143,7 @@ function sameAttachment(
 ): boolean {
 	return (
 		discovered.id === locked.id &&
+		discovered.email === locked.email &&
 		discovered.workspace_id === locked.workspace_id &&
 		discovered.attach_task_id === locked.attach_task_id &&
 		discovered.attach_kind === locked.attach_kind &&
@@ -204,6 +205,7 @@ export async function claimFastInvite(
 					actorId: userId,
 					inviteeId: userId,
 					inviterId: observed.created_by,
+					inviteEmail: observed.email,
 					membershipRole:
 						observed.claimed_by === userId ? undefined : observed.role,
 				});
@@ -224,6 +226,7 @@ export async function claimFastInvite(
 					actorId: userId,
 					inviterId: observed.created_by,
 					role: observed.role,
+					inviteEmail: observed.email,
 					insert: observed.claimed_by !== userId,
 				});
 			} catch (error) {
@@ -457,6 +460,7 @@ export async function finalizeFastInvite(
 					actorId: userId,
 					inviterId: observed.created_by,
 					role: observed.role,
+					inviteEmail: observed.email,
 					insert: false,
 				});
 			} catch (error) {

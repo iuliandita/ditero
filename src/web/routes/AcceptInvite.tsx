@@ -41,7 +41,7 @@ import {
 type Preview =
 	| { state: "loading" }
 	| { state: "invalid" }
-	| { state: "valid"; workspaceName: string; email: string | null };
+	| { state: "valid"; workspaceName: string; maskedEmail: string | null };
 
 export function tokenFromLocation(): string | null {
 	return (
@@ -120,11 +120,32 @@ export function captureFastInvite(
 	return captured;
 }
 
+export async function consumeInviteMailboxProof(): Promise<boolean> {
+	const params = new URLSearchParams(window.location.hash.slice(1));
+	const proof = params.get("proof");
+	if (!proof) return true;
+	const response = await fetch("/api/invite/verify-email", {
+		method: "POST",
+		credentials: "include",
+		headers: { "content-type": "application/json" },
+		body: JSON.stringify({ proof }),
+	});
+	params.delete("proof");
+	history.replaceState(
+		history.state,
+		"",
+		`${window.location.pathname}${window.location.search}#${params}`,
+	);
+	return response.ok;
+}
+
 // Map the accept endpoint's 4xx into one friendly line; never echo the raw reason.
 // The reasons stay the server's invite-state values -- only the lines resolve.
 function acceptMessage(status: number, reason: string): string {
 	if (status === 401) return m.accept_error_sign_in_required();
 	if (status === 404) return m.accept_error_invalid();
+	if (reason === "email_verification_required")
+		return m.accept_verify_required();
 	if (reason === "email_mismatch") return m.accept_error_email_mismatch();
 	if (reason === "expired") return m.accept_error_expired();
 	if (reason === "exhausted") return m.accept_error_exhausted();
@@ -184,6 +205,8 @@ function AcceptInvitePage({
 	const [mode, setMode] = useState<"signup" | "signin">("signup");
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [mailboxRequired, setMailboxRequired] = useState(false);
+	const [verificationSent, setVerificationSent] = useState(false);
 	const [emailMismatch, setEmailMismatch] = useState(false);
 	const [fastClaim, setFastClaim] = useState<FastClaim | null>(null);
 	const [fastWdk, setFastWdk] = useState<Uint8Array | null>(null);
@@ -211,16 +234,15 @@ function AcceptInvitePage({
 				const data = (await res.json().catch(() => ({}))) as {
 					valid?: boolean;
 					workspaceName?: string;
-					email?: string | null;
+					maskedEmail?: string | null;
 				};
 				if (!active) return;
 				if (res.ok && data.valid && data.workspaceName) {
 					setPreview({
 						state: "valid",
 						workspaceName: data.workspaceName,
-						email: data.email ?? null,
+						maskedEmail: data.maskedEmail ?? null,
 					});
-					if (data.email) setEmail(data.email);
 				} else {
 					setPreview({ state: "invalid" });
 				}
@@ -233,8 +255,15 @@ function AcceptInvitePage({
 		};
 	}, [token]);
 
+	const consumeProof = useCallback(async (): Promise<boolean> => {
+		const verified = await consumeInviteMailboxProof();
+		setMailboxRequired(!verified);
+		if (!verified) setError(m.accept_verify_required());
+		return verified;
+	}, []);
+
 	const ordinaryAccept = useCallback(async (): Promise<void> => {
-		if (!token) return;
+		if (!token || !(await consumeProof())) return;
 		const res = await fetch("/api/invite/accept", {
 			method: "POST",
 			credentials: "include",
@@ -246,9 +275,10 @@ function AcceptInvitePage({
 			return;
 		}
 		const reason = (await res.text().catch(() => "")).trim();
+		setMailboxRequired(reason === "email_verification_required");
 		setEmailMismatch(reason === "email_mismatch");
 		setError(acceptMessage(res.status, reason));
-	}, [token]);
+	}, [token, consumeProof]);
 
 	const finalize = useCallback(
 		async (mode: "fast" | "fallback"): Promise<boolean> => {
@@ -292,6 +322,7 @@ function AcceptInvitePage({
 			// returns success to the same claimant even though preview is now invalid.
 			// A fresh link has no durable grant to finalize, so skip the guaranteed
 			// 409 probe and claim first.
+			if (!(await consumeProof())) return;
 			if (fastInvite.grant && (await finalize("fast"))) return;
 
 			const response = await fetch("/api/invite/claim", {
@@ -305,6 +336,7 @@ function AcceptInvitePage({
 				if (reason === "not_fast_eligible") {
 					await ordinaryAccept();
 				} else {
+					setMailboxRequired(reason === "email_verification_required");
 					setEmailMismatch(reason === "email_mismatch");
 					setError(acceptMessage(response.status, reason));
 				}
@@ -341,6 +373,7 @@ function AcceptInvitePage({
 			setBusy(false);
 		}
 	}, [
+		consumeProof,
 		fallBackAfterClaim,
 		fastInvite,
 		finalize,
@@ -474,7 +507,10 @@ function AcceptInvitePage({
 					return;
 				}
 				const res = await runAfterZeroRetirement(() =>
-					authClient.signUp.email({ email, password, name }),
+					authClient.signUp.email(
+						{ email, password, name },
+						{ headers: { "x-ditero-invite-token": token ?? "" } },
+					),
 				);
 				if (res.error) {
 					setError(authErrorMessage(res.error, m.accept_signup_failed));
@@ -559,6 +595,37 @@ function AcceptInvitePage({
 					</p>
 				</div>
 
+				{preview.maskedEmail && (
+					<p className="text-sm text-muted-foreground">
+						{m.accept_intended_email({ email: preview.maskedEmail })}
+					</p>
+				)}
+				{userId && mailboxRequired && (
+					<div className="flex flex-col gap-3">
+						<Button
+							type="button"
+							disabled={busy}
+							onClick={() => {
+								setBusy(true);
+								void fetch("/api/invite/verify-email", {
+									method: "POST",
+									credentials: "include",
+									headers: { "content-type": "application/json" },
+									body: JSON.stringify({ token }),
+								})
+									.then((response) => {
+										if (!response.ok) throw new Error();
+										setVerificationSent(true);
+									})
+									.catch(() => setError(m.accept_error_generic()))
+									.finally(() => setBusy(false));
+							}}
+						>
+							{m.accept_verify_send()}
+						</Button>
+						{verificationSent && <p role="status">{m.accept_verify_sent()}</p>}
+					</div>
+				)}
 				{userId ? (
 					<div className="flex flex-col gap-3">
 						<Button

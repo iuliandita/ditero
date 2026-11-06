@@ -8,6 +8,7 @@ import {
 	finalizeFastInvite,
 	grantFastInvite,
 } from "../../auth/invite-fast-path.ts";
+import { InviteMailboxError } from "../../auth/invite-mailbox.ts";
 import { e2eEnabled } from "../../config/e2e.ts";
 import type { db as defaultDb } from "../../db/client.ts";
 import type { Guards } from "../guards.ts";
@@ -53,6 +54,8 @@ async function parsedBody<T>(
 }
 
 function fastInviteFailure(error: unknown): Response | null {
+	if (error instanceof InviteMailboxError)
+		return new Response(error.message, { status: 403 });
 	if (!(error instanceof FastInviteError)) return null;
 	return new Response(error.reason, { status: STATUS[error.reason] });
 }

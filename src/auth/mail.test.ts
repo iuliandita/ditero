@@ -311,3 +311,11 @@ describe("mailUnavailableResponse", () => {
 		expect(mailUnavailableResponse(signUp, {})).toBeNull();
 	});
 });
+
+it("preserves mailbox proof fragments when selecting the public origin", () => {
+	expect(
+		publicAuthLink("http://localhost:3000/accept#token=invite&proof=secret", {
+			DITERO_PUBLIC_URL: "https://todo.example",
+		}),
+	).toBe("https://todo.example/accept#token=invite&proof=secret");
+});

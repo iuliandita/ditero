@@ -300,3 +300,19 @@ Unexpected portability failures return a generic message, a `correlationId`, and
 `X-Correlation-ID` response header. Operators can match that identifier to server
 logs containing only the error class and, when available, PostgreSQL SQLSTATE.
 Expected error identifiers retain their existing meaning.
+
+## Email invitation confirmation
+
+The HTTPS accept page shows a masked address; enter the full invited address.
+Email/password registration on closed or bootstrapped instances requires the link's
+token. When SMTP is configured, email-bound invitations grant membership only to
+verified accounts. The page can send a single-use confirmation link valid for 15
+minutes; open it and sign in to the same account before joining. Resends are limited
+to one per minute per invitation/address and keep existing valid links usable.
+Mail remains detached, and delivery failures are logged.
+
+Without SMTP, the token and matching account address still grant the invited role.
+Mailbox ownership cannot be checked, so a leaked link can grant its role to someone
+who registers that address. Configure SMTP when mailbox confirmation is required.
+The global optional-verification policy and native task-link destinations do not
+change. See [invitation handling](../security.md#email-invitation-confirmation).

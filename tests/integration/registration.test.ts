@@ -8,7 +8,7 @@ import {
 	SIGN_UP_RESPONSE_FLOOR_MS,
 } from "../../src/auth/auth.ts";
 import { acceptInvite } from "../../src/auth/invite-accept.ts";
-import { emailHasRedeemableInvite } from "../../src/auth/invite-bypass.ts";
+import { emailHasTokenInvite } from "../../src/auth/invite-bypass.ts";
 import { assertRegistrationAllowed } from "../../src/auth/registration.ts";
 import * as tables from "../../src/db/schema.ts";
 import { signInForTest } from "../support/auth-sign-in.ts";
@@ -40,13 +40,14 @@ afterAll(async () => {
 	await pool.end();
 });
 
-function signup(email: string) {
+function signup(email: string, token?: string) {
 	return handleAuthRequest(
 		new Request("http://localhost:3000/api/auth/sign-up/email", {
 			method: "POST",
 			headers: {
 				"content-type": "application/json",
 				origin: "http://localhost:5173",
+				...(token ? { "x-ditero-invite-token": token } : {}),
 			},
 			body: JSON.stringify({
 				name: email.split("@")[0],
@@ -134,7 +135,7 @@ describe("invite-gated registration (post-first-user)", () => {
 			createdBy: "seed-owner",
 		});
 
-		const response = await signup("invited@test.invalid");
+		const response = await signup("invited@test.invalid", "token-email");
 		expect(response.status).toBe(200);
 
 		const created = await db
@@ -162,6 +163,38 @@ describe("invite-gated registration (post-first-user)", () => {
 					),
 				),
 		).toMatchObject([{ userId: created[0].id, role: "member" }]);
+	});
+
+	test("an invited address without its token has the same refusal as an uninvited address", async () => {
+		await seedWorkspaceOwner();
+		await db.insert(tables.invite).values({
+			id: "private-invite",
+			workspaceId: "seed-ws",
+			role: "admin",
+			email: "invited@test.invalid",
+			token: "private-token",
+			status: "pending",
+			createdBy: "seed-owner",
+		});
+		const replies = [];
+		for (const [email, token] of [
+			["invited@test.invalid", undefined],
+			["missing@test.invalid", undefined],
+			["invited@test.invalid", "wrong-token"],
+			["missing@test.invalid", "private-token"],
+		] as const) {
+			const response = await signup(email, token);
+			replies.push({
+				status: response.status,
+				body: await response.json(),
+				cookies: response.headers.getSetCookie(),
+			});
+		}
+		expect(replies[0].status).toBe(403);
+		for (const reply of replies) expect(reply).toEqual(replies[0]);
+		expect(
+			await db.select({ email: tables.user.email }).from(tables.user),
+		).toEqual([{ email: "owner@test.invalid" }]);
 	});
 
 	test("an open (email-null) invite does NOT enable signup", async () => {
@@ -200,12 +233,25 @@ describe("closed-mode invite bypass at the seam", () => {
 			createdBy: "seed-owner",
 		});
 
-		const invited = await emailHasRedeemableInvite(
+		const invited = await emailHasTokenInvite(
 			"seam@test.invalid",
+			"token-seam",
 			db,
 			Date.now(),
 		);
 		expect(invited).toBe(true);
+		for (const email of ["seam@test.invalid", "missing@test.invalid"]) {
+			const withoutToken = await emailHasTokenInvite(
+				email,
+				undefined,
+				db,
+				Date.now(),
+			);
+			expect(withoutToken).toBe(false);
+			expect(() =>
+				assertRegistrationAllowed("closed", 5, { invited: withoutToken }),
+			).toThrow(/registration is disabled/i);
+		}
 		expect(() =>
 			assertRegistrationAllowed("closed", 5, { invited }),
 		).not.toThrow();
@@ -224,8 +270,9 @@ describe("closed-mode invite bypass at the seam", () => {
 			createdBy: "seed-owner",
 		});
 
-		const invited = await emailHasRedeemableInvite(
+		const invited = await emailHasTokenInvite(
 			"whoever@test.invalid",
+			"token-seam-link",
 			db,
 			Date.now(),
 		);
@@ -237,8 +284,9 @@ describe("closed-mode invite bypass at the seam", () => {
 
 	test("closed + no invite => denied", async () => {
 		await seedWorkspaceOwner();
-		const invited = await emailHasRedeemableInvite(
+		const invited = await emailHasTokenInvite(
 			"nobody@test.invalid",
+			undefined,
 			db,
 			Date.now(),
 		);

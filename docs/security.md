@@ -388,3 +388,27 @@ Leaving uses the same transaction as owner-initiated member removal: affected
 notification activation is blocked, ownership is reassigned to a remaining owner,
 and the workspace is marked as requiring key rotation. Previously downloaded
 files cannot be revoked.
+
+## Email invitation confirmation
+
+On closed instances and after bootstrap, email/password registration through an
+email invitation requires its token and the same normalized address. The accept
+page carries the token from the invitation link; entering an invited address on
+the ordinary registration page does not admit an account. Preview shows a masked
+address, so enter the full invited address yourself.
+
+When `DITERO_SMTP_HOST` is configured, an email-bound invitation grants membership
+only after the account's email is verified. The accept page can send a single-use
+confirmation link valid for 15 minutes. Sign in to the same account and join from
+that link, or return to the original invitation after confirming. Sends are
+limited to one per minute per invitation/address; resending keeps earlier valid
+links usable. Accounts already verified skip this step. Mail delivery is detached
+and failures are logged. A broken configured SMTP service must be repaired before
+unverified invitees can join; account sign-in and global email verification policy
+remain unchanged. Provider sign-ups still require a provider-verified address.
+
+Without SMTP, membership still requires the invitation token and an account with
+the matching address. The server cannot prove mailbox control in this mode, so a
+leaked email invitation link can grant its role to someone who registers that
+address. Share links privately and configure SMTP when mailbox confirmation is
+required. Android and desktop invitation links use the same HTTPS accept page.

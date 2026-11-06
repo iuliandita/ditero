@@ -1,5 +1,9 @@
 import { afterEach, expect, test, vi } from "vitest";
-import { captureFastInvite, tokenFromLocation } from "./AcceptInvite.tsx";
+import {
+	captureFastInvite,
+	consumeInviteMailboxProof,
+	tokenFromLocation,
+} from "./AcceptInvite.tsx";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -81,4 +85,25 @@ test("unavailable tab storage retains the live encrypted invite and strips its k
 	});
 	expect(browser.location.hash).toBe("#token=bearer");
 	expect(browser.location.searchParams.has("token")).toBe(false);
+});
+
+test.each([
+	200, 400,
+])("mailbox proof is posted once and removed from the fragment (%s)", async (status) => {
+	const { browser } = location(
+		"https://todo.example/accept?e2e=sealed#token=bearer&proof=mailbox-proof",
+	);
+	const fetcher = vi.fn().mockResolvedValue(new Response(null, { status }));
+	vi.stubGlobal("fetch", fetcher);
+	expect(await consumeInviteMailboxProof()).toBe(status === 200);
+	expect(fetcher).toHaveBeenCalledWith("/api/invite/verify-email", {
+		method: "POST",
+		credentials: "include",
+		headers: { "content-type": "application/json" },
+		body: JSON.stringify({ proof: "mailbox-proof" }),
+	});
+	expect(browser.location.hash).toBe("#token=bearer");
+	expect(browser.location.search).toBe("?e2e=sealed");
+	expect(await consumeInviteMailboxProof()).toBe(true);
+	expect(fetcher).toHaveBeenCalledTimes(1);
 });

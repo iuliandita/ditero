@@ -1,7 +1,7 @@
 // Invite redemption. acceptInvite runs the whole redeem in ONE transaction so the
 // membership grant, uses increment, and optional task attach commit atomically.
 // previewInvite is the unauthenticated read the signup screen uses; it leaks only
-// {valid, workspaceName, email} — never the token, role, ids, or attach details.
+// {valid, workspaceName, maskedEmail} — never the token, role, ids, or attach details.
 import { and, eq, gt, isNull, lt, or, sql } from "drizzle-orm";
 import { db as defaultDb } from "../db/client.ts";
 import { invite, taskAssignee, workspace } from "../db/schema.ts";
@@ -80,6 +80,7 @@ export async function acceptInvite(
 						inviteeId: userId,
 						inviterId: inv.createdBy,
 						membershipRole: inv.role,
+						inviteEmail: inv.email,
 					},
 				);
 				await lockInviteEvidence(query, lockedTask);
@@ -98,6 +99,7 @@ export async function acceptInvite(
 					actorId: userId,
 					inviterId: inv.createdBy,
 					role: inv.role,
+					inviteEmail: inv.email,
 					insert: true,
 				});
 			} catch (error) {
@@ -114,6 +116,7 @@ export async function acceptInvite(
 		if (!current) throw new InviteAcceptError("not_found", "invite not found");
 		if (
 			current.id !== inv.id ||
+			current.email !== inv.email ||
 			current.workspaceId !== inv.workspaceId ||
 			current.attachTaskId !== inv.attachTaskId ||
 			current.attachKind !== inv.attachKind ||
@@ -139,9 +142,7 @@ export async function acceptInvite(
 			throw new InviteAcceptError(reason, `invite ${reason}`);
 		}
 
-		// Email-targeted invites bind to the invitee's address: a leaked email-invite
-		// link cannot grant its role to a different account. Open (email-null) invites
-		// stay redeemable by anyone holding the link.
+		// Open invites remain redeemable by anyone holding the link.
 		if (
 			current.email != null &&
 			userEmail.toLowerCase() !== current.email.toLowerCase()
@@ -257,7 +258,7 @@ async function requestActiveKeyDrizzle(
 export type InvitePreview = {
 	valid: boolean;
 	workspaceName?: string;
-	email?: string | null;
+	maskedEmail?: string | null;
 };
 
 export async function previewInvite(
@@ -279,5 +280,15 @@ export async function previewInvite(
 		.where(and(eq(invite.token, token), eq(workspace.kind, "shared")))
 		.limit(1);
 	if (!row || !canRedeem(domainRow(row), now)) return { valid: false };
-	return { valid: true, workspaceName: row.workspaceName, email: row.email };
+	return {
+		valid: true,
+		workspaceName: row.workspaceName,
+		maskedEmail: maskInviteEmail(row.email),
+	};
+}
+
+export function maskInviteEmail(email: string | null): string | null {
+	if (email === null) return null;
+	const at = email.lastIndexOf("@");
+	return at > 0 ? `${email[0]}***${email.slice(at)}` : "***";
 }

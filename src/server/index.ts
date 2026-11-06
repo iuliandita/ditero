@@ -23,6 +23,11 @@ import {
 } from "../auth/invite-create.ts";
 import { FAST_INVITE_TTL_MS } from "../auth/invite-fast-path.ts";
 import {
+	InviteMailboxError,
+	proveInviteMailbox,
+	sendInviteMailboxProof,
+} from "../auth/invite-mailbox.ts";
+import {
 	createManagedAccount,
 	ManagedAccountError,
 } from "../auth/managed-account.ts";
@@ -451,6 +456,27 @@ const routes = new Elysia({ serve: { maxRequestBodySize: 128 * 1024 * 1024 } })
 			}
 		}),
 	)
+	.post(
+		"/api/invite/verify-email",
+		guardedPost(async (request, session) => {
+			const body = await readJsonObject(request);
+			if (!body.ok) return new Response("Bad Request", { status: body.status });
+			if (typeof body.value.proof === "string") {
+				const verified = await proveInviteMailbox(
+					body.value.proof,
+					session.user.id,
+					db,
+				);
+				return verified
+					? { verified: true }
+					: new Response("verification_failed", { status: 400 });
+			}
+			if (typeof body.value.token !== "string" || body.value.token.length > 256)
+				return new Response("Bad Request", { status: 400 });
+			await sendInviteMailboxProof(body.value.token, session.user.id, db);
+			return { sent: true };
+		}),
+	)
 	// Invite accept: ALWAYS requires a session. A brand-new invitee signs up FIRST
 	// (Task 6's email-invite bypass permits the signup), which authenticates them,
 	// THEN calls this. So there is no unauthenticated accept path here.
@@ -487,6 +513,8 @@ const routes = new Elysia({ serve: { maxRequestBodySize: 128 * 1024 * 1024 } })
 				}
 				return { workspaceId: accepted.workspaceId };
 			} catch (error) {
+				if (error instanceof InviteMailboxError)
+					return new Response(error.message, { status: 403 });
 				if (error instanceof InviteAcceptError) {
 					// Distinct 4xx per reason; the token is never echoed back.
 					const status =
@@ -502,7 +530,7 @@ const routes = new Elysia({ serve: { maxRequestBodySize: 128 * 1024 * 1024 } })
 		}),
 	)
 	// Invite preview: minimal, pre-signup read. Returns ONLY {valid, workspaceName,
-	// email}; never the token, role, or ids. Cross-origin requests are rejected;
+	// maskedEmail}; never the token, role, or ids. Cross-origin requests are rejected;
 	// same-origin (no Origin header) is allowed so the signup screen can read it.
 	// The bearer belongs in the body, never in a request URL or cache entry.
 	.post(
