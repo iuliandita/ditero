@@ -267,8 +267,9 @@ removes the additional browser subject and avatar URL checks.
 ## Attachment accounting and grant retries
 
 Upgrade web and native server routes together after backing up the coordinated database, blobs
-and original key material. Apply the attachment GC retry migration before starting the app;
-it adds nullable `attachment.gc_retry_at` timestamps without changing ciphertext or key formats.
+and original key material. Apply `0094_attachment_gc_retry` after landed migrations 0092 and
+0093 before starting the app; it adds nullable `attachment.gc_retry_at` timestamps without
+changing ciphertext or key formats. Keep the existing transfer token column and role guards.
 Retained soft-deleted files continue to consume workspace quota until GC removes them; migration
 reservations and replacements use the configured quota. Quota refusals identify retained bytes
 and the latest restore window, and updated clients explain pending cleanup. Failed GC rows back
