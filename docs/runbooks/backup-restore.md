@@ -247,3 +247,11 @@ newer focus sessions merely to roll back the application. Older released clients
 without interval IDs keep their legacy logging behavior; interval-ID clients must
 upgrade to send the explicit proof marker for offline completion. Personal focus
 records from legacy/offline clients are not tamper-proof time tracking.
+
+Transfer leases carry a five-minute expiry inside the existing nullable upload token; no
+additional migration is needed. Ordinary storage errors leave transfers retryable, and identical
+thumbnail retries preserve the recorded object. After a completion error the server releases the
+lease when the database is reachable; otherwise retry after its lease expires. A preceding
+server treats the timestamped token as an opaque token, so drain unfinished transfers before
+rollback as described above. Storage inventory reconciliation must account for streams that
+finish after GC removes their row; see the attachment-storage runbook before removing orphans.

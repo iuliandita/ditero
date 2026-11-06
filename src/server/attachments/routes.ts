@@ -49,6 +49,7 @@ export type AttachmentRouteOptions = {
 
 const DEFAULT_QUOTA_BYTES = 10 * 1024 * 1024 * 1024;
 const DEFAULT_RESERVATION_TTL_MS = 60 * 60_000;
+export const ATTACHMENT_UPLOAD_LEASE_MS = 5 * 60_000;
 
 const identifier = z
 	.string()
@@ -360,34 +361,41 @@ async function transferAttachment({
 	kind: "content" | "thumbnail";
 	now: () => Date;
 }): Promise<Response | Record<string, unknown>> {
-	const token = randomUUID();
+	const token = `${now().getTime() + ATTACHMENT_UPLOAD_LEASE_MS}_${randomUUID()}`;
 	const claim = await withUserContext(pool, userId, async (client) => {
 		const row = await attachmentForUpdate(client, id);
 		if (!row || row.uploadedBy !== userId) {
 			return { response: new Response("Not Found", { status: 404 }) };
 		}
 		if (
-			row.uploadToken !== null ||
+			(row.uploadToken !== null &&
+				Number(row.uploadToken.split("_")[0]) > now().getTime()) ||
 			(kind === "content"
 				? row.state !== "reserved"
 				: row.state !== "uploading" ||
 					row.observedBytes === null ||
 					row.thumbnailDeclaredBytes === null ||
-					row.thumbnailStorageKey === null ||
-					row.thumbnailObservedBytes !== null)
+					row.thumbnailStorageKey === null)
 		) {
 			return { response: new Response("Conflict", { status: 409 }) };
 		}
 		const invalid = await validateTransfer(client, row, userId, now);
 		if (invalid) return invalid;
-		const key = storageKeyFor(row.workspaceId, token, kind);
+		// Storage keys have independent entropy; they never disclose the transfer token.
+		const key = storageKeyFor(row.workspaceId, randomUUID(), kind);
+		const recordedThumbnail =
+			kind === "thumbnail" && row.thumbnailObservedBytes !== null;
+		const previousKey =
+			kind === "content" ? row.storageKey : row.thumbnailStorageKey;
 		await client.query(
 			`update attachment set upload_token = $2,
-			 ${kind === "content" ? "storage_key" : "thumbnail_storage_key"} = $3 where id = $1`,
-			[id, token, key],
+    ${kind === "content" ? "storage_key" : "thumbnail_storage_key"} = $3 where id = $1`,
+			[id, token, recordedThumbnail ? previousKey : key],
 		);
 		return {
 			key,
+			recordedThumbnail,
+			retiredKey: recordedThumbnail ? null : previousKey,
 			declaredBytes:
 				kind === "content" ? row.declaredBytes : row.thumbnailDeclaredBytes,
 		};
@@ -395,6 +403,7 @@ async function transferAttachment({
 	if ("response" in claim) return cleanupAndReturn(store, claim);
 	if (claim.declaredBytes === null)
 		throw new Error("missing thumbnail declaration");
+	if (claim.retiredKey) await cleanupTransfer(store, [claim.retiredKey]);
 
 	// Storage consumes the request with no database client or row lock held.
 	let transfer:
@@ -432,15 +441,50 @@ async function transferAttachment({
 					};
 				}
 				const invalid = await validateTransfer(client, row, userId, now);
-				if (invalid) return invalid;
-				if (!transfer.ok) {
-					await abortAttachment(client, row);
+				if (invalid)
 					return {
-						response: new Response("Payload Too Large", { status: 413 }),
-						cleanupKeys: storageKeys(row),
+						...invalid,
+						cleanupKeys: [...(invalid.cleanupKeys ?? []), claim.key],
+					};
+				if (!transfer.ok) {
+					if (transfer.error instanceof UploadTooLargeError)
+						await abortAttachment(client, row);
+					else
+						await client.query(
+							"update attachment set upload_token = null where id = $1",
+							[id],
+						);
+					return {
+						response: new Response(
+							transfer.error instanceof UploadTooLargeError
+								? "Payload Too Large"
+								: "Upload failed",
+							{
+								status:
+									transfer.error instanceof UploadTooLargeError ? 413 : 500,
+							},
+						),
+						cleanupKeys:
+							transfer.error instanceof UploadTooLargeError
+								? [...storageKeys(row), claim.key]
+								: [claim.key],
 					};
 				}
 				const { bytes, sha256 } = transfer.observed;
+				if (claim.recordedThumbnail) {
+					await client.query(
+						"update attachment set upload_token = null where id = $1",
+						[id],
+					);
+					return {
+						response:
+							bytes === row.thumbnailObservedBytes &&
+							sha256 === row.thumbnailCiphertextSha256
+								? { id, state: "uploading", bytes, sha256 }
+								: new Response("Conflict", { status: 409 }),
+						cleanupKeys: [claim.key],
+					};
+				}
 				if (kind === "content")
 					assertAttachmentTransition(row.state, "uploading");
 				await client.query(
@@ -454,17 +498,55 @@ async function transferAttachment({
 			},
 		);
 	} catch (error) {
-		await store.delete(claim.key);
+		try {
+			const canRemove = await withUserContext(pool, userId, async (client) => {
+				const row = await attachmentForUpdate(client, id);
+				if (row?.uploadedBy === userId && row.uploadToken === token) {
+					await client.query(
+						"update attachment set upload_token = null where id = $1",
+						[id],
+					);
+					return true;
+				}
+				// A lost COMMIT reply may already have published the observed object.
+				return !(
+					row &&
+					((row.storageKey === claim.key && row.observedBytes !== null) ||
+						(row.thumbnailStorageKey === claim.key &&
+							row.thumbnailObservedBytes !== null))
+				);
+			});
+			if (canRemove) await cleanupTransfer(store, [claim.key]);
+		} catch (releaseError) {
+			console.error("attachments: transfer lease release failed", {
+				code: storageErrorCode(releaseError),
+			});
+		}
 		throw error;
 	}
-	const response = await cleanupAndReturn(store, result);
+	await cleanupTransfer(store, result.cleanupKeys ?? []);
 	if (!transfer.ok && !(transfer.error instanceof UploadTooLargeError)) {
 		console.error("attachments: storage upload failed", {
 			code: storageErrorCode(transfer.error),
 		});
 		throw transfer.error;
 	}
-	return response;
+	return result.response;
+}
+
+async function cleanupTransfer(
+	store: BlobStore,
+	keys: string[],
+): Promise<void> {
+	for (const key of new Set(keys)) {
+		try {
+			await store.delete(key);
+		} catch (error) {
+			console.error("attachments: transfer cleanup failed", {
+				code: storageErrorCode(error),
+			});
+		}
+	}
 }
 
 async function downloadResponse(

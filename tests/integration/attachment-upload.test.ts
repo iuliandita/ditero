@@ -236,11 +236,12 @@ async function row(id: string) {
 			reservation_expires_at: Date | null;
 			committed_at: Date | null;
 			deleted_at: Date | null;
+			upload_token: string | null;
 		}>(
 			`select state, declared_bytes, observed_bytes, ciphertext_sha256,
 			 storage_key, thumbnail_declared_bytes, thumbnail_observed_bytes,
 			 thumbnail_ciphertext_sha256, thumbnail_storage_key,
-				 reservation_expires_at, committed_at, deleted_at
+				 reservation_expires_at, committed_at, deleted_at, upload_token
 			 from attachment where id = $1`,
 			[id],
 		)
@@ -644,6 +645,110 @@ describe("attachment delete", () => {
 });
 
 describe("attachment upload and finalize", () => {
+	test.each([
+		["content", upload],
+		["thumbnail", uploadThumbnail],
+	] as const)("retries %s after a failed storage put", async (kind, transfer) => {
+		const id = `att-put-retry-${kind}`;
+		await reserve(id, { declaredBytes: 4, thumbnailDeclaredBytes: 4 });
+		if (kind === "thumbnail") await upload(id, new Uint8Array(4));
+		const put = vi
+			.spyOn(store, "put")
+			.mockRejectedValueOnce(new Error("connection dropped"));
+		const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+		try {
+			expect((await transfer(id, new Uint8Array(4))).status).toBe(500);
+			expect(await row(id)).toMatchObject({
+				state: kind === "content" ? "reserved" : "uploading",
+				upload_token: null,
+			});
+			expect((await transfer(id, new Uint8Array(4))).status).toBe(200);
+			if (kind === "content") await uploadThumbnail(id, new Uint8Array(4));
+			expect((await finalize(id)).status).toBe(200);
+		} finally {
+			put.mockRestore();
+			log.mockRestore();
+		}
+	});
+
+	test("releases the lease after a completion transaction error without masking it with cleanup", async () => {
+		const id = "att-tx-retry";
+		await reserve(id, { declaredBytes: 4 });
+		await pool.query(`create sequence transfer_failure_seq;
+   create function transfer_failure() returns trigger language plpgsql as $$
+   begin if nextval('transfer_failure_seq') = 1 then raise exception 'completion failed'; end if; return new; end $$;
+   create constraint trigger transfer_failure after update on attachment deferrable initially deferred
+   for each row when (new.id = 'att-tx-retry' and new.observed_bytes is not null) execute function transfer_failure()`);
+		const originalDelete = store.delete.bind(store);
+		const deletion = vi
+			.spyOn(store, "delete")
+			.mockImplementation(async (key) => {
+				if (key === (await row(id))?.storage_key)
+					throw new Error("cleanup failed");
+				await originalDelete(key);
+			});
+		const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+		try {
+			const response = await upload(id, new Uint8Array(4));
+			expect(response.status).toBe(500);
+			expect(await response.text()).toContain("completion failed");
+			expect(await row(id)).toMatchObject({
+				state: "reserved",
+				upload_token: null,
+			});
+			deletion.mockRestore();
+			expect((await upload(id, new Uint8Array(4))).status).toBe(200);
+			expect((await finalize(id)).status).toBe(200);
+			expect(store.objects.size).toBe(1);
+		} finally {
+			deletion.mockRestore();
+			log.mockRestore();
+			await pool.query(
+				"drop trigger transfer_failure on attachment; drop function transfer_failure(); drop sequence transfer_failure_seq",
+			);
+		}
+	});
+
+	test("accepts an identical thumbnail retry and refuses different bytes without replacing it", async () => {
+		const id = "att-thumbnail-retry";
+		await reserve(id, { declaredBytes: 4, thumbnailDeclaredBytes: 4 });
+		await upload(id, new Uint8Array(4));
+		await uploadThumbnail(id, new Uint8Array(4));
+		const original = await row(id);
+		expect((await uploadThumbnail(id, new Uint8Array(4))).status).toBe(200);
+		expect(
+			(await uploadThumbnail(id, new Uint8Array([1, 2, 3, 4]))).status,
+		).toBe(409);
+		expect(await row(id)).toMatchObject({
+			thumbnail_storage_key: original?.thumbnail_storage_key,
+			upload_token: null,
+		});
+		expect(store.objects.size).toBe(2);
+		expect((await finalize(id)).status).toBe(200);
+	});
+
+	test.each([
+		["content", upload],
+		["thumbnail", uploadThumbnail],
+	] as const)("takes over an expired %s lease and fences the stalled transfer", async (kind, transfer) => {
+		const id = `att-lease-${kind}`;
+		await reserve(id, { declaredBytes: 4, thumbnailDeclaredBytes: 4 });
+		if (kind === "thumbnail") await upload(id, new Uint8Array(4));
+		const pause = store.pauseNextPut();
+		const previous = transfer(id, new Uint8Array([1, 2, 3, 4]));
+		await pause.started.promise;
+		try {
+			expect((await transfer(id, new Uint8Array(4))).status).toBe(409);
+			currentNow = new Date(NOW.getTime() + 5 * 60_000);
+			expect((await transfer(id, new Uint8Array(4))).status).toBe(200);
+		} finally {
+			pause.release.resolve();
+		}
+		expect((await previous).status).toBe(409);
+		if (kind === "content") await uploadThumbnail(id, new Uint8Array(4));
+		expect((await finalize(id)).status).toBe(200);
+		expect(store.objects.size).toBe(2);
+	});
 	test.each([
 		["content", upload],
 		["thumbnail", uploadThumbnail],

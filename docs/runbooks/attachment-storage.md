@@ -30,7 +30,16 @@ does not create the directory or change ownership. Storage errors during later
 uploads log their error codes without filenames or other plaintext metadata. Each upload claims
 an exclusive transfer token in a short transaction, releases the database client while streaming,
 and rechecks current access and reservation state before recording the observed bytes and hash.
-Interrupted transfers remain subject to reservation expiry and garbage collection.
+Non-size storage failures leave the reservation retryable. A failed completion transaction releases
+its lease on a best-effort basis; a new transfer may take over a stalled lease after five minutes.
+A takeover fences the previous transfer. Identical thumbnail retries succeed without replacing
+the recorded thumbnail; differing bytes are refused. Reservation expiry still applies.
+
+In a rare interruption, GC may remove an expired row while its stream is still running, and the
+process may then crash after storage publishes the object but before completion removes it.
+The unreferenced ciphertext is not downloadable through the app, but can remain in storage.
+Reconcile an offline blob inventory against a coordinated database snapshot before removing
+confirmed orphan objects; preserve backups and never infer orphan status from an object's age alone.
 
 Use `DITERO_ATTACHMENT_STORAGE_DRIVER=s3` for an S3-compatible bucket. Clear
 `DITERO_ATTACHMENT_FS_PATH`, then set `DITERO_ATTACHMENT_S3_BUCKET` and
