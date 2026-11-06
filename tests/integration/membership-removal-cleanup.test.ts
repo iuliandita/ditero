@@ -336,7 +336,7 @@ test("upgrade permanently revokes only webhooks without a workspace membership",
 	await admin.query(
 		await readFile(
 			new URL(
-				"../../drizzle/0094_revoke_departed_webhooks.sql",
+				"../../drizzle/0096_revoke_departed_webhooks.sql",
 				import.meta.url,
 			),
 			"utf8",
