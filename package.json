@@ -111,7 +111,7 @@
 		"browserslist": "^4.28.7",
 		"esbuild": "^0.28.1",
 		"hono": "^4.13.7",
-		"minimatch": "^10.2.5",
+		"minimatch": "^11.0.0",
 		"@opentelemetry/propagator-jaeger": "^2.9.0",
 		"find-my-way": "^9.7.0",
 		"js-yaml": "^4.3.2",
