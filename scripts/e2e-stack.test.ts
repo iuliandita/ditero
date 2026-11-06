@@ -1,9 +1,11 @@
+import { createServer } from "node:net";
 import { describe, expect, test } from "vitest";
 import {
 	allocatePorts,
 	apiProxyTarget,
 	assertDistinctPorts,
 	assertEmptyInventory,
+	bindEphemeral,
 	type ContainerRecord,
 	cleanupSteps,
 	confirmIdentity,
@@ -586,6 +588,52 @@ describe("allocatePorts", () => {
 		{ name: "ntfy", host: "172.17.0.1" },
 		{ name: "web", host: "127.0.0.1" },
 	] as const;
+
+	test("holds host ports while container ports are selected and checked", async () => {
+		const { bind, events } = fakeBinder([41000, 41001, 41002]);
+		let checked = false;
+		await allocatePorts(requests, bind, [], async (ports) => {
+			checked = true;
+			expect(events).toEqual([
+				"bind 127.0.0.1:41000",
+				"bind 172.17.0.1:41001",
+				"bind 127.0.0.1:41002",
+			]);
+			expect(() => assertDistinctPorts({ ...ports, browser: 41002 })).toThrow(
+				"web and browser collide",
+			);
+		});
+		expect(checked).toBe(true);
+		expect(events.filter((event) => event.startsWith("close"))).toHaveLength(3);
+	});
+	test("releases reservations when container startup fails", async () => {
+		const { bind, events } = fakeBinder([41000, 41001, 41002]);
+		await expect(
+			allocatePorts(requests, bind, [], async () => {
+				throw new Error("container startup failed");
+			}),
+		).rejects.toThrow("container startup failed");
+		expect(events.filter((event) => event.startsWith("close"))).toHaveLength(3);
+	});
+	test("a host listener blocks another listener until startup completes", async () => {
+		const listen = (port: number) =>
+			new Promise<void>((resolve, reject) => {
+				const server = createServer();
+				server.once("error", reject);
+				server.listen(port, "127.0.0.1", () => server.close(() => resolve()));
+			});
+		let selected = 0;
+		await allocatePorts(
+			[{ name: "web", host: "127.0.0.1" }],
+			bindEphemeral,
+			[],
+			async ({ web }) => {
+				selected = web;
+				await expect(listen(web)).rejects.toMatchObject({ code: "EADDRINUSE" });
+			},
+		);
+		await expect(listen(selected)).resolves.toBeUndefined();
+	});
 
 	test("holds every bind until all picks finish, then releases them", async () => {
 		const { bind, events, bound } = fakeBinder([41000, 41001, 41002]);

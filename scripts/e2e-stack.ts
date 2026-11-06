@@ -452,14 +452,14 @@ export const bindEphemeral: PortBinder = (host) =>
 		});
 	});
 
-// Every reservation stays bound until all picks are made, so the picks are
-// distinct from each other and from `reserved` (ports Docker already owns).
+// Reservations stay bound through container startup, so Docker cannot pick them.
 // They are released afterwards: a race with another process is not hidden here;
 // the consumers (strictPort, reuseExistingServer: false) fail loudly on it.
 export async function allocatePorts<K extends string>(
 	requests: readonly { name: K; host: string }[],
 	bind: PortBinder,
 	reserved: Iterable<number> = [],
+	whileHeld?: (ports: Record<K, number>) => Promise<void>,
 ): Promise<Record<K, number>> {
 	const taken = new Set(reserved);
 	const holds: PortHold[] = [];
@@ -481,6 +481,7 @@ export async function allocatePorts<K extends string>(
 			if (!port) throw new Error(`Cannot reserve a distinct ${name} port`);
 			picks[name] = port;
 		}
+		await whileHeld?.(picks);
 	} catch (error) {
 		failed = true;
 		primaryFailure = error;

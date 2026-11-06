@@ -377,11 +377,11 @@ try {
 	env.DATABASE_URL = actualDatabaseURL;
 	env.E2E_DATABASE_URL = actualDatabaseURL;
 	await run("bun", ["run", "db:migrate"]);
-	// Reserved while all are held, then released for the servers that bind them.
+	// Keep reservations until Docker has published its ports, then release them.
 	// A race with another process fails loudly: reuseExistingServer is false and
 	// Vite runs with --strictPort.
 	const ntfyHost = privateHost();
-	const hostPorts = await allocatePorts(
+	await allocatePorts(
 		[
 			{ name: "api", host: "127.0.0.1" },
 			{ name: "web", host: "127.0.0.1" },
@@ -392,27 +392,35 @@ try {
 		],
 		bindEphemeral,
 		[databasePort],
+		async (hostPorts) => {
+			Object.assign(env, hostEnvironment(hostPorts, ntfyHost));
+			await up(["up", "--build", "--detach", "--wait", "zero-cache"]);
+			const zeroPort = publishedPort("zero-cache", "4848");
+			env.E2E_PUBLIC_ZERO_URL = originFor(zeroPort);
+			const dockerPorts: Record<string, number> = {
+				database: databasePort,
+				zero: zeroPort,
+			};
+			if (isolatedBrowser) {
+				await up([
+					"--profile",
+					"browser",
+					"up",
+					"--detach",
+					"--wait",
+					"browser",
+				]);
+				dockerPorts.browser = publishedPort("browser", "3000", true);
+			}
+			assertDistinctPorts({ ...hostPorts, ...dockerPorts });
+			// Only an endpoint on the owned browser's actual port is ever used.
+			if (isolatedBrowser)
+				Object.assign(env, {
+					PW_TEST_CONNECT_WS_ENDPOINT: `ws://127.0.0.1:${dockerPorts.browser}/`,
+					PW_TEST_CONNECT_EXPOSE_NETWORK: "<loopback>",
+				});
+		},
 	);
-	Object.assign(env, hostEnvironment(hostPorts, ntfyHost));
-	await up(["up", "--build", "--detach", "--wait", "zero-cache"]);
-	const zeroPort = publishedPort("zero-cache", "4848");
-	env.E2E_PUBLIC_ZERO_URL = originFor(zeroPort);
-	const dockerPorts: Record<string, number> = {
-		database: databasePort,
-		zero: zeroPort,
-	};
-	if (isolatedBrowser) {
-		await up(["--profile", "browser", "up", "--detach", "--wait", "browser"]);
-		dockerPorts.browser = publishedPort("browser", "3000", true);
-	}
-	// Docker's ephemeral ports were chosen after the host ports were released.
-	assertDistinctPorts({ ...hostPorts, ...dockerPorts });
-	// Only an endpoint on the owned browser's actual port is ever used.
-	if (isolatedBrowser)
-		Object.assign(env, {
-			PW_TEST_CONNECT_WS_ENDPOINT: `ws://127.0.0.1:${dockerPorts.browser}/`,
-			PW_TEST_CONNECT_EXPOSE_NETWORK: "<loopback>",
-		});
 	// Forwards filters and flags: `bun run test:e2e crypto-vectors --project=webkit`.
 	status = await run(
 		"bunx",
