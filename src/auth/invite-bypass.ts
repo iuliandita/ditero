@@ -1,7 +1,7 @@
 // Email-invite registration bypass. Only a non-null invite email that matches a
 // pending, redeemable invite grants a bypass -- open link/code invites (email
 // null) MUST NOT mint accounts in a closed/bootstrap instance.
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { db } from "../db/client.ts";
 import { invite, workspace } from "../db/schema.ts";
 import { canRedeem } from "../domain/invite.ts";
@@ -28,7 +28,7 @@ export async function emailHasRedeemableInvite(
 		.innerJoin(workspace, eq(invite.workspaceId, workspace.id))
 		.where(
 			and(
-				eq(invite.email, email),
+				sql`lower(${invite.email}) = ${email.toLowerCase()}`,
 				eq(invite.status, "pending"),
 				eq(workspace.kind, "shared"),
 			),

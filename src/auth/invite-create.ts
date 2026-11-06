@@ -5,8 +5,8 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db as defaultDb } from "../db/client.ts";
 import { invite, list, task, workspace } from "../db/schema.ts";
-import { newInviteToken } from "../domain/invite.ts";
-import { ADMIN_ROLES, ROLES, type Role, WRITE_ROLES } from "../domain/role.ts";
+import { canIssueInvite, newInviteToken } from "../domain/invite.ts";
+import { ROLES, type Role } from "../domain/role.ts";
 import {
 	ackBaseUrl,
 	takeRateToken,
@@ -129,23 +129,7 @@ export async function createInvite(
 		throw new InviteCreateError(403, "invitations require a shared workspace");
 	}
 
-	// Role-escalation gate, from most-privileged grant down:
-	// - owner: only an owner may grant owner (workspace lifecycle/transfer); an
-	//   admin must NOT be able to escalate an invitee past itself.
-	// - admin: owner or admin (ADMIN_ROLES).
-	// - member/viewer: member+ (WRITE_ROLES), unless policy tightens to admin+.
-	let allowed: boolean;
-	if (input.role === "owner") {
-		allowed = callerRole === "owner";
-	} else if (input.role === "admin") {
-		allowed = ADMIN_ROLES.has(callerRole);
-	} else {
-		allowed =
-			memberInvitePolicy(env) === "admin"
-				? ADMIN_ROLES.has(callerRole)
-				: WRITE_ROLES.has(callerRole);
-	}
-	if (!allowed) {
+	if (!canIssueInvite(callerRole, input.role, memberInvitePolicy(env))) {
 		throw new InviteCreateError(403, "insufficient role to grant this invite");
 	}
 
@@ -169,13 +153,29 @@ export async function createInvite(
 	// A targeted (email) invite is single-use by default: it should redeem once,
 	// then acceptInvite flips it to 'accepted' so the owner's pending entry clears.
 	// Open link/code invites (email null) stay reusable unless a cap is given.
-	const email = input.email ?? null;
+	const email = input.email?.toLowerCase() ?? null;
 	// A targeted invite address must be a real, bounded email (RFC 5321 max 320).
 	if (email != null && !z.string().email().max(320).safeParse(email).success) {
 		throw new InviteCreateError(400, "invalid email");
 	}
-	const maxUses =
-		input.maxUses !== undefined ? input.maxUses : email != null ? 1 : null;
+	if (
+		input.maxUses != null &&
+		(!Number.isInteger(input.maxUses) ||
+			input.maxUses < 1 ||
+			input.maxUses > 32767)
+	)
+		throw new InviteCreateError(
+			400,
+			"maxUses must be an integer from 1 to 32767",
+		);
+	if (
+		input.expiresAt != null &&
+		(!Number.isSafeInteger(input.expiresAt) ||
+			input.expiresAt <= Date.now() ||
+			input.expiresAt > 8_640_000_000_000_000)
+	)
+		throw new InviteCreateError(400, "expiresAt must be a future timestamp");
+	const maxUses = input.maxUses ?? (email != null ? 1 : null);
 	const values = {
 		id,
 		workspaceId: input.workspaceId,

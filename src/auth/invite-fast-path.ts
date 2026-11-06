@@ -204,7 +204,8 @@ export async function claimFastInvite(
 					actorId: userId,
 					inviteeId: userId,
 					inviterId: observed.created_by,
-					membershipRole: observed.role,
+					membershipRole:
+						observed.claimed_by === userId ? undefined : observed.role,
 				});
 				await lockInviteEvidence(query, lockedTask);
 			} catch (error) {
@@ -223,7 +224,7 @@ export async function claimFastInvite(
 					actorId: userId,
 					inviterId: observed.created_by,
 					role: observed.role,
-					insert: true,
+					insert: observed.claimed_by !== userId,
 				});
 			} catch (error) {
 				if (error instanceof InviteTaskUnavailable)

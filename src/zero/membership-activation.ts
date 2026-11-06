@@ -1,4 +1,5 @@
 import type { Transaction } from "@rocicorp/zero";
+import { canIssueInvite } from "../domain/invite.ts";
 import { MutatorError } from "../domain/mutator-error.ts";
 import type { Schema } from "./schema.gen.ts";
 
@@ -198,8 +199,37 @@ export async function lockMembershipRoleChange(
 	tx: Tx,
 	actorId: string,
 	membershipId: string,
+	nextRole: string,
 ): Promise<string> {
-	return (await lockAuthority(tx, actorId, membershipId, false)).callerRole;
+	const authority = await lockAuthority(tx, actorId, membershipId, false);
+	if (nextRole === "owner" && authority.callerRole !== "owner")
+		throw new Error("access denied: only an owner may grant owner");
+	await revokeCreatorInvites(tx, authority, nextRole);
+	return authority.callerRole;
+}
+
+async function revokeCreatorInvites(
+	tx: Tx,
+	authority: Authority,
+	nextRole: string | null,
+): Promise<void> {
+	const rows = await query(
+		tx,
+		`select id,role from invite where workspace_id=$1 and created_by=$2
+		and status='pending' and claimed_by is null order by id for update`,
+		[authority.workspaceId, authority.targetUserId],
+	);
+	const policy =
+		process.env.DITERO_MEMBER_INVITES === "admin" ? "admin" : "allow";
+	const revoked = rows
+		.filter((row) => !canIssueInvite(nextRole, String(row.role), policy))
+		.map((row) => id(row));
+	if (revoked.length)
+		await query(
+			tx,
+			"update invite set status='revoked' where id=any($1::text[])",
+			[revoked],
+		);
 }
 
 const affected = `
@@ -258,6 +288,7 @@ export async function removeMembershipWithActivation(
 			"remove managed accounts from this workspace before removing their guardian",
 			dependents.map((row) => id(row, "name")),
 		);
+	await revokeCreatorInvites(tx, authority, null);
 	await lockPaged(
 		tx,
 		`select id from list where workspace_id=$1 and ($2::text is null or id>$2) order by id limit ${PAGE} for update`,

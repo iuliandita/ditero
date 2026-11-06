@@ -203,6 +203,29 @@ afterAll(async () => {
 	}
 });
 
+test.each([
+	{ maxUses: 0 },
+	{ maxUses: 32768 },
+	{ maxUses: 1.5 },
+	{ maxUses: "2" },
+	{ expiresAt: 0 },
+	{ expiresAt: 8_640_000_000_000_001 },
+	{ expiresAt: "tomorrow" },
+])("invite creation rejects invalid fields over HTTP: %j", async (fields) => {
+	const response = await call("POST", "/api/invite/create", {
+		cookie: ownerCookie,
+		body: { workspaceId: WORKSPACE, role: "member", ...fields },
+	});
+	expect(response.status).toBe(400);
+	expect(
+		(
+			await pool.query("select id from invite where workspace_id=$1", [
+				WORKSPACE,
+			])
+		).rows,
+	).toEqual([]);
+});
+
 describe("fragment invite state machine", () => {
 	test("personal workspace rejects a new fast claim without reserving a seat", async () => {
 		await makeInvite("personal-claim");

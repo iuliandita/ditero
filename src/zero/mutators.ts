@@ -2072,7 +2072,7 @@ export const mutators = defineMutators({
 			async ({ tx, ctx, args }) => {
 				const callerRole =
 					tx.location === "server"
-						? await lockMembershipRoleChange(tx, ctx.id, args.id)
+						? await lockMembershipRoleChange(tx, ctx.id, args.id, args.role)
 						: (
 								await requireMembershipAdmin(
 									tx,

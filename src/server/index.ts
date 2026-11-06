@@ -369,7 +369,14 @@ const routes = new Elysia({ serve: { maxRequestBodySize: 128 * 1024 * 1024 } })
 			) {
 				return new Response("Bad Request", { status: 400 });
 			}
-			const email = (body.email as string | null | undefined) ?? null;
+			if (body.email != null && typeof body.email !== "string")
+				return new Response("invalid email", { status: 400 });
+			if (body.maxUses != null && typeof body.maxUses !== "number")
+				return new Response("invalid maxUses", { status: 400 });
+			if (body.expiresAt != null && typeof body.expiresAt !== "number")
+				return new Response("invalid expiresAt", { status: 400 });
+			const email =
+				(body.email as string | null | undefined)?.toLowerCase() ?? null;
 			try {
 				// Authenticated-caller-first (guardedPost), then rate-gate, then
 				// create: bounds both the invite rows and the real mail the send
