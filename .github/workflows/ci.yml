@@ -236,7 +236,7 @@ jobs:
           scanners: vuln,secret,misconfig
           severity: HIGH,CRITICAL
           exit-code: "1"
-          version: "v0.76.1"
+          version: "v0.76.2"
       - name: Qualify experimental bundle runtime
         run: node tests/container/aio-runtime.mjs
       # Preserve source builds and run the container smokes sequentially.
@@ -277,7 +277,7 @@ jobs:
           scanners: vuln
           severity: HIGH,CRITICAL
           exit-code: "1"
-          version: "v0.76.1"
+          version: "v0.76.2"
       - run: bun run push-relay:integration
         env:
           RELAY_TEST_IMAGE: ditero-push-relay:check
