@@ -1,4 +1,4 @@
-import { count, eq } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeEach, describe, expect, test, vi } from "vitest";
@@ -70,6 +70,12 @@ async function seedWorkspaceOwner() {
 		name: "Seed",
 		ownerId: "seed-owner",
 		kind: "shared",
+	});
+	await db.insert(tables.membership).values({
+		id: "seed-owner-membership",
+		userId: "seed-owner",
+		workspaceId: "seed-ws",
+		role: "owner",
 	});
 }
 
@@ -149,7 +155,12 @@ describe("invite-gated registration (post-first-user)", () => {
 			await db
 				.select()
 				.from(tables.membership)
-				.where(eq(tables.membership.workspaceId, "seed-ws")),
+				.where(
+					and(
+						eq(tables.membership.workspaceId, "seed-ws"),
+						eq(tables.membership.userId, created[0].id),
+					),
+				),
 		).toMatchObject([{ userId: created[0].id, role: "member" }]);
 	});
 
