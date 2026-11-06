@@ -362,12 +362,23 @@ describe("attachment reserve", () => {
 		await uploadThumbnail("att-retained", new Uint8Array(6));
 		await finalize("att-retained");
 		expect((await remove("att-retained")).status).toBe(200);
-		expect(
-			(await reserve("att-retained-over", { declaredBytes: 5 })).status,
-		).toBe(409);
+		const refused = await reserve("att-retained-over", { declaredBytes: 5 });
+		expect(refused.status).toBe(409);
+		expect(await refused.json()).toEqual({
+			code: "quota-retained-deleted",
+			retainedDeletedBytes: 16,
+			restoreWindowEndsAt: "2026-10-02T12:00:00.000Z",
+			gcPending: false,
+		});
 		expect(store.objects.size).toBe(2);
+		currentNow = new Date(NOW.getTime() + 30 * 24 * 60 * 60_000 + 1);
+		expect(
+			await (
+				await reserve("att-retained-pending", { declaredBytes: 5 })
+			).json(),
+		).toMatchObject({ code: "quota-retained-deleted", gcPending: true });
 		await attachmentSweep(pool, store, {
-			now: new Date(NOW.getTime() + 30 * 24 * 60 * 60_000 + 1),
+			now: currentNow,
 		});
 		expect(store.objects.size).toBe(0);
 		expect(
@@ -593,13 +604,22 @@ describe("attachment reserve", () => {
 });
 
 describe("attachment delete", () => {
+	test("keeps a writable uploader's delete permission after key loss", async () => {
+		await reserve("att-own-key-loss", { declaredBytes: 4 }, "upload-member");
+		await upload("att-own-key-loss", new Uint8Array(4), "upload-member");
+		await finalize("att-own-key-loss", "upload-member");
+		await pool.query("delete from user_key");
+		expect((await remove("att-own-key-loss", "upload-member")).status).toBe(
+			200,
+		);
+	});
 	test("requires admin permission to delete an unrecoverable attachment version", async () => {
 		await reserve("att-unrecoverable", { declaredBytes: 4 });
 		await upload("att-unrecoverable", new Uint8Array(4));
 		await finalize("att-unrecoverable");
 		await pool.query("delete from user_key");
 		expect((await remove("att-unrecoverable", "upload-member")).status).toBe(
-			404,
+			403,
 		);
 		expect(await row("att-unrecoverable")).toMatchObject({
 			state: "committed",
@@ -667,7 +687,7 @@ describe("attachment delete", () => {
 	test("re-derives the current write role without revealing rows to outsiders", async () => {
 		await committed("att-delete-role");
 
-		expect((await remove("att-delete-role", "upload-viewer")).status).toBe(404);
+		expect((await remove("att-delete-role", "upload-viewer")).status).toBe(403);
 		expect((await remove("att-delete-role", "upload-outsider")).status).toBe(
 			404,
 		);

@@ -2877,5 +2877,7 @@
 	"security_sso_unlink": "Dissocier",
 	"security_sso_error_load": "Impossible de charger tes connexions associées.",
 	"security_sso_error_link": "Impossible de démarrer l'association de l'authentification unique.",
-	"security_sso_error_unlink": "Impossible de dissocier l'authentification unique."
+	"security_sso_error_unlink": "Impossible de dissocier l'authentification unique.",
+	"attachment_quota_retained_deleted": "Les fichiers supprimés occupent encore {bytes}. Leur dernier délai de restauration se termine le {date} ; l’espace sera libéré après le nettoyage.",
+	"attachment_quota_cleanup_pending": "Les fichiers supprimés occupent encore {bytes}. Leurs délais de restauration sont terminés, mais le nettoyage est en attente. Contacte la personne qui administre ton serveur si cela persiste."
 }

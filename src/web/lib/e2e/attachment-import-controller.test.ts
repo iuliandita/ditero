@@ -178,6 +178,18 @@ beforeEach(() => {
 	);
 });
 describe("attachment import controller", () => {
+	it("publishes retained-deleted quota details for localized feedback", async () => {
+		const c = await ready();
+		const quota = {
+			code: "quota-retained-deleted",
+			retainedDeletedBytes: 400,
+			restoreWindowEndsAt: "2026-12-01T12:00:00.000Z",
+			gcPending: false,
+		};
+		mock.fetcher.mockResolvedValueOnce(Response.json(quota, { status: 409 }));
+		await expect(c.transfer()).rejects.toMatchObject({ code: quota.code });
+		expect(c.state).toMatchObject({ stage: "error", retainedQuota: quota });
+	});
 	it("transfers a different-account archive through durable status acknowledgment", async () => {
 		const c = await ready();
 		mock.fetcher

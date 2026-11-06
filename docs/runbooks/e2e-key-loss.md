@@ -37,8 +37,10 @@ files and requires explicit acknowledgement. This acknowledgement accepts perman
 does not make the server capable of decrypting or re-keying the old files. A sole owner must first
 transfer shared-workspace ownership, regardless of the key-loss acknowledgement.
 
-Only a workspace owner or admin may delete attachments whose key version has no known live
-holder. Other writable members may delete recoverable attachments.
+A writable uploader may delete their own attachment even when its key version has no known live
+holder. Deleting someone else's unrecoverable attachment requires a workspace owner or admin.
+Other writable members may delete recoverable attachments. Authorized parent deletion retires
+all of that parent's files; see [Attachment Storage](attachment-storage.md#quota-and-retention).
 
 ## Rejected workspace grants
 

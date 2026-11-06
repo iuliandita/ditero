@@ -5,7 +5,8 @@ import { z } from "zod";
 import { storageKeyFor } from "../../domain/attachment.ts";
 import { type Role, WRITE_ROLES } from "../../domain/role.ts";
 import {
-	attachmentQuotaWouldExceed,
+	AttachmentQuotaError,
+	attachmentQuotaFailure,
 	validateAttachmentWrite,
 } from "../attachments/quota.ts";
 import { e2eBlobSchema } from "../e2e/input.ts";
@@ -495,15 +496,14 @@ export async function reserveAttachmentMigration(
 				);
 				if (!isDeepStrictEqual(before, after)) fail("migration-parent-changed");
 				const v = request.prepared;
-				if (
-					await attachmentQuotaWouldExceed(
-						client,
-						parent.workspaceId,
-						v.declaredBytes + (v.thumbnailDeclaredBytes ?? 0),
-						quota,
-					)
-				)
-					fail("quota-exceeded");
+				const quotaFailure = await attachmentQuotaFailure(
+					client,
+					parent.workspaceId,
+					v.declaredBytes + (v.thumbnailDeclaredBytes ?? 0),
+					quota,
+					(options.now ?? (() => new Date()))(),
+				);
+				if (quotaFailure) throw new AttachmentQuotaError(quotaFailure);
 				if (v.declaredBytes + (v.thumbnailDeclaredBytes ?? 0) > maxFile)
 					fail("file-too-large", 413);
 				const associationId = randomUUID(),
@@ -1024,15 +1024,14 @@ export async function recoverAttachmentMigration(
 					checkpoint,
 				);
 				const v = request.prepared;
-				if (
-					await attachmentQuotaWouldExceed(
-						client,
-						parent.workspaceId,
-						v.declaredBytes + (v.thumbnailDeclaredBytes ?? 0),
-						quota,
-					)
-				)
-					fail("quota-exceeded");
+				const quotaFailure = await attachmentQuotaFailure(
+					client,
+					parent.workspaceId,
+					v.declaredBytes + (v.thumbnailDeclaredBytes ?? 0),
+					quota,
+					(options.now ?? (() => new Date()))(),
+				);
+				if (quotaFailure) throw new AttachmentQuotaError(quotaFailure);
 				if (v.declaredBytes + (v.thumbnailDeclaredBytes ?? 0) > maxFile)
 					fail("file-too-large", 413);
 				if (f && ["reserved", "uploading", "aborted"].includes(f.state))

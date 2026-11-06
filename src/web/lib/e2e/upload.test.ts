@@ -290,6 +290,16 @@ describe("uploadAttachment", () => {
 		[413, "file-too-large", ""],
 		[413, "file-too-large", '{"error":"limit"}'],
 		[409, "quota-exceeded", "quota-exceeded"],
+		[
+			409,
+			"quota-retained-deleted",
+			JSON.stringify({
+				code: "quota-retained-deleted",
+				retainedDeletedBytes: 16,
+				restoreWindowEndsAt: "2026-10-02T12:00:00.000Z",
+				gcPending: false,
+			}),
+		],
 		[409, "rotation-required", "rotation-required"],
 		[409, "key-unavailable", "key-unavailable"],
 	] as const)("preserves a %s reserve failure as %s", async (status, reason, body) => {
@@ -314,6 +324,8 @@ describe("uploadAttachment", () => {
 
 		expect(failure).toBeInstanceOf(AttachmentUploadError);
 		expect(failure).toMatchObject({ stage: "reserve", reason, status });
+		if (reason === "quota-retained-deleted")
+			expect(failure).toMatchObject({ retainedQuota: JSON.parse(body) });
 	});
 });
 

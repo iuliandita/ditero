@@ -470,3 +470,21 @@ it("accepts original durable receipt before fresh target equality", async () => 
 		"committed",
 	);
 });
+
+it("preserves retained-deleted quota details for migration feedback", async () => {
+	const quota = {
+		code: "quota-retained-deleted",
+		retainedDeletedBytes: 16,
+		restoreWindowEndsAt: "2026-10-02T12:00:00.000Z",
+		gcPending: false,
+	};
+	const api = createAttachmentMigrationApi({
+		binding,
+		checkpoint: () => {},
+		fetcher: async () => Response.json(quota, { status: 409 }),
+	});
+	await expect(api.reserve(request)).rejects.toMatchObject({
+		code: quota.code,
+		retainedQuota: quota,
+	});
+});

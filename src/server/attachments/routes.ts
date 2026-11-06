@@ -14,8 +14,8 @@ import { type BlobStore, storageErrorCode } from "../storage/blob-store.ts";
 import {
 	type AttachmentAccessFailure,
 	type AttachmentContext,
-	attachmentQuotaWouldExceed,
-	canDeleteAttachment,
+	attachmentDeleteFailure,
+	attachmentQuotaFailure,
 	hasAttachmentWriteRole,
 	validateAttachmentWrite,
 } from "./quota.ts";
@@ -666,16 +666,17 @@ export function attachmentRoutes(
 					) {
 						return new Response("file-too-large", { status: 413 });
 					}
-					if (
-						await attachmentQuotaWouldExceed(
-							client,
-							body.workspaceId,
-							body.declaredBytes + (body.thumbnailDeclaredBytes ?? 0),
-							quotaBytes,
-						)
-					) {
-						return new Response("quota-exceeded", { status: 409 });
-					}
+					const quotaFailure = await attachmentQuotaFailure(
+						client,
+						body.workspaceId,
+						body.declaredBytes + (body.thumbnailDeclaredBytes ?? 0),
+						quotaBytes,
+						now(),
+					);
+					if (quotaFailure)
+						return quotaFailure.code === "quota-exceeded"
+							? new Response("quota-exceeded", { status: 409 })
+							: Response.json(quotaFailure, { status: 409 });
 
 					const expiresAt = new Date(now().getTime() + reservationTtlMs);
 					const storageKey = storageKeyFor(body.workspaceId, body.id);
@@ -924,9 +925,15 @@ export function attachmentRoutes(
 				return await withUserContext(pool, session.user.id, async (client) => {
 					const row = await attachmentForUpdate(client, body.id);
 					if (!row) return new Response("Not Found", { status: 404 });
-					if (!(await canDeleteAttachment(client, session.user.id, row))) {
-						return new Response("Not Found", { status: 404 });
-					}
+					const deletionFailure = await attachmentDeleteFailure(
+						client,
+						session.user.id,
+						row,
+					);
+					if (deletionFailure)
+						return deletionFailure === "not-member"
+							? new Response("Not Found", { status: 404 })
+							: Response.json({ code: deletionFailure }, { status: 403 });
 					const result = { id: row.id, state: "deleting" as const };
 					if (row.state === "deleting") return result;
 					if (row.state !== "committed") {

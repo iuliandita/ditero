@@ -504,6 +504,7 @@ export const attachment = pgTable(
 		storageKey: text("storage_key").notNull(),
 		thumbnailStorageKey: text("thumbnail_storage_key"),
 		uploadToken: text("upload_token"),
+		gcRetryAt: timestamp("gc_retry_at", { withTimezone: true }),
 		uploadedBy: text("uploaded_by")
 			.notNull()
 			.references(() => user.id),

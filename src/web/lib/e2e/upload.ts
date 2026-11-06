@@ -1,4 +1,8 @@
 import { isPreviewable, sanitiseFilename } from "../../../domain/attachment.ts";
+import {
+	type RetainedAttachmentQuota,
+	retainedAttachmentQuotaSchema,
+} from "../../../domain/attachment-quota.ts";
 import { aad, encryptWrapped } from "../../../domain/e2e/envelope.ts";
 import {
 	DEK_BYTES,
@@ -47,6 +51,7 @@ export type UploadedAttachment = {
 export type AttachmentUploadFailure =
 	| "file-too-large"
 	| "quota-exceeded"
+	| "quota-retained-deleted"
 	| "rotation-required"
 	| "key-unavailable"
 	| "unknown";
@@ -56,6 +61,7 @@ export class AttachmentUploadError extends Error {
 		readonly stage: AttachmentUploadPhase | "reserve" | "abort",
 		readonly status: number,
 		readonly reason: AttachmentUploadFailure,
+		readonly retainedQuota: RetainedAttachmentQuota | null = null,
 	) {
 		super(`attachment upload: ${stage} failed (${status}, ${reason})`);
 		this.name = "AttachmentUploadError";
@@ -194,6 +200,22 @@ async function expectOk(
 ): Promise<Response> {
 	if (!response.ok) {
 		const detail = await response.text().catch(() => "");
+		let quota: RetainedAttachmentQuota | null = null;
+		try {
+			const parsed = retainedAttachmentQuotaSchema.safeParse(
+				JSON.parse(detail),
+			);
+			if (parsed.success) quota = parsed.data;
+		} catch {
+			/* Non-JSON errors keep their existing classification. */
+		}
+		if (quota)
+			throw new AttachmentUploadError(
+				stage,
+				response.status,
+				quota.code,
+				quota,
+			);
 		const reason: AttachmentUploadFailure =
 			response.status === 413
 				? "file-too-large"

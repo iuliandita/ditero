@@ -7,7 +7,7 @@ import {
 	MAX_ATTACHMENT_SWEEP_BATCH_SIZE,
 } from "../../config/attachment-sweep.ts";
 import { withLeaderLock } from "../notifications/scheduler.ts";
-import type { BlobStore } from "../storage/blob-store.ts";
+import { type BlobStore, storageErrorCode } from "../storage/blob-store.ts";
 import { ATTACHMENT_PARENT_EXISTS_SQL, type AttachmentState } from "./state.ts";
 
 type SweepRow = {
@@ -33,6 +33,7 @@ export type AttachmentSweepSummary = {
 };
 
 export const ATTACHMENT_SWEEP_LOCK_KEY = 918_277;
+const FAILURE_BACKOFF_MS = 5 * 60_000;
 
 function validateOptions(
 	options: AttachmentSweepOptions,
@@ -128,55 +129,60 @@ export async function attachmentSweep(
 	}
 	const candidates = await (lockClient ?? pool).query<{ id: string }>(
 		`select id from attachment a
-		 where (state = any($1::attachment_state[])
+		 where (gc_retry_at is null or gc_retry_at <= $2) and ((state = any($1::attachment_state[])
 		        and reservation_expires_at <= $2)
 		    or (state = 'deleting' and deleted_at <= $3)
-		    or (state = 'committed' and not (${ATTACHMENT_PARENT_EXISTS_SQL}))
-		 order by id limit $4`,
+		    or (state = 'committed' and not (${ATTACHMENT_PARENT_EXISTS_SQL})))
+		 order by gc_retry_at nulls first, id limit $4`,
 		[["reserved", "uploading", "aborted"], now, deletingBefore, batchSize],
 	);
 	const summary: AttachmentSweepSummary = { deleted: 0, failed: 0 };
 
-	for (const candidate of candidates.rows) {
-		const client = lockClient ?? (await pool.connect());
-		try {
-			await client.query("begin");
-			const row = await lockedRow(client, candidate.id);
-			if (row?.state === "committed") {
-				await client.query(
-					`update attachment a set state='deleting', deleted_at=$2
+	try {
+		for (const candidate of candidates.rows) {
+			const client = lockClient ?? (await pool.connect());
+			try {
+				await client.query("begin");
+				const row = await lockedRow(client, candidate.id);
+				if (row?.state === "committed") {
+					await client.query(
+						`update attachment a set state='deleting', deleted_at=$2
 					 where a.id=$1 and a.state='committed'
 					 and not (${ATTACHMENT_PARENT_EXISTS_SQL})`,
-					[row.id, now],
-				);
-				await client.query("commit");
-				continue;
-			}
-			if (!row || !eligible(row, now, deletingBefore)) {
-				await client.query("commit");
-				continue;
-			}
+						[row.id, now],
+					);
+					await client.query("commit");
+					continue;
+				}
+				if (!row || !eligible(row, now, deletingBefore)) {
+					await client.query("commit");
+					continue;
+				}
 
-			try {
-				await deleteBlobs(store, row);
-			} catch (error) {
-				await client.query("rollback");
-				summary.failed++;
-				(
-					options.onError ??
-					((failure) =>
-						console.error(
-							`attachments: failed to delete blob for ${row.id}:`,
-							failure,
-						))
-				)(error, row);
-				continue;
-			}
+				try {
+					await deleteBlobs(store, row);
+				} catch (error) {
+					await client.query(
+						"update attachment set gc_retry_at=$2 where id=$1",
+						[row.id, new Date(now.getTime() + FAILURE_BACKOFF_MS)],
+					);
+					await client.query("commit");
+					summary.failed++;
+					(
+						options.onError ??
+						((failure) =>
+							console.error(
+								`attachments: failed to delete blob for ${row.id}:`,
+								{ code: storageErrorCode(failure) },
+							))
+					)(error, row);
+					continue;
+				}
 
-			await options.onAfterBlobDelete?.(row);
-			await client.query("delete from attachment where id = $1", [row.id]);
-			await client.query(
-				`delete from workspace w
+				await options.onAfterBlobDelete?.(row);
+				await client.query("delete from attachment where id = $1", [row.id]);
+				await client.query(
+					`delete from workspace w
 				 using "user" owner_user
 				 where w.owner_id = owner_user.id
 				   and w.kind = 'personal'
@@ -185,17 +191,35 @@ export async function attachmentSweep(
 				     select 1 from attachment remaining
 				     where remaining.workspace_id = w.id
 				   )`,
-			);
-			await client.query("commit");
-			summary.deleted++;
-		} catch (error) {
-			await client.query("rollback").catch(() => undefined);
-			throw error;
-		} finally {
-			if (!lockClient) client.release();
+				);
+				await client.query("commit");
+				summary.deleted++;
+			} catch (error) {
+				await client.query("rollback").catch(() => undefined);
+				throw error;
+			} finally {
+				if (!lockClient) client.release();
+			}
 		}
+	} finally {
+		const deferred = await (lockClient ?? pool)
+			.query<{ count: number }>(
+				"select count(*)::int as count from attachment where gc_retry_at > $1",
+				[now],
+			)
+			.catch((error: unknown) => {
+				console.error("attachments: sweep summary unavailable", {
+					code: storageErrorCode(error),
+				});
+				return null;
+			});
+		console.info("attachments: garbage-collection sweep", {
+			...summary,
+			candidates: candidates.rows.length,
+			deferred: deferred?.rows[0]?.count ?? null,
+			failureBackoffMs: FAILURE_BACKOFF_MS,
+		});
 	}
-
 	return summary;
 }
 

@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+	type RetainedAttachmentQuota,
+	retainedAttachmentQuotaSchema,
+} from "../../../domain/attachment-quota.ts";
 import { isoDateTimeSchema } from "../../../domain/iso-datetime.ts";
 import type { E2eFetcher } from "./workspace-keys.ts";
 
@@ -212,6 +216,7 @@ export class MigrationTransportError extends Error {
 		public readonly code: string,
 		public readonly status: number | null,
 		public readonly uncertain: boolean,
+		public readonly retainedQuota: RetainedAttachmentQuota | null = null,
 	) {
 		super(code);
 		this.name = "MigrationTransportError";
@@ -314,10 +319,12 @@ export function createAttachmentMigrationApi(options: {
 				const error = z
 					.object({ code: z.string().regex(/^[a-z0-9-]{1,128}$/) })
 					.safeParse(value);
+				const quota = retainedAttachmentQuotaSchema.safeParse(value);
 				throw new MigrationTransportError(
 					error.success ? error.data.code : "http-error",
 					response.status,
 					uncertain,
+					quota.success ? quota.data : null,
 				);
 			}
 			return schema.parse(value);

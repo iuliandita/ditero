@@ -18,6 +18,7 @@ import {
 	ProviderInputError,
 } from "../../domain/portability/providers/input.ts";
 import { PortableExportValidationError } from "../../domain/portability/validate.ts";
+import { AttachmentQuotaError } from "../attachments/quota.ts";
 import type { Guards } from "../guards.ts";
 import { getAttachmentMigrationParents } from "./attachment-migration-parents.ts";
 import {
@@ -208,6 +209,8 @@ async function handled(run: () => Promise<Response>): Promise<Response> {
 	try {
 		return await run();
 	} catch (error) {
+		if (error instanceof AttachmentQuotaError)
+			return Response.json(error.refusal, { status: 409, headers });
 		if (
 			error instanceof ImportRequestError ||
 			error instanceof ImportPlanStoreError

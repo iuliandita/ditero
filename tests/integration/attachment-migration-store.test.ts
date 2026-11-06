@@ -1346,6 +1346,14 @@ test("live recovery requires exact confirmed witness and retains uploaded bytes 
 		).rows[0].n,
 	).toBe(1);
 	expect(await attachmentSweep(admin, transferStore)).toEqual({
+		deleted: 0,
+		failed: 0,
+	});
+	expect(
+		await attachmentSweep(admin, transferStore, {
+			now: new Date(Date.now() + 5 * 60_000 + 1),
+		}),
+	).toEqual({
 		deleted: 1,
 		failed: 0,
 	});

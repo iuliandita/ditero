@@ -1,4 +1,5 @@
 import { sanitiseFilename } from "../../../domain/attachment.ts";
+import type { RetainedAttachmentQuota } from "../../../domain/attachment-quota.ts";
 import { byteNarrower } from "../../../domain/e2e/bytes.ts";
 import { aad, decryptWrapped } from "../../../domain/e2e/envelope.ts";
 import { decodeBytes, decodeWrapped } from "../../../domain/e2e/wire.ts";
@@ -41,6 +42,7 @@ export type AttachmentImportStage =
 	| "error";
 export type AttachmentImportState = Readonly<{
 	stage: AttachmentImportStage;
+	retainedQuota?: RetainedAttachmentQuota;
 	ordinal: number | null;
 	code: string | null;
 	reservation: Readonly<MigrationReservation> | null;
@@ -101,9 +103,14 @@ export function createAttachmentImportController(options: {
 	function parseHistoryDocument(text: string) {
 		return parseImportDocument(text, { historyPreview: true });
 	}
-	function publish(stage: AttachmentImportStage, code: string | null = null) {
+	function publish(
+		stage: AttachmentImportStage,
+		code: string | null = null,
+		quota: RetainedAttachmentQuota | null = null,
+	) {
 		state = Object.freeze({
 			stage,
+			...(quota ? { retainedQuota: quota } : {}),
 			ordinal: selected?.ordinal ?? null,
 			code,
 			reservation: reservation ? Object.freeze({ ...reservation }) : null,
@@ -209,7 +216,12 @@ export function createAttachmentImportController(options: {
 					(error instanceof MigrationTransportError && error.uncertain))
 			)
 				publish("uncertain", code);
-			else publish(abort.signal.aborted ? "cancelled" : "error", code);
+			else
+				publish(
+					abort.signal.aborted ? "cancelled" : "error",
+					code,
+					error instanceof MigrationTransportError ? error.retainedQuota : null,
+				);
 			throw error;
 		} finally {
 			busy = false;

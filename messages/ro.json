@@ -2877,5 +2877,7 @@
 	"security_sso_unlink": "Dezasociază",
 	"security_sso_error_load": "Conectările tale asociate nu au putut fi încărcate.",
 	"security_sso_error_link": "Asocierea autentificării unice nu a putut fi pornită.",
-	"security_sso_error_unlink": "Autentificarea unică nu a putut fi dezasociată."
+	"security_sso_error_unlink": "Autentificarea unică nu a putut fi dezasociată.",
+	"attachment_quota_retained_deleted": "Fișierele șterse încă ocupă {bytes}. Ultima perioadă de restaurare se încheie la {date}; spațiul se eliberează după curățare.",
+	"attachment_quota_cleanup_pending": "Fișierele șterse încă ocupă {bytes}. Perioadele de restaurare s-au încheiat, dar curățarea este în așteptare. Contactează administratorul serverului dacă situația persistă."
 }

@@ -4,6 +4,7 @@ import type { Pool } from "pg";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { CSV_V1_EXCLUSIONS } from "../../domain/portability/providers/input.ts";
 import type { PortableExportV1 } from "../../domain/portability/v1.ts";
+import { AttachmentQuotaError } from "../attachments/quota.ts";
 import { makeGuards, type Session } from "../guards.ts";
 import { V4ApplyConflict } from "./import-activation.ts";
 
@@ -875,6 +876,21 @@ describe("attachment reservation transport", () => {
 		expect(response.status).toBe(409);
 		expect(await response.json()).toEqual({ code: "migration-conflict" });
 		expect((await api.handle(reserveRequest())).status).toBe(200);
+	});
+	test("preserves retained-deleted quota details for attachment reservations", async () => {
+		const refusal = {
+			code: "quota-retained-deleted" as const,
+			retainedDeletedBytes: 400,
+			restoreWindowEndsAt: "2026-12-01T12:00:00.000Z",
+			gcPending: false,
+		};
+		reservations.reserve.mockRejectedValueOnce(
+			new AttachmentQuotaError(refusal),
+		);
+		const response = await app().handle(reserveRequest());
+		expect(response.status).toBe(409);
+		expect(await response.json()).toEqual(refusal);
+		expect(response.headers.get("cache-control")).toBe("no-store");
 	});
 	test("one per owner and two total share existing apply budget", async () => {
 		let release!: (value: unknown) => void;

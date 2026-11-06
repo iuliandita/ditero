@@ -2877,5 +2877,7 @@
 	"security_sso_unlink": "Desvincular",
 	"security_sso_error_load": "No se pudieron cargar tus inicios de sesión vinculados.",
 	"security_sso_error_link": "No se pudo iniciar la vinculación del inicio de sesión único.",
-	"security_sso_error_unlink": "No se pudo desvincular el inicio de sesión único."
+	"security_sso_error_unlink": "No se pudo desvincular el inicio de sesión único.",
+	"attachment_quota_retained_deleted": "Los archivos eliminados aún ocupan {bytes}. El último plazo de restauración termina el {date}; el espacio se libera después de la limpieza.",
+	"attachment_quota_cleanup_pending": "Los archivos eliminados aún ocupan {bytes}. Los plazos de restauración han terminado, pero la limpieza sigue pendiente. Contacta con quien administra tu servidor si esto continúa."
 }
