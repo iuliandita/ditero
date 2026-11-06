@@ -37,6 +37,16 @@ files and requires explicit acknowledgement. This acknowledgement accepts perman
 does not make the server capable of decrypting or re-keying the old files. A sole owner must first
 transfer shared-workspace ownership, regardless of the key-loss acknowledgement.
 
+Only a workspace owner or admin may delete attachments whose key version has no known live
+holder. Other writable members may delete recoverable attachments.
+
+## Rejected workspace grants
+
+If a received workspace key fails its commitment check, the recipient's failure report discards
+that recipient's wrap for the requested version. Other members' wraps remain intact. Request the
+workspace key again so a holder can send a replacement. A delayed repeat failure for the old
+request cannot remove the replacement. The server cannot verify the encrypted key itself.
+
 ## What rotation can and cannot do
 
 E2E identity rotation replaces a compromised identity while the user still holds the old private

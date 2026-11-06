@@ -263,3 +263,16 @@ account and asks for sign-in again without deleting pending offline edits. Nativ
 clients retain their opaque host handles. Backup and rollback procedures are
 unchanged: no persisted format or database migration is introduced. Rollback
 removes the additional browser subject and avatar URL checks.
+
+## Attachment accounting and grant retries
+
+This update needs no schema migration or client format change. Upgrade web and native server
+routes together. Back up the coordinated database, blobs and original key material before
+upgrading. Retained soft-deleted files continue to consume workspace quota until GC removes
+them; migration reservations and replacements use the configured quota. A rejected grant
+removes only the recipient's wrap for that request's version, allowing a fresh request.
+
+Existing web and native clients remain compatible. Rolling back the server restores the
+preceding quota and deletion rules and can leave rejected grants blocking retries again.
+Rollback does not restore a discarded wrap; use a fresh key request or a coordinated
+database-plus-blob backup when restoring earlier state, accepting loss of later writes.

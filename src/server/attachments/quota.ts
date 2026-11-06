@@ -1,6 +1,6 @@
 import type { PoolClient } from "pg";
 import { quotaWouldExceed } from "../../domain/attachment.ts";
-import { type Role, WRITE_ROLES } from "../../domain/role.ts";
+import { ADMIN_ROLES, type Role, WRITE_ROLES } from "../../domain/role.ts";
 
 export type AttachmentParentKind = "task" | "comment" | "list";
 
@@ -102,6 +102,31 @@ export async function hasAttachmentWriteRole(
 	return role !== undefined && WRITE_ROLES.has(role);
 }
 
+export async function canDeleteAttachment(
+	client: PoolClient,
+	userId: string,
+	context: Pick<AttachmentContext, "workspaceId" | "keyVersion">,
+): Promise<boolean> {
+	const found = await client.query<{ role: Role; recoverable: boolean }>(
+		`select m.role, exists (
+		 select 1 from membership_key mk
+		 join membership holder on holder.id = mk.membership_id
+		 join user_key uk on uk.user_id = holder.user_id
+		  and uk.retired_at is null and uk.state = 'ready'
+		 where mk.workspace_id = m.workspace_id and mk.key_version = $3
+		 ) as recoverable
+		 from membership m where m.workspace_id = $1 and m.user_id = $2
+		 for share of m`,
+		[context.workspaceId, userId, context.keyVersion],
+	);
+	const seat = found.rows[0];
+	return (
+		seat !== undefined &&
+		WRITE_ROLES.has(seat.role) &&
+		(seat.recoverable || ADMIN_ROLES.has(seat.role))
+	);
+}
+
 export async function attachmentQuotaWouldExceed(
 	client: PoolClient,
 	workspaceId: string,
@@ -115,7 +140,7 @@ export async function attachmentQuotaWouldExceed(
 		`select
 		 coalesce(sum(coalesce(observed_bytes, declared_bytes)
 		   + coalesce(thumbnail_observed_bytes, thumbnail_declared_bytes, 0))
-		   filter (where state = 'committed'), 0)::text
+		   filter (where state in ('committed', 'deleting')), 0)::text
 		   as committed,
 		 coalesce(sum(declared_bytes + coalesce(thumbnail_declared_bytes, 0)) filter
 		   (where state = any($2::attachment_state[])

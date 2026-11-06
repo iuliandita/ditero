@@ -15,6 +15,7 @@ import {
 	type AttachmentAccessFailure,
 	type AttachmentContext,
 	attachmentQuotaWouldExceed,
+	canDeleteAttachment,
 	hasAttachmentWriteRole,
 	validateAttachmentWrite,
 } from "./quota.ts";
@@ -923,13 +924,7 @@ export function attachmentRoutes(
 				return await withUserContext(pool, session.user.id, async (client) => {
 					const row = await attachmentForUpdate(client, body.id);
 					if (!row) return new Response("Not Found", { status: 404 });
-					if (
-						!(await hasAttachmentWriteRole(
-							client,
-							session.user.id,
-							row.workspaceId,
-						))
-					) {
+					if (!(await canDeleteAttachment(client, session.user.id, row))) {
 						return new Response("Not Found", { status: 404 });
 					}
 					const result = { id: row.id, state: "deleting" as const };

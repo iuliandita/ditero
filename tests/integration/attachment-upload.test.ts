@@ -332,6 +332,8 @@ beforeEach(async () => {
 		 values ('upload-key', $1, 1, 'wdkc1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', 'upload-owner')`,
 		[WORKSPACE],
 	);
+	await pool.query(`insert into user_key(id,user_id,public_key,state)
+	 values ('upload-identity', 'upload-owner', 'upload-public-key', 'ready')`);
 	await pool.query(
 		`insert into membership_key (id, membership_id, user_id, workspace_id,
 		 key_version, enc, ciphertext, recipient_public_key, granted_by) values
@@ -351,6 +353,28 @@ afterAll(async () => {
 });
 
 describe("attachment reserve", () => {
+	test("counts retained deleted content and thumbnails until GC removes them", async () => {
+		await reserve("att-retained", {
+			declaredBytes: 10,
+			thumbnailDeclaredBytes: 6,
+		});
+		await upload("att-retained", new Uint8Array(10));
+		await uploadThumbnail("att-retained", new Uint8Array(6));
+		await finalize("att-retained");
+		expect((await remove("att-retained")).status).toBe(200);
+		expect(
+			(await reserve("att-retained-over", { declaredBytes: 5 })).status,
+		).toBe(409);
+		expect(store.objects.size).toBe(2);
+		await attachmentSweep(pool, store, {
+			now: new Date(NOW.getTime() + 30 * 24 * 60 * 60_000 + 1),
+		});
+		expect(store.objects.size).toBe(0);
+		expect(
+			(await reserve("att-retained-after", { declaredBytes: 5 })).status,
+		).toBe(200);
+	});
+
 	test("keeps migration destination IDs out of ordinary reservation", async () => {
 		const id = "migration_2b8dfbb7-36d4-4d4d-9a43-fc9dbb6638eb";
 		expect((await reserve(id)).status).toBe(400);
@@ -569,6 +593,22 @@ describe("attachment reserve", () => {
 });
 
 describe("attachment delete", () => {
+	test("requires admin permission to delete an unrecoverable attachment version", async () => {
+		await reserve("att-unrecoverable", { declaredBytes: 4 });
+		await upload("att-unrecoverable", new Uint8Array(4));
+		await finalize("att-unrecoverable");
+		await pool.query("delete from user_key");
+		expect((await remove("att-unrecoverable", "upload-member")).status).toBe(
+			404,
+		);
+		expect(await row("att-unrecoverable")).toMatchObject({
+			state: "committed",
+		});
+		expect((await remove("att-unrecoverable", "upload-owner")).status).toBe(
+			200,
+		);
+	});
+
 	test("logs a storage upload error code without plaintext metadata or provider details", async () => {
 		expect(
 			(await reserve("att-storage-failure", { declaredBytes: 4 })).status,

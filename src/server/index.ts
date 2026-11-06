@@ -252,6 +252,7 @@ const routes = new Elysia()
 	.use(
 		nativePortabilityRoutes({
 			pool,
+			attachmentLimits: { quotaBytes: attachmentConfig.quotaBytes },
 			exporter: portabilityExporter,
 			admission: importAdmission,
 			rateLimit: nativeRateLimit,
@@ -281,6 +282,7 @@ const routes = new Elysia()
 			pool,
 			{ guardedPost, guardedGet, foreignOrigin },
 			importAdmission,
+			{ quotaBytes: attachmentConfig.quotaBytes },
 		),
 	)
 	// Public capability ack, mounted AHEAD of the global CORS plugin: the button

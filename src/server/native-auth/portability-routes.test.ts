@@ -74,7 +74,10 @@ const request = (
 	new Request(`http://localhost${path}`, {
 		headers: { authorization: `Bearer ${user}`, ...headers },
 	});
-function setup() {
+function setup(attachmentLimits?: {
+	quotaBytes: number;
+	maxFileBytes?: number;
+}) {
 	const exporter = createPortabilityExporter(pool);
 	const rateLimit = vi.fn().mockResolvedValue(true);
 	const guards = makeGuards(
@@ -84,12 +87,21 @@ function setup() {
 	);
 	const admission = createImportAdmission();
 	const app = new Elysia()
-		.use(importPlanRoutes(pool, guards, admission))
+		.use(importPlanRoutes(pool, guards, admission, attachmentLimits))
 		.use(portabilityRoutes(pool, guards, {}, exporter))
-		.use(nativePortabilityRoutes({ pool, exporter, rateLimit, admission }));
+		.use(
+			nativePortabilityRoutes({
+				pool,
+				exporter,
+				rateLimit,
+				admission,
+				attachmentLimits,
+			}),
+		);
 	return { app, rateLimit, exporter };
 }
 beforeEach(() => {
+	vi.stubEnv("DITERO_E2E_ENABLED", "true");
 	vi.resetAllMocks();
 	mocks.auth.mockImplementation(async (_pool, headers: Headers) =>
 		headers.get("authorization")
@@ -292,8 +304,9 @@ const migrationRequest = (
 		},
 	);
 describe("native attachment migration", () => {
-	it("uses native session owner and fixed store handlers", async () => {
-		const { app } = setup();
+	it("uses native session owner and configured storage limits in both transports", async () => {
+		const limits = { quotaBytes: 49, maxFileBytes: 40 };
+		const { app } = setup(limits);
 		for (const [action, operation] of [
 			["attachment-parents?afterOrdinal=-1&limit=2", mocks.parents],
 			["attachment-migrations?ordinal=0", mocks.inspect],
@@ -314,7 +327,7 @@ describe("native attachment migration", () => {
 		expect(mocks.reserve).toHaveBeenCalledWith(
 			pool,
 			expect.objectContaining({ ownerId: "a", jobId, ...migrationBody }),
-			expect.objectContaining({ signal: expect.any(AbortSignal) }),
+			expect.objectContaining({ ...limits, signal: expect.any(AbortSignal) }),
 		);
 		const recovery = {
 			ordinal: 0,
@@ -335,8 +348,25 @@ describe("native attachment migration", () => {
 		expect(mocks.recover).toHaveBeenCalledWith(
 			pool,
 			expect.objectContaining({ ownerId: "a", jobId, ...recovery }),
-			expect.anything(),
+			expect.objectContaining({ ...limits, signal: expect.any(AbortSignal) }),
 		);
+		for (const [action, body] of [
+			["attachment-reservations", migrationBody],
+			["attachment-recoveries", recovery],
+		] as const) {
+			const native = migrationRequest(action, body);
+			const web = new Request(native.url.replace("/api/native/", "/api/"), {
+				method: "POST",
+				headers: {
+					...Object.fromEntries(native.headers),
+					origin: "http://localhost",
+				},
+				body: JSON.stringify(body),
+			});
+			expect((await app.handle(web)).status).toBe(200);
+		}
+		expect(mocks.reserve.mock.calls[1]?.[2]).toMatchObject(limits);
+		expect(mocks.recover.mock.calls[1]?.[2]).toMatchObject(limits);
 	});
 	it("bounds completed-job queries and rejects unknown or duplicate fields", async () => {
 		const { app } = setup();
@@ -733,4 +763,36 @@ describe("authoritative native migration upload witness", () => {
 		});
 		expect(x.query).not.toHaveBeenCalled();
 	});
+});
+
+it.each([
+	"attachment-reservations",
+	"attachment-recoveries",
+])("hides native migration %s while encryption is disabled", async (action) => {
+	const { expectedRevision: _expectedRevision, ...prepared } = migrationBody;
+	const body =
+		action === "attachment-reservations"
+			? { ...prepared, expectedRevision: 0 }
+			: {
+					...prepared,
+					retireLive: true,
+					previous: {
+						associationId: "11111111-1111-4111-8111-111111111111",
+						attemptId: "22222222-2222-4222-8222-222222222222",
+						targetAttachmentId:
+							"migration_33333333-3333-4333-8333-333333333333",
+						revision: 1,
+					},
+				};
+	mocks.reserve.mockResolvedValue({ revision: 1 });
+	mocks.recover.mockResolvedValue({ revision: 2 });
+	const { app } = setup();
+	const call = () => app.handle(migrationRequest(action, body));
+	expect((await call()).status).toBe(200);
+	mocks.reserve.mockClear();
+	mocks.recover.mockClear();
+	vi.stubEnv("DITERO_E2E_ENABLED", "false");
+	expect((await call()).status).toBe(404);
+	expect(mocks.reserve).not.toHaveBeenCalled();
+	expect(mocks.recover).not.toHaveBeenCalled();
 });

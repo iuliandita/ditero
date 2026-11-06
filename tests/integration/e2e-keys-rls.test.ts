@@ -10,6 +10,7 @@ import {
 import zeroConfig from "../../drizzle-zero.config.ts";
 import { withUserContext } from "../../src/db/user-context.ts";
 import {
+	markGrantFailed,
 	myWorkspaceKeys,
 	pendingGrants,
 	requestWorkspaceKey,
@@ -496,6 +497,64 @@ describe("grant writes cross the owner boundary under RLS", () => {
 				submitGrant(client, "u_alice", input),
 			),
 		).toEqual({ ok: true, requestId: input.requestId, outcome: "already" });
+		expect(
+			await withUserContext(runtimePool, "u_alice", (client) =>
+				markGrantFailed(
+					client,
+					"u_alice",
+					input.requestId,
+					"commitment mismatch",
+				),
+			),
+		).toBe(false);
+		expect(
+			await withUserContext(runtimePool, "u_bob", (client) =>
+				markGrantFailed(
+					client,
+					"u_bob",
+					input.requestId,
+					"commitment mismatch",
+				),
+			),
+		).toBe(true);
+		expect(
+			(await asBob("select id from membership_key where membership_id='m_bob'"))
+				.rows,
+		).toEqual([]);
+		expect(
+			(
+				await asAlice(
+					"select id from membership_key where membership_id='m_alice'",
+				)
+			).rowCount,
+		).toBe(1);
+		const replacement = await withUserContext(runtimePool, "u_bob", (client) =>
+			requestWorkspaceKey(client, "u_bob", "ws_alice"),
+		);
+		expect(replacement).toMatchObject({ state: "pending", keyVersion: 1 });
+		if (!replacement) throw new Error("missing replacement request");
+		expect(replacement.requestId).not.toBe(input.requestId);
+		expect(
+			await withUserContext(runtimePool, "u_alice", (client) =>
+				submitGrant(client, "u_alice", {
+					...input,
+					requestId: replacement.requestId,
+					ciphertext: "replacement",
+				}),
+			),
+		).toMatchObject({ ok: true, outcome: "granted" });
+		expect(
+			await withUserContext(runtimePool, "u_bob", (client) =>
+				markGrantFailed(client, "u_bob", input.requestId, "delayed failure"),
+			),
+		).toBe(false);
+		expect(
+			(
+				await asBob(
+					"select ciphertext from membership_key where membership_id='m_bob'",
+				)
+			).rows,
+		).toEqual([{ ciphertext: "replacement" }]);
 	});
 
 	test("workspace rotation grants every enrolled member under the non-bypassing runtime role", async () => {

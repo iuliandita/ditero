@@ -118,6 +118,7 @@ function request(
 }
 
 beforeEach(() => {
+	vi.stubEnv("DITERO_E2E_ENABLED", "true");
 	vi.clearAllMocks();
 	store.save.mockResolvedValue({
 		id: "saved",
@@ -1092,7 +1093,7 @@ describe("attachment recovery transport", () => {
 				ownerId: "caller",
 				jobId: job,
 			},
-			{ signal: request.signal },
+			{ quotaBytes: 10 * 1024 * 1024 * 1024, signal: request.signal },
 		);
 	});
 	test.each([
@@ -1179,4 +1180,44 @@ test("separate browser route instances can share application import admission", 
 	release({ id: "saved", report: { plannerVersion: 4, applySupported: true } });
 	expect((await pending).status).toBe(200);
 	expect(admission.size).toBe(0);
+});
+
+test.each([
+	"attachment-reservations",
+	"attachment-recoveries",
+])("hides migration %s while encryption is disabled", async (action) => {
+	const { expectedRevision: _expectedRevision, ...prepared } =
+		preparedRequest();
+	const body =
+		action === "attachment-reservations"
+			? { ...prepared, expectedRevision: 0 }
+			: {
+					...prepared,
+					retireLive: true,
+					previous: {
+						associationId: "11111111-1111-4111-8111-111111111111",
+						attemptId: "22222222-2222-4222-8222-222222222222",
+						targetAttachmentId:
+							"migration_33333333-3333-4333-8333-333333333333",
+						revision: 1,
+					},
+				};
+	reservations.reserve.mockResolvedValue({ revision: 1 });
+	reservations.recover.mockResolvedValue({ revision: 2 });
+	const api = app();
+	const call = () =>
+		api.handle(
+			reserveRequest(
+				JSON.stringify(body),
+				{},
+				reservationURL.replace("attachment-reservations", action),
+			),
+		);
+	expect((await call()).status).toBe(200);
+	reservations.reserve.mockClear();
+	reservations.recover.mockClear();
+	vi.stubEnv("DITERO_E2E_ENABLED", "false");
+	expect((await call()).status).toBe(404);
+	expect(reservations.reserve).not.toHaveBeenCalled();
+	expect(reservations.recover).not.toHaveBeenCalled();
 });

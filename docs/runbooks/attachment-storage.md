@@ -90,8 +90,10 @@ not fall back to buffering the entire file. Canceling after choosing a new desti
 an empty file, but unauthenticated content is never written to it.
 
 `DITERO_ATTACHMENT_QUOTA_BYTES` is a per-workspace ciphertext quota. Accounting includes reserved
-uploads, committed files, and encrypted thumbnails. It is based on bytes observed by the server,
-not the client's declared size.
+uploads, committed files, soft-deleted files retained for restoration, and encrypted thumbnails.
+Reservations count declared bytes; uploaded files count bytes observed by the server. Deleting a
+file frees quota only after garbage collection removes its blobs and database row. Migration
+reservations and replacements use the same configured quota and combined file/thumbnail limit.
 
 Deletion is soft first. The independently leader-elected sweep removes expired reservations and
 attachments whose retention period has elapsed. Configure its retention, cadence, and bounded

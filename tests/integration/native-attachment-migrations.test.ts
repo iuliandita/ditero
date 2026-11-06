@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { escapeLiteral, Pool } from "pg";
-import { afterAll, beforeAll, expect, test } from "vitest";
+import { afterAll, beforeAll, expect, test, vi } from "vitest";
 import { auth } from "../../src/auth/auth.ts";
 import type { PortableExportV1 } from "../../src/domain/portability/v1.ts";
 import { s256Challenge } from "../../src/server/native-auth/contracts.ts";
@@ -32,6 +32,7 @@ const users: string[] = [];
 let created = false;
 let routes: ReturnType<typeof nativePortabilityRoutes>;
 beforeAll(async () => {
+	vi.stubEnv("DITERO_E2E_ENABLED", "true");
 	await admin.query(
 		`create role "${role}" login nosuperuser nocreatedb nocreaterole noinherit nobypassrls password ${escapeLiteral(runtimeURL.password)}`,
 	);
@@ -54,6 +55,7 @@ beforeAll(async () => {
 	});
 });
 afterAll(async () => {
+	vi.unstubAllEnvs();
 	const failures: unknown[] = [];
 	for (const cleanup of [
 		async () => {
