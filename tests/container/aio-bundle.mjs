@@ -28,6 +28,23 @@ const check = (fn) => {
 	checks++;
 };
 check(() => {
+	const lock = JSON.parse(
+		readFileSync(
+			new URL("../../deploy/docker/aio/packages.lock.json", import.meta.url),
+		),
+	);
+	for (const architecture of ["x86_64", "aarch64"]) {
+		const packages = lock.packages.filter(
+			(pkg) => pkg.architecture === architecture,
+		);
+		const musl = packages.filter((pkg) => pkg.name === "musl");
+		const utils = packages.filter((pkg) => pkg.name === "musl-utils");
+		assert.equal(musl.length, 1);
+		assert.equal(utils.length, 1);
+		assert.equal(utils[0].version, musl[0].version);
+	}
+});
+check(() => {
 	const dockerfile = readFileSync(
 		new URL("../../deploy/docker/Dockerfile.all-in-one", import.meta.url),
 		"utf8",

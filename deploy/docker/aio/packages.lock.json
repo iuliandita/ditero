@@ -40,6 +40,13 @@
 		},
 		{
 			"architecture": "x86_64",
+			"name": "musl-utils",
+			"version": "1.2.6-r3",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/musl-utils-1.2.6-r3.apk",
+			"sha256": "47263d05842c5e12d01e0369e5b5bea51733323501c00ca21968a5102de137ca"
+		},
+		{
+			"architecture": "x86_64",
 			"name": "postgresql18-client",
 			"version": "18.6-r0",
 			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/postgresql18-client-18.6-r0.apk",
@@ -219,6 +226,13 @@
 			"version": "1.2.6-r3",
 			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/musl-1.2.6-r3.apk",
 			"sha256": "2e17864102278d9049c3a56f1bceed9e8cf287065617e579325123443daed8a5"
+		},
+		{
+			"architecture": "aarch64",
+			"name": "musl-utils",
+			"version": "1.2.6-r3",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/musl-utils-1.2.6-r3.apk",
+			"sha256": "bb460bdc009e88989bd5adca8a7c8298c339cba99da11c6196c818e042fbaf49"
 		},
 		{
 			"architecture": "aarch64",
