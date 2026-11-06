@@ -47,6 +47,7 @@ describe("authRateLimitOptions", () => {
 	});
 	test("relaxes only the harness per-IP rules", () => {
 		vi.stubEnv("DITERO_E2E", "1");
+		vi.stubEnv("NODE_ENV", "test");
 		const options = authRateLimitOptions();
 		for (const path of [
 			"/sign-in/email",
@@ -59,6 +60,20 @@ describe("authRateLimitOptions", () => {
 			window: 60,
 			max: 30,
 		});
+	});
+
+	test.each([
+		undefined,
+		"development",
+		"production",
+	])("keeps strict limits outside test mode (%s)", (mode) => {
+		vi.stubEnv("DITERO_E2E", "1");
+		vi.stubEnv("NODE_ENV", mode);
+		const { customRules } = authRateLimitOptions();
+		expect(customRules["/sign-in/email"]).toEqual({ window: 60, max: 30 });
+		expect(customRules["/sign-up/email"]).toEqual({ window: 60, max: 10 });
+		for (const path of ["/get-session", "/token"])
+			expect(customRules[path]).toEqual({ window: 60, max: 600 });
 	});
 
 	test("exempts the passkey list read from the ceremony ceiling, and orders it first", () => {

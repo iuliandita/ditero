@@ -467,6 +467,12 @@ self-service provider registration (those routes answer 404).
 - Android and desktop apps sign in through the system browser, so SAML works there
   with the same configuration; see [native authentication](native-authentication.md).
 
+Over HTTPS, a solicited SAML callback must carry the RelayState returned at
+sign-in start and the matching browser-binding cookie. A missing RelayState is
+refused before consuming the sign-in request. Callbacks without RelayState are
+accepted only when `DITERO_SAML_ALLOW_IDP_INITIATED=true` explicitly permits
+IdP-initiated sign-in.
+
 ### Settings
 
 All settings are environment variables. Each one that names a secret or a document

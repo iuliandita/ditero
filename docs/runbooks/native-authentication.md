@@ -73,6 +73,10 @@ of the account and revokes its access tokens, calendar feed links, passkeys,
 linked provider sign-ins, other reset links and pending account-bound sign-in proofs
 (including two-factor challenges and trusted-device grants) in the same transaction.
 It also marks the email verified because the mailed token proves mailbox access.
+A password change requires the current password and revokes the same account
+credentials and pending proofs in one transaction. It replaces the initiating
+browser session and ends other browser and native sessions even if the client
+requests otherwise. It does not verify an unverified email address.
 Existing two-factor enrollment and backup codes stay unchanged. Provider relinking
 still requires the server's linking policy to permit it; see
 [security](../security.md).

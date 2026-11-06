@@ -1,6 +1,7 @@
 // Better Auth's mail path end to end: the real handler, a real Postgres and a
 // real SMTP server on a real socket.
 import { createServer, type Server, type Socket } from "node:net";
+import { like } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import {
@@ -48,6 +49,9 @@ beforeEach(async () => {
 	await db.delete(tables.user);
 	// /request-password-reset is capped at 3/300s per IP; this file makes more.
 	await db.delete(tables.rateLimit);
+	await db
+		.delete(tables.rateBucket)
+		.where(like(tables.rateBucket.key, "auth:password-reset:%"));
 	for (const key of SMTP_KEYS) delete process.env[key];
 });
 
@@ -233,3 +237,42 @@ describe("password reset is not a user-enumeration oracle", () => {
 		).toBe(true);
 	});
 });
+
+it.each([
+	"ada@example.test",
+	"unknown@example.test",
+])("bounds reset requests for %s across client addresses", async (email) => {
+	await useSink();
+	await signup("ada@example.test");
+	const responses: Response[] = [];
+	for (let attempt = 0; attempt < 4; attempt++) {
+		responses.push(
+			await handleAuthRequest(
+				new Request("http://localhost:3000/api/auth/request-password-reset", {
+					method: "POST",
+					headers: {
+						"content-type": "application/json",
+						origin: "http://localhost:5173",
+					},
+					body: JSON.stringify({
+						email: attempt === 3 ? email.toUpperCase() : email,
+					}),
+				}),
+				`198.51.100.${attempt + 1}`,
+			),
+		);
+	}
+	expect(responses.map((response) => response.status)).toEqual([
+		200, 200, 200, 429,
+	]);
+	expect(await responses[3].json()).toMatchObject({
+		code: "TOO_MANY_REQUESTS",
+	});
+	expect(responses[3].headers.get("retry-after")).toBe("100");
+	const buckets = await db
+		.select()
+		.from(tables.rateBucket)
+		.where(like(tables.rateBucket.key, "auth:password-reset:%"));
+	expect(buckets).toHaveLength(1);
+	expect(buckets[0].key).not.toContain(email);
+}, 30_000);

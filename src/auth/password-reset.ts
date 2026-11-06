@@ -10,6 +10,7 @@ type Database = Pick<NodePgDatabase<typeof schema>, "transaction" | "execute">;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 
 export const RESET_PATH = "/api/auth/reset-password";
+export const CHANGE_PATH = "/api/auth/change-password";
 export const RESET_CALLBACK_PATH = "/reset-password";
 
 export type ResetRevocation = {
@@ -19,7 +20,7 @@ export type ResetRevocation = {
 	linkedAccounts: number;
 };
 
-type ResetState = { revoked?: ResetRevocation };
+type ResetState = { kind: "reset" | "change"; revoked?: ResetRevocation };
 const passwordReset = new AsyncLocalStorage<ResetState>();
 
 // Better Auth builds the mailed link from whatever redirectTo the requesting
@@ -37,6 +38,7 @@ export function resetLinkWithWebCallback(rawUrl: string): string {
 export async function revokeResetCredentials(
 	tx: Pick<Transaction, "execute">,
 	userId: string,
+	verifyEmail = true,
 ): Promise<ResetRevocation> {
 	// Token and feed rows are row-level secured by the acting user. Creating
 	// either locks the user row too, so one that commits first is revoked here.
@@ -67,9 +69,10 @@ export async function revokeResetCredentials(
 			or identifier in (select '2fa-otp-' || identifier from owned)
 	`);
 	// Redeeming the emailed reset link proves control of the account's mailbox.
-	await tx.execute(
-		sql`update "user" set email_verified = true, updated_at = statement_timestamp() where id = ${userId}`,
-	);
+	if (verifyEmail)
+		await tx.execute(
+			sql`update "user" set email_verified = true, updated_at = statement_timestamp() where id = ${userId}`,
+		);
 	const accessTokens = await tx.execute(
 		sql`update personal_access_token set revoked_at = statement_timestamp() where user_id = ${userId} and revoked_at is null`,
 	);
@@ -97,16 +100,25 @@ type AdapterCall = {
 	data?: Record<string, unknown>;
 };
 
-function credentialOwner(property: PropertyKey, input: AdapterCall) {
+function credentialOwner(
+	property: PropertyKey,
+	input: AdapterCall,
+	result: unknown,
+) {
 	if (input.model !== "account") return undefined;
 	if (property === "create")
 		return input.data?.providerId === "credential" && input.data.password
 			? input.data.userId
 			: undefined;
-	if ((property === "update" || property === "updateMany") && input.update)
-		return "password" in input.update
-			? input.where?.find((clause) => clause.field === "userId")?.value
-			: undefined;
+	if (
+		(property === "update" || property === "updateMany") &&
+		input.update &&
+		"password" in input.update
+	) {
+		if (result && typeof result === "object" && "userId" in result)
+			return result.userId;
+		return input.where?.find((clause) => clause.field === "userId")?.value;
+	}
 	return undefined;
 }
 
@@ -122,7 +134,7 @@ function observePasswordWrite<T extends object>(
 				return value.bind(target);
 			return async (input: AdapterCall) => {
 				const result = await Reflect.apply(value, target, [input]);
-				const userId = credentialOwner(property, input);
+				const userId = credentialOwner(property, input, result);
 				if (typeof userId === "string") {
 					if (property === "updateMany" ? result !== 1 : !result)
 						throw resetUnavailable();
@@ -162,7 +174,11 @@ export function withPasswordResetTransaction(
 						);
 						// Roll back rather than commit a password change that nothing revoked.
 						if (userId === undefined) throw resetUnavailable();
-						state.revoked = await revokeResetCredentials(tx, userId);
+						state.revoked = await revokeResetCredentials(
+							tx,
+							userId,
+							state.kind === "reset",
+						);
 						return result;
 					});
 				};
@@ -184,10 +200,23 @@ function resetUnavailable(): APIError {
 	});
 }
 
-export async function runPasswordReset(
+export function runPasswordReset(
 	handle: () => Promise<Response>,
 ): Promise<Response> {
-	const state: ResetState = {};
+	return runPasswordUpdate("reset", handle);
+}
+
+export function runPasswordChange(
+	handle: () => Promise<Response>,
+): Promise<Response> {
+	return runPasswordUpdate("change", handle);
+}
+
+async function runPasswordUpdate(
+	kind: ResetState["kind"],
+	handle: () => Promise<Response>,
+): Promise<Response> {
+	const state: ResetState = { kind };
 	const response = await passwordReset.run(state, handle);
 	if (!response.ok) return response;
 	if (!state.revoked) {
@@ -197,6 +226,7 @@ export async function runPasswordReset(
 			{ status: 500 },
 		);
 	}
+	if (kind === "change") return response;
 	return Response.json(
 		{ status: true, revoked: state.revoked },
 		{ headers: { "cache-control": "no-store" } },

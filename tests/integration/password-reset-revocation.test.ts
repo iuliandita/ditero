@@ -600,3 +600,93 @@ test("mailbox verification commits with the reset and rolls back with a later re
 	expect(await verified(bystander.userId)).toBe(false);
 	expect((await reset(victim.resetToken)).status).toBe(400);
 });
+
+test.each([
+	undefined,
+	false,
+	true,
+])("password change revokes account credentials with revokeOtherSessions=%s", async (revokeOtherSessions) => {
+	const victim = await seedAccount();
+	const bystander = await seedAccount();
+	await admin.query('update "user" set email_verified=false where id=$1', [
+		victim.userId,
+	]);
+	const signedIn = await postAuth("/sign-in/email", {
+		email: `${victim.userId}@reset.test`,
+		password: "old-password-123",
+	});
+	expect(signedIn.status).toBe(200);
+	const response = await postAuth(
+		"/change-password",
+		{
+			currentPassword: "old-password-123",
+			newPassword: "changed-password-456",
+			revokeOtherSessions,
+		},
+		cookies(signedIn),
+	);
+	expect(response.status, await response.clone().text()).toBe(200);
+	expect(await counts(victim.userId)).toEqual({
+		sessions: 1,
+		accessTokens: 0,
+		calendarFeeds: 0,
+		passkeys: 0,
+		linkedAccounts: 0,
+		credentials: 1,
+		twoFactor: 1,
+		webhooks: 1,
+		resetTokens: 0,
+	});
+	expect(await passwordMatches(victim.userId, "changed-password-456")).toBe(
+		true,
+	);
+	expect(
+		(
+			await admin.query('select email_verified from "user" where id=$1', [
+				victim.userId,
+			])
+		).rows[0].email_verified,
+	).toBe(false);
+	expect(
+		await auth.auth.api.getSession({
+			headers: new Headers({ cookie: cookies(signedIn) }),
+		}),
+	).toBeNull();
+	expect(
+		(
+			await auth.auth.api.getSession({
+				headers: new Headers({ cookie: cookies(response) }),
+			})
+		)?.user.id,
+	).toBe(victim.userId);
+	expect(await counts(bystander.userId)).toMatchObject({
+		sessions: 1,
+		accessTokens: 1,
+		calendarFeeds: 1,
+		passkeys: 1,
+		linkedAccounts: 1,
+	});
+});
+
+test("password change rolls back if credential revocation fails", async () => {
+	const victim = await seedAccount();
+	const signedIn = await postAuth("/sign-in/email", {
+		email: `${victim.userId}@reset.test`,
+		password: "old-password-123",
+	});
+	expect(signedIn.status).toBe(200);
+	const before = await counts(victim.userId);
+	vi.spyOn(console, "error").mockImplementation(() => {});
+	await admin.query(`revoke update on calendar_feed from "${role}"`);
+	const response = await postAuth(
+		"/change-password",
+		{
+			currentPassword: "old-password-123",
+			newPassword: "changed-password-456",
+		},
+		cookies(signedIn),
+	);
+	expect(response.ok).toBe(false);
+	expect(await counts(victim.userId)).toEqual(before);
+	expect(await passwordMatches(victim.userId, "old-password-123")).toBe(true);
+});
