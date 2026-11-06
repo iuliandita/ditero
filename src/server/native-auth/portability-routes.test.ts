@@ -207,7 +207,7 @@ describe("native portability export", () => {
 		await vi.waitFor(() => expect(releaseB).toBeDefined());
 		expect(
 			(await app.handle(request("/api/portability/export", "c"))).status,
-		).toBe(429);
+		).toBe(200);
 		releaseA("{}");
 		releaseB("{}");
 		expect((await a).status).toBe(200);
@@ -240,10 +240,16 @@ describe("native portability export", () => {
 				request("/api/native/portability/export"),
 			);
 			expect(failed.status).toBe(500);
-			expect(await failed.json()).toEqual({ code: "export-failed" });
-			expect(JSON.stringify(log.mock.calls)).not.toContain(
-				"private database payload",
-			);
+			const body = await failed.json();
+			expect(body).toEqual({
+				code: "export-failed",
+				message: "An unexpected error occurred",
+				correlationId: expect.any(String),
+			});
+			expect(log).toHaveBeenCalledWith("HTTP request failed", {
+				correlationId: body.correlationId,
+				error: expect.objectContaining({ message: "private database payload" }),
+			});
 		} finally {
 			log.mockRestore();
 		}

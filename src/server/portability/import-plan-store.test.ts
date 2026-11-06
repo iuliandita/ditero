@@ -178,6 +178,10 @@ test("timed-out acquisitions bound abandoned waiters and release late clients", 
 		status: 429,
 	});
 	expect(connect).toHaveBeenCalledTimes(2);
+	connect.mockRejectedValueOnce(new Error("other owner admitted"));
+	await expect(listImportSources(pool, "other-owner")).rejects.toThrow(
+		"other owner admitted",
+	);
 	for (const arrive of arrivals) {
 		const release = vi.fn();
 		arrive({ release } as unknown as PoolClient);

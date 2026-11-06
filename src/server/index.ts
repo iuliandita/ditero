@@ -50,6 +50,7 @@ import { withZeroUserContext } from "../zero/task-activation.ts";
 import { accountDeletionRoutes } from "./account-deletion.ts";
 import { attachmentRoutes } from "./attachments/routes.ts";
 import { startAttachmentSweep } from "./attachments/sweep.ts";
+import { enforceRequestBodyLimit } from "./body-limit.ts";
 import { resolveClientRateKey, trustedProxyCIDRsFromEnv } from "./client-ip.ts";
 import { ctxFromAuthHeader } from "./ctx.ts";
 import { lookupUsers } from "./discovery.ts";
@@ -107,6 +108,7 @@ import {
 	publicApiRoutes,
 } from "./public-api/routes.ts";
 import { publicConfig } from "./public-config.ts";
+import { handleServerError } from "./server-error.ts";
 import { createShutdown } from "./shutdown.ts";
 import { taskHistoryRoutes } from "./task-history.ts";
 import { nativeZeroPayload } from "./zero-auth.ts";
@@ -189,7 +191,9 @@ async function channelWrite(
 	}
 }
 
-const routes = new Elysia()
+const routes = new Elysia({ serve: { maxRequestBodySize: 128 * 1024 * 1024 } })
+	.onRequest(enforceRequestBodyLimit)
+	.onError(handleServerError)
 	.use(
 		calendarFeedRoutes(
 			pool,

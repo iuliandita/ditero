@@ -17,13 +17,13 @@ export class UnsupportedImportVersionError extends Error {
 export function parseImportDocument(input: string): PortableExportV1;
 export function parseImportDocument(
 	input: string,
-	options: { historyPreview: true },
+	options: { historyPreview: true; checkpoint?: () => void },
 ): PortableExportV1 | PortableExportV2;
 export function parseImportDocument(
 	input: string,
-	options?: { historyPreview: true },
+	options?: { historyPreview: true; checkpoint?: () => void },
 ) {
-	const value = parseBoundedPortableJson(input);
+	const value = parseBoundedPortableJson(input, options?.checkpoint);
 	if (
 		value !== null &&
 		typeof value === "object" &&
@@ -32,10 +32,11 @@ export function parseImportDocument(
 		"schemaVersion" in value &&
 		value.schemaVersion === 2
 	) {
-		if (options?.historyPreview) return validatePortableExportV2Value(value);
+		if (options?.historyPreview)
+			return validatePortableExportV2Value(value, options?.checkpoint);
 		throw new UnsupportedImportVersionError();
 	}
-	return validatePortableExportV1Value(value);
+	return validatePortableExportV1Value(value, options?.checkpoint);
 }
 
 // Historical authors never pass through native principal/author mapping.

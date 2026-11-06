@@ -2,6 +2,8 @@ import { Elysia } from "elysia";
 import type { Pool } from "pg";
 import { UserContextError } from "../../db/user-context.ts";
 import type { Guards } from "../guards.ts";
+import { serverErrorResponse } from "../server-error.ts";
+import { PORTABILITY_CONCURRENCY } from "./admission.ts";
 import {
 	ExportInterruptedError,
 	ExportLimitError,
@@ -21,7 +23,10 @@ export function createPortabilityExporter(
 		userId: string,
 		version: 1 | 2,
 	): Promise<Response> => {
-		if (activeUsers.size >= 2 || activeUsers.has(userId)) {
+		if (
+			activeUsers.size >= PORTABILITY_CONCURRENCY ||
+			activeUsers.has(userId)
+		) {
 			return Response.json(
 				{ code: "export-busy" },
 				{
@@ -77,20 +82,7 @@ export function createPortabilityExporter(
 					: status === 413
 						? "export-limit-exceeded"
 						: "export-failed";
-			if (status === 500) {
-				const databaseCode =
-					error &&
-					typeof error === "object" &&
-					"code" in error &&
-					typeof error.code === "string" &&
-					/^[0-9A-Z]{5}$/.test(error.code)
-						? error.code
-						: undefined;
-				console.error("portability export failed", {
-					category: databaseCode ? "database" : "unexpected",
-					code: databaseCode,
-				});
-			}
+			if (status === 500) return serverErrorResponse(error, code);
 			return Response.json(
 				{ code },
 				{ status, headers: { "cache-control": "no-store" } },

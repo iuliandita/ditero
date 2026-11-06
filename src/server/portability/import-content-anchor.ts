@@ -23,9 +23,10 @@ export async function prepareAnchoredProviderImport(
 	source: ImportSourceSelection,
 	value: unknown,
 	options: ProviderImportOptions & { exportedAt: string },
+	prepare: typeof prepareProviderImportRequest = prepareProviderImportRequest,
 ) {
 	// Validate the current preview against its bytes before consulting saved metadata.
-	const prepared = await prepareProviderImportRequest(value, options);
+	const prepared = await prepare(value, options);
 	if (
 		source.mode !== "existing" ||
 		prepared.binding.adapter !== CONTENT_ADAPTER ||
@@ -59,7 +60,7 @@ export async function prepareAnchoredProviderImport(
 	)
 		return prepared;
 	// Reparse with the source's original anchor; the final store still checks its binding.
-	return prepareProviderImportRequest(
+	return prepare(
 		{
 			...binding,
 			originalBase64: (value as { originalBase64: string }).originalBase64,

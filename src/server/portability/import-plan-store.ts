@@ -34,6 +34,7 @@ import {
 import type { PortableExportV1 } from "../../domain/portability/v1.ts";
 import type { PortableExportV2 } from "../../domain/portability/v2.ts";
 import { type Role, WRITE_ROLES } from "../../domain/role.ts";
+import { PORTABILITY_CONCURRENCY } from "./admission.ts";
 import {
 	discoverV4Authority,
 	ImportActivationLimitError,
@@ -101,7 +102,7 @@ const sourceSchema = z.discriminatedUnion("mode", [
 ]);
 
 // Pool acquisition cannot be removed from pg's queue after cancellation.
-const pendingAcquisitions = new WeakMap<Pool, number>();
+const pendingAcquisitions = new WeakMap<Pool, Map<string, number>>();
 
 export async function importTransaction<T>(
 	pool: Pool,
@@ -114,19 +115,34 @@ export async function importTransaction<T>(
 	const acquisitionBudget = Math.ceil(deadline - performance.now());
 	if (signal?.aborted) fail("import-cancelled", 408);
 	if (acquisitionBudget <= 0) fail("import-timeout", 503);
-	if ((pendingAcquisitions.get(pool) ?? 0) >= 2) fail("import-busy", 429);
-	pendingAcquisitions.set(pool, (pendingAcquisitions.get(pool) ?? 0) + 1);
+	let pending = pendingAcquisitions.get(pool);
+	if (!pending) {
+		pending = new Map();
+		pendingAcquisitions.set(pool, pending);
+	}
+	if (
+		(pending.get(ownerId) ?? 0) >= 2 ||
+		[...pending.values()].reduce((total, count) => total + count, 0) >=
+			PORTABILITY_CONCURRENCY
+	)
+		fail("import-busy", 429);
+	pending.set(ownerId, (pending.get(ownerId) ?? 0) + 1);
+	const releaseAcquisition = () => {
+		const count = (pending.get(ownerId) ?? 1) - 1;
+		if (count) pending.set(ownerId, count);
+		else pending.delete(ownerId);
+	};
 	let expired = false;
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	let cancelAcquisition: (() => void) | undefined;
 	const acquisition = pool.connect().then(
 		(client) => {
-			pendingAcquisitions.set(pool, (pendingAcquisitions.get(pool) ?? 1) - 1);
+			releaseAcquisition();
 			if (expired) client.release();
 			return client;
 		},
 		(error: unknown) => {
-			pendingAcquisitions.set(pool, (pendingAcquisitions.get(pool) ?? 1) - 1);
+			releaseAcquisition();
 			throw error;
 		},
 	);

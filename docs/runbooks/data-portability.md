@@ -427,6 +427,15 @@ and 32 MiB. A conservative preflight also bounds the memory needed to serialize 
 fields, accounting for compression and JSON escaping; it can refuse some exports below
 the output limit. A limit refusal returns HTTP 413 without a partial file. Each export has
 a 15-second total deadline, including database connection acquisition. Cancellation
-releases its database connection and locks. At most two exports run per app process,
+releases its database connection and locks. At most eight exports run per app process,
 with one per user; extra requests receive HTTP 429 and a retry delay. Interrupted or
 failed requests do not alter your content.
+
+Import work also allows eight concurrent users per app process and one operation per
+user, shared by browser and native requests. Plan creation allows a burst of four
+requests per account, then refills one request every 15 seconds. HTTP 429 responses
+include a retry delay. Provider envelopes are limited to 32 MiB before JSON parsing;
+native document envelopes retain their separate escaping allowance. Parsing runs in
+workers that terminate on cancellation or after at most 15 seconds. Native documents
+allow at most 10,000 filter conditions and 1,000 dashboard panels in total, across all
+views and dashboards; exceeding either budget returns HTTP 413.

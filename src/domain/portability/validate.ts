@@ -501,6 +501,8 @@ const validationMessages = {
 	"nesting-limit": "Portable export exceeds nesting limit",
 	"array-limit": "Portable export exceeds array limit",
 	"node-limit": "Portable export exceeds node limit",
+	"condition-limit": "Portable export exceeds aggregate filter limit",
+	"panel-limit": "Portable export exceeds aggregate panel limit",
 	"non-finite-number": "Portable export contains a non-finite number",
 	"invalid-text": "Portable export contains unsupported text",
 } as const;
@@ -616,12 +618,62 @@ export function parsePortableExportV1(input: string): PortableExportV1 {
 	return validatePortableExportV1Value(parseBoundedPortableJson(input));
 }
 
-// Resource bounds belong to parseBoundedPortableJson before this shape check.
+// Apply aggregate domain budgets before recursive schema validation.
+export function validatePortableComplexity(
+	parsed: unknown,
+	checkpoint: () => void = () => {},
+): void {
+	const record = (value: unknown): Record<string, unknown> =>
+		value !== null && typeof value === "object" && !Array.isArray(value)
+			? (value as Record<string, unknown>)
+			: {};
+	const data = record(record(parsed).data);
+	let conditions = 0;
+	let panels = 0;
+	const checkFilter = (filter: unknown) => {
+		const pending = [{ value: filter, depth: 0 }];
+		while (pending.length) {
+			checkpoint();
+			const entry = pending.pop();
+			if (!entry) break;
+			if (entry.depth > MAX_NESTING)
+				throw new PortableExportValidationError("nesting-limit");
+			const children = record(entry.value).conditions;
+			if (!Array.isArray(children)) continue;
+			conditions += children.length;
+			if (conditions > 10_000)
+				throw new PortableExportValidationError("condition-limit");
+			for (const value of children)
+				pending.push({ value, depth: entry.depth + 1 });
+		}
+	};
+	const views = Array.isArray(data.views) ? data.views : [];
+	const dashboards = Array.isArray(data.dashboards) ? data.dashboards : [];
+	if (views.length + dashboards.length > MAX_ROWS)
+		throw new PortableExportValidationError("row-limit");
+	for (const view of views) {
+		checkpoint();
+		checkFilter(record(view).filter);
+	}
+	for (const dashboard of dashboards) {
+		checkpoint();
+		const items = record(dashboard).panels;
+		if (!Array.isArray(items)) continue;
+		panels += items.length;
+		if (panels > 1000) throw new PortableExportValidationError("panel-limit");
+		for (const panel of items) checkFilter(record(record(panel).source).filter);
+	}
+	checkpoint();
+}
+
 export function validatePortableExportV1Value(
 	parsed: unknown,
+	checkpoint: () => void = () => {},
 ): PortableExportV1 {
+	validatePortableComplexity(parsed, checkpoint);
 	const validated = documentSchema.safeParse(parsed);
 	if (!validated.success || !unchanged(parsed, validated.data))
 		throw new PortableExportValidationError("invalid-export");
+	checkpoint();
 	return validated.data;
 }

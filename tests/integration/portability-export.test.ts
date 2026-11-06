@@ -1227,10 +1227,11 @@ describe("portable export", () => {
 		}
 	});
 
-	test("cancels blocked requests and limits exports to two users and one per user", async () => {
+	test("cancels blocked requests while allowing a third user and limiting each user", async () => {
 		const blocker = await pool.connect();
 		const first = new AbortController();
 		const second = new AbortController();
+		const third = new AbortController();
 		const app = new Elysia().use(portabilityRoutes(pool, guards));
 		const pending: Promise<Response>[] = [];
 		try {
@@ -1244,7 +1245,9 @@ describe("portable export", () => {
 			expect(await duplicate.json()).toEqual({ code: "export-busy" });
 			pending.push(app.handle(exportRequest("bob", second.signal)));
 			await expect.poll(waitingExports).toBe(2);
-			expect((await app.handle(exportRequest("outsider"))).status).toBe(429);
+			pending.push(app.handle(exportRequest("outsider", third.signal)));
+			await expect.poll(waitingExports).toBe(3);
+			third.abort();
 			first.abort();
 			second.abort();
 			for (const response of await Promise.all(pending)) {
@@ -1257,6 +1260,7 @@ describe("portable export", () => {
 		} finally {
 			first.abort();
 			second.abort();
+			third.abort();
 			await blocker.query("rollback");
 			await Promise.all(pending);
 			blocker.release();
