@@ -43,12 +43,12 @@
 		"clients": {
 			"sourceDigest": "f2138d935a7e40ef94cc561716c5b3e5387eae0e7892eb2bc09820d0b12f8cc2",
 			"docs": ["docs/cli.md", "docs/mcp.md"],
-			"note": "CLI output escapes terminal C1 and bidirectional controls while preserving decoded JSON values. MCP write tools are disabled until the fixed startup environment sets DITERO_MCP_ALLOW_WRITES=1; direct calls cannot bypass SDK disabling. Existing credentials, membership checks, strict schemas and idempotency rules remain authoritative."
+			"note": "Ship CLI/MCP/TUI JavaScript bundles for user-installed Bun 1.3.14+; document archive/checksum verification, MCP launch, JSON --version, BUILDINFO building-Bun identity, source URLs and notices/license texts covering every bundled or dependency-inlined package. The shebang uses --no-env-file and --config=/dev/null to prevent working-directory environment/preload injection. Minimum-version failure exits 2 and suffixes are tolerated. Scope is any Bun OS, qualified on Linux x64; rebuilds name tagged commit, building Bun and GNU tar. Commands, API envelopes, other exit codes and environment credentials remain unchanged. Standalone binary publication remains blocked/deferred. CLI output escapes terminal C1 and bidirectional controls while preserving decoded JSON values. MCP write tools are disabled until the fixed startup environment sets DITERO_MCP_ALLOW_WRITES=1; direct calls cannot bypass SDK disabling. Existing credentials, membership checks, strict schemas and idempotency rules remain authoritative."
 		},
 		"public-api": {
 			"sourceDigest": "4ec6216d4608c5af6ca443db1c25f9f2079e1be4b4d4147215946ea688b3f533",
 			"docs": ["docs/runbooks/public-api.md"],
-			"note": "Reject dot-segment identifiers in the shared public API ID schema so CLI and MCP workflows cannot normalize into another endpoint. Document redaction of calendar-feed capability segments in proxy, access and telemetry logs. No migration, stored format, mutator or API envelope changes."
+			"note": "Preserve minute, second and fractional-second ISO timestamp acceptance for task create/update/completion, observations and metadata. Offset-capable inputs retain explicit offsets or Z; UTC-only responses remain UTC-only. CSV retains acceptance and normalization. No API version or persisted format changes. Reject dot-segment identifiers in the shared public API ID schema so CLI and MCP workflows cannot normalize into another endpoint. Document redaction of calendar-feed capability segments in proxy, access and telemetry logs. No migration, stored format, mutator or API envelope changes."
 		}
 	}
 }
