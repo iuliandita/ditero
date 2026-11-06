@@ -9,7 +9,7 @@ slots/WAL senders, and direct connections. The bundled stack uses PostgreSQL 18.
 Use three database logins:
 
 - A migration owner that owns the database schema but is not a superuser.
-- A runtime login with DML privileges but no ownership, superuser, owner membership, or `BYPASSRLS`.
+- A runtime login with DML privileges but no RLS-table ownership, privileged role membership, `SUPERUSER`, `BYPASSRLS`, `CREATEROLE`, or `REPLICATION`.
 - A direct Zero login with the replication and schema privileges required by Zero.
 
 Create the owner and runtime roles before the first migration. As a database administrator, adapt and run:
@@ -41,6 +41,66 @@ this fix. Existing coordinated database/blob backups and client versions remain
 compatible. Application rollback can restore the former TEMP requirement
 and the 403 response for foreign attachment downloads; current downloads return
 404 for both foreign and missing IDs. Rollback needs no data conversion.
+
+## Runtime role and key-grant upgrade
+
+Migration `0092_database_role_boundaries` binds every new membership key to the
+recipient's actual membership, user and workspace, and requires the caller as
+granter even for self-grants. Request updates can change
+only `state`, `granted_at` and `failure_reason`; a trigger enforces this even
+when a custom or inherited role retains table-wide UPDATE. Existing rows are
+preserved. Membership-key updates can change only `enc`, `ciphertext` and
+`recipient_public_key`, matching identity rotation. The named runtime role also
+receives column-level UPDATE grants on both tables.
+
+The migration removes PUBLIC execution of the bounded focus expiry function.
+It automatically grants execution to every existing non-superuser role with
+DELETE on `public.focus_interval_start`, including custom runtime role names
+and roles receiving that privilege through inheritance. Read-only roles do not
+receive it. The built-in entrypoints migrate and then start the server, so this
+preserves existing cleanup authority without an intervening manual grant.
+
+Before upgrading Compose or Helm, stop app and Zero writers and back up the
+coordinated PostgreSQL, attachment and replica recovery set with the original
+secrets. Apply migrations with the existing migration owner. Initialization
+scripts do not rerun on retained database volumes; this migration applies the
+changes to existing databases as well as fresh installs. Deployment logins and
+Zero publications are unchanged. Helm does not provision database roles.
+
+For a runtime role created after migration, or a custom role whose previous
+grants did not include DELETE on `public.focus_interval_start`, grant cleanup
+execution before deploying the updated application. Adapt these commands to the
+runtime role name and run them as the migration owner:
+
+```sql
+revoke update on public.key_grant_request, public.membership_key from ditero_runtime;
+grant update (state, granted_at, failure_reason)
+  on public.key_grant_request to ditero_runtime;
+grant update (enc, ciphertext, recipient_public_key)
+  on public.membership_key to ditero_runtime;
+grant execute on function public.prune_focus_intervals() to ditero_runtime;
+```
+
+Do not restore blanket UPDATE grants over existing tables. Check inherited and
+PUBLIC grants too; PostgreSQL privileges are additive. Startup verifies cleanup
+EXECUTE access and names the exact GRANT to run when it is missing. A later
+pruning failure is logged independently and does not prevent reminder scanning.
+
+Production boot now rejects membership in any role with `SUPERUSER`, `BYPASSRLS`,
+`CREATEROLE` or `REPLICATION`, including indirect and NOINHERIT memberships. It
+also rejects direct ownership or owner membership for every RLS-enabled table,
+including private schemas. Hosted database consoles may automatically enroll new
+logins in provider administration roles, including roles with CREATEROLE. Check
+memberships before upgrading, and remove unintended grants before restart; do
+not disable the check to accommodate operator drift. See PostgreSQL's
+[role membership rules](https://www.postgresql.org/docs/18/role-membership.html).
+
+Verify startup, a recipient's key request, co-member fulfilment and scheduler
+expiry through the runtime login. No client format or encrypted-data conversion
+is involved; existing web and native client versions remain compatible. On app
+rollback, retain the migration, column grants and function ACL. The previous
+writers already use only the permitted columns and scheduler function. Restore
+the coordinated backup only if required; restoration discards newer changes.
 
 ## Better Auth 1.7 upgrade
 
@@ -207,7 +267,11 @@ create publication ditero_public for tables in schema public
 ```
 
 The schema publication requires an administrator/superuser and includes future
-tables in `public`. Zero creates its own internal publication and CDC/CVR schemas;
+tables in `public`. This includes authentication and key tables excluded from
+the browser schema: RLS does not restrict the replication login or remove those
+rows from the replica and its backups. Treat Zero storage and backup credentials
+as privileged database access. Zero creates its own internal publication and
+CDC/CVR schemas;
 database `CREATE` permits that lifecycle. `REPLICATION` permits logical decoding
 and `BYPASSRLS` permits complete initial snapshots. This is a privileged service
 login, never the application runtime login or a browser credential. Providers must

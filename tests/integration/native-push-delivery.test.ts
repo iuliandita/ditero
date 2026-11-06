@@ -149,6 +149,9 @@ beforeAll(async () => {
 	await pool.query(`grant update on "user", task, list, workspace, membership, task_assignee, user_pref,
 		notification_channel, task_notification_activation, task_notification_recipient
 		to ditero_native_delivery_runtime_test`);
+	await pool.query(
+		"grant execute on function public.prune_focus_intervals() to ditero_native_delivery_runtime_test",
+	);
 	await verifyRuntimeDatabaseRole(runtimePool);
 	await pool.query(
 		'insert into "user"(id,name,email,email_verified) values($1,$2,$3,true)',

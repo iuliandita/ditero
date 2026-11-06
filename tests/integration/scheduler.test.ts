@@ -3,6 +3,7 @@
 // ON CONFLICT insert, and the sweep are all database behaviors that a mock
 // would assert away. Instants are pinned rather than relative to wall-clock
 // now, so a DST-sensitive expansion is reproducible.
+import { randomUUID } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
@@ -13,11 +14,14 @@ import {
 	describe,
 	expect,
 	test,
+	vi,
 } from "vitest";
 import type { SchedulerTiming } from "../../src/config/scheduler.ts";
+import { verifyRuntimeDatabaseRole } from "../../src/db/runtime-role.ts";
 import * as tables from "../../src/db/schema.ts";
 import {
 	scanTick,
+	startScheduler,
 	withLeaderLock,
 } from "../../src/server/notifications/scheduler.ts";
 
@@ -208,6 +212,63 @@ afterAll(async () => {
 	await wipe();
 	await pool.end();
 	await otherPool.end();
+});
+
+test("pruning failure cannot starve reminder scans after a runtime grant is revoked", async () => {
+	const role = `scheduler_cleanup_${randomUUID().replaceAll("-", "")}`;
+	await pool.query(
+		`create role "${role}" nosuperuser nocreatedb nocreaterole noinherit nobypassrls`,
+	);
+	const runtimePool = new Pool({
+		connectionString: databaseURL,
+		options: `-c role=${role}`,
+		max: 2,
+	});
+	let scheduler: ReturnType<typeof startScheduler> | undefined;
+	const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+	try {
+		await pool.query(`grant usage on schema public to "${role}"`);
+		await pool.query(
+			`grant select, insert, update, delete on all tables in schema public to "${role}"`,
+		);
+		await pool.query(
+			`grant execute on function public.prune_focus_intervals() to "${role}"`,
+		);
+		await verifyRuntimeDatabaseRole(runtimePool);
+		await pool.query(
+			`revoke execute on function public.prune_focus_intervals() from "${role}"`,
+		);
+		await expect(
+			runtimePool.query("select public.prune_focus_intervals()"),
+		).rejects.toThrow(/permission denied for function/);
+		const now = new Date(Date.now() - 10_000);
+		await seedTask("sched-t-prune-failure", {
+			dueAt: now,
+			reminderTime: now.toISOString().slice(11, 16),
+		});
+		scheduler = startScheduler(
+			drizzle(runtimePool, { schema: tables }),
+			runtimePool,
+		);
+		scheduler.pause();
+		await scheduler.trigger();
+		const reminders = await remindersFor("sched-t-prune-failure");
+		expect(reminders).toHaveLength(1);
+		expect(await outboxFor(reminders[0].id)).toHaveLength(1);
+		expect(errors).toHaveBeenCalledWith(
+			"scheduler: focus interval pruning failed:",
+			expect.objectContaining({
+				code: "42501",
+				message: "permission denied for function prune_focus_intervals",
+			}),
+		);
+	} finally {
+		scheduler?.stop();
+		errors.mockRestore();
+		await runtimePool.end();
+		await pool.query(`drop owned by "${role}"`);
+		await pool.query(`drop role "${role}"`);
+	}
 });
 
 describe("withLeaderLock", () => {
