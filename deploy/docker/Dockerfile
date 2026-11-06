@@ -3,7 +3,7 @@
 # with the Elysia API from a single Bun runtime. Build context is the repo root
 # (build with `context: .`); this file lives at deploy/docker/Dockerfile.
 
-ARG RUNTIME_IMAGE=oven/bun:1.3.14-alpine@sha256:5acc90a93e91ff07bf72aa90a7c9f0fa189765aec90b47bdbf2152d2196383c0
+ARG RUNTIME_IMAGE=oven/bun:1.4.4-alpine@sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a
 ARG RUNTIME_VARIANT=alpine
 
 # --- build stage: install deps + build the web bundle -----------------------
@@ -28,11 +28,11 @@ COPY package.json bun.lock ./
 COPY patches ./patches
 RUN bun install --frozen-lockfile --production --omit=optional --omit=peer
 
-FROM rocicorp/zero:1.11.1@sha256:b27fe690d5873e97daf330bb883a2636688cbc65fe6d00a6c567c4cab28a26ba AS zero-base
+FROM rocicorp/zero:1.11.4@sha256:da55baa417adf670d07dd882ec90b9d9591f274a13347205cd2f71956433c057 AS zero-base
 
 # Keep upstream's PostgreSQL patch, but rebuild its dependency tree
 # from the reviewed lock so the vulnerable packages are actually replaced.
-FROM node:22.23.3-alpine3.24@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS zero-node
+FROM node:22.23.4-alpine3.24@sha256:0e1754758c2df4cfa3e68d59e2e1b7374bb7fd9ea6328eaaacf15cc934af8202 AS zero-node
 
 FROM zero-node AS zero-deps
 RUN corepack enable && corepack prepare pnpm@11.11.0 --activate
@@ -43,7 +43,7 @@ RUN pnpm install --prod --frozen-lockfile
 COPY deploy/docker/zero-runtime/verify.mjs ./
 
 # Rebuild the exact backup sources Zero ships, preserving both backup formats.
-FROM golang:1.27.3-alpine3.23@sha256:895e5feab11a4b3774d24ee3c9579028456b82ad37f42a9eb6f82adaf776a201 AS litestream-build
+FROM golang:1.27.3-alpine3.23@sha256:5d5113301ffcac84e2bfb20c42648803fecaea6789c89bb9b66884e18cbb30a7 AS litestream-build
 RUN apk add --no-cache build-base
 ENV GOTOOLCHAIN=local
 WORKDIR /src
@@ -66,7 +66,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     go build -mod=readonly -trimpath -ldflags "-s -w -X main.Version=v0.5.18-zero.16-ditero.1 -extldflags '-static'" \
     -tags osusergo,netgo,sqlite_omit_load_extension -o /out/litestream-v5 ./cmd/litestream
 
-FROM alpine:3.24.2@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6 AS zero-runtime
+FROM alpine:3.24.4@sha256:93b41ef40b1677fce8fcc64ff4af09daddfacf5040afde618bc46c1e2d1cc7d4 AS zero-runtime
 RUN apk add --no-cache 'ca-certificates=20261020-r0' 'curl=8.23.0-r0' 'brotli-libs=1.2.1-r0' \
 		'libcrypto3=3.5.9-r0' 'libssl3=3.5.9-r0' 'zlib=1.4-r0' 'libstdc++=15.2.0-r5' 'readline=8.3.3-r1' \
 		'musl=1.2.6-r3' 'musl-utils=1.2.6-r3'
@@ -125,7 +125,7 @@ RUN mkdir -p /rootfs/etc /rootfs/usr/bin /rootfs/usr/local/bin /rootfs/home/bun 
 	&& chown 1000:1000 /rootfs/home/bun /rootfs/data/attachments
 
 # gcr.io/distroless/base-debian13 (multi-arch index digest)
-FROM gcr.io/distroless/base-debian13@sha256:f5e95195e998742ff590b7569bae479accce1226e51ae6c3118954030121cdcb AS runtime-debian
+FROM gcr.io/distroless/base-debian13@sha256:075a33d9c49026ca7ee72738b4c4a1caea55d0f44227356e46a611a211050e20 AS runtime-debian
 COPY --from=debian-prep /rootfs/ /
 
 # --- runtime stage ----------------------------------------------------------
