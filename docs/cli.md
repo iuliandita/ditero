@@ -6,6 +6,9 @@ Later sections cover list, folder, comment, relationship, placement and webhook 
 
 ## Release bundles
 
+The [beta.5 release](https://github.com/iuliandita/ditero/releases/tag/v0.1.0-beta.5),
+published November 7, 2026, includes the client archive.
+
 Each release publishes `ditero-VERSION-clients.tar.gz` with the CLI
 (`ditero-cli.js`), the stdio MCP server (`ditero-mcp.js`) and the terminal UI
 (`ditero-tui.js`) as minified JavaScript bundles. They run on a Bun you install

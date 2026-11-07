@@ -4,9 +4,9 @@ Ditero builds server containers and native clients from one release commit. Deve
 happens on `develop`; `0.x.y` releases are prereleases. Stable `1.x.y` releases come
 from `main`. Every change lands through a PR.
 
-`0.1.0-beta.5` is the fifth beta being prepared. Beta remains a `0.x` prerelease
-with breaking changes possible, not a stable release. Until publication completes,
-use the [latest published downloads](https://github.com/iuliandita/ditero/releases).
+`0.1.0-beta.5` is the fifth beta, published November 7, 2026. Beta remains a `0.x`
+prerelease with breaking changes possible, not a stable release. See the
+[published downloads](https://github.com/iuliandita/ditero/releases/tag/v0.1.0-beta.5).
 
 ## Build artifacts
 
@@ -99,7 +99,7 @@ those behaviors. See the [Android](apps/android/README.md) and
 | `0.1.0-beta.2` | Second beta version |
 | `0.1.0-beta.3` | Third beta tag, never published (#1267) |
 | `0.1.0-beta.4` | Fourth beta version |
-| `0.1.0-beta.5` | Fifth beta version (in preparation) |
+| `0.1.0-beta.5` | Fifth beta version |
 | `X.Y.Z`, `X.Y`, `X`, `latest` | Stable releases, starting at `1.0.0` |
 | `stable` | Stable release explicitly promoted after a week |
 

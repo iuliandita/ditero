@@ -30,7 +30,7 @@ channels, or a user-supplied PostgreSQL instance).
 ## Supported Versions
 
 Security fixes target the latest published prerelease (currently
-[`v0.0.1-alpha.12`](https://github.com/iuliandita/ditero/releases/tag/v0.0.1-alpha.12))
+[`v0.1.0-beta.5`](https://github.com/iuliandita/ditero/releases/tag/v0.1.0-beta.5))
 and `develop`/nightly builds. Older prereleases receive no backported fixes. There is
 no stable release or stable support window yet; native qualification remains
 in progress as described in the [README](README.md).
