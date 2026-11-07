@@ -199,8 +199,11 @@ export function channelHealth(
 	row: ChannelHealthRow | null,
 ): ChannelHealth {
 	if (stored === null) return { state: "unconfigured" };
-	const verifiedAt = row?.verifiedAt ?? stored.verifiedAt;
 	const ackVerifiedAt = row?.ackVerifiedAt ?? stored.ackVerifiedAt;
+	const verifiedAt =
+		stored.kind === "email"
+			? ackVerifiedAt
+			: (row?.verifiedAt ?? stored.verifiedAt);
 	const errorAt = row?.lastErrorAt ?? null;
 	const code = row?.lastErrorCode ?? null;
 	if (
@@ -225,8 +228,14 @@ export function channelHealth(
 export function rowUnavailable(
 	kind: ChannelKind,
 	capabilities: ChannelCapabilities,
-): "email_smtp_missing" | "channel_unavailable" | null {
+):
+	| "email_smtp_missing"
+	| "email_public_url_missing"
+	| "channel_unavailable"
+	| null {
 	if (kind === "email" && !capabilities.email) return "email_smtp_missing";
+	if (kind === "email" && !capabilities.ackBaseUrl)
+		return "email_public_url_missing";
 	if (capabilities.available && !capabilities.available.includes(kind))
 		return "channel_unavailable";
 	return null;
@@ -253,6 +262,7 @@ export type ChannelWarning =
 	| "channel_unavailable"
 	| "app_mode_no_public_url"
 	| "email_smtp_missing"
+	| "email_public_url_missing"
 	| "email_delivery_paused"
 	| "telegram_webhook_unreachable";
 
@@ -278,6 +288,7 @@ export function rowWarnings(
 	if (stored !== null && kind === "email" && !capabilities.email) {
 		warnings.push("email_delivery_paused");
 	}
+
 	if (
 		kind === "telegram" &&
 		capabilities.telegramTransport === "webhook" &&
@@ -323,4 +334,26 @@ export function channelFieldErrors(
 		errors[field.key] = !values[field.key] ? "required" : "invalid";
 	}
 	return errors;
+}
+
+export function channelDeliveryStatus(
+	rows: readonly {
+		kind: string;
+		enabled: boolean | null;
+		verifiedAt: number | null;
+		ackVerifiedAt: number | null;
+	}[],
+): { allUnverified: boolean; unconfirmedEmail: boolean } {
+	const enabled = rows.filter((row) => row.enabled);
+	return {
+		allUnverified:
+			enabled.length > 0 &&
+			enabled.every(
+				(row) =>
+					(row.kind === "email" ? row.ackVerifiedAt : row.verifiedAt) === null,
+			),
+		unconfirmedEmail: enabled.some(
+			(row) => row.kind === "email" && row.ackVerifiedAt === null,
+		),
+	};
 }

@@ -149,7 +149,7 @@ export function ackBaseUrl(
 // clock on every accepted request floors the credit to 0 forever, so the
 // steady-state refill would be exactly zero rather than refillPerSec.
 export async function takeRateToken(
-	database: Database,
+	database: Database | DbTransaction,
 	key: string,
 	capacity: number,
 	refillPerSec: number,

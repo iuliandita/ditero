@@ -358,6 +358,7 @@ beforeAll(async () => {
 				"telegram",
 				{ botToken: BOT_A, chatId: CHAT_A },
 				channelKeyRing(process.env),
+				USER_A,
 			),
 		},
 		{
@@ -368,6 +369,7 @@ beforeAll(async () => {
 				"telegram",
 				{ botToken: BOT_B, chatId: CHAT_B },
 				channelKeyRing(process.env),
+				USER_B,
 			),
 		},
 	]);

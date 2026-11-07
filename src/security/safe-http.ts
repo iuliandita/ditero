@@ -42,12 +42,13 @@ export class OutboundPolicyError extends Error {
 	}
 }
 
-type Resolver = {
+export type Resolver = {
 	resolve4: (hostname: string) => Promise<string[]>;
 	resolve6: (hostname: string) => Promise<string[]>;
 };
 
 type SafeFetchOptions = {
+	channelPolicy?: boolean;
 	method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 	headers?: HeadersInit;
 	body?: string | Uint8Array;
@@ -142,6 +143,23 @@ export function assertPublicAddress(
 	);
 }
 
+function assertTransportPolicy(
+	url: URL,
+	value: string,
+	allow: readonly Network[],
+): void {
+	const address = assertNotForbidden(value);
+	// The operator's private-network grant covers self-hosted services, including
+	// their HTTP listeners and custom ports. Public addresses never inherit it.
+	if (address.range() !== "unicast" && matchesAny(address, allow)) return;
+	if (url.protocol !== "https:") {
+		throw new OutboundPolicyError("Public outbound URLs require HTTPS");
+	}
+	if (url.port && url.port !== "443" && url.port !== "80") {
+		throw new OutboundPolicyError("Public outbound URL port must be 80 or 443");
+	}
+}
+
 async function resolveFamily(
 	resolver: (hostname: string) => Promise<string[]>,
 	hostname: string,
@@ -159,10 +177,12 @@ export async function resolvePinnedTarget(
 	hostname: string,
 	resolver: Resolver = { resolve4, resolve6 },
 	allowedPrivateCIDRs: readonly Network[] = [],
+	url?: URL,
 ): Promise<{ address: string; family: 4 | 6 }> {
 	const literal = normalizedHostname(hostname);
 	if (ipaddr.isValid(literal)) {
 		assertPublicAddress(literal, allowedPrivateCIDRs);
+		if (url) assertTransportPolicy(url, literal, allowedPrivateCIDRs);
 		return {
 			address: literal,
 			family: ipaddr.parse(literal).kind() === "ipv4" ? 4 : 6,
@@ -183,6 +203,7 @@ export async function resolvePinnedTarget(
 	if (answers.length === 0) throw new Error("Outbound target did not resolve");
 	for (const answer of answers) {
 		assertPublicAddress(answer.address, allowedPrivateCIDRs);
+		if (url) assertTransportPolicy(url, answer.address, allowedPrivateCIDRs);
 	}
 	return answers[0];
 }
@@ -227,6 +248,7 @@ export async function safeFetch(
 		url.hostname,
 		deps.resolver,
 		options.allowedPrivateCIDRs,
+		options.channelPolicy ? url : undefined,
 	);
 	const requestFn =
 		deps.requestFn ?? (url.protocol === "https:" ? httpsRequest : httpRequest);

@@ -48,7 +48,7 @@ describe("channelCapabilities", () => {
 		).toBe(true);
 	});
 
-	it("separates SMTP from the public URL", () => {
+	it("reports missing public URL separately from SMTP", () => {
 		expect(channelCapabilities(SMTP)).toMatchObject({
 			ackBaseUrl: false,
 			email: true,

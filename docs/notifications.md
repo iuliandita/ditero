@@ -4,7 +4,7 @@ Ditero can remind you about due tasks and habit occurrences, and can notify you
 about assignments, `@`-mentions, and overdue tasks.
 
 ntfy, Telegram, Discord, Slack, and email are supported. Email requires operator
-SMTP configuration. Discord and Slack have send-only webhook modes and interactive
+SMTP configuration and a public base URL for address verification. Discord and Slack have send-only webhook modes and interactive
 app modes; app modes require a public listener on your Ditero server. Settings
 only offers setup for channels the server reports available. Missing or invalid
 settings show repair guidance beside each affected field.
@@ -20,6 +20,9 @@ Two independent loops:
   advisory lock). Every tick it expands reminder-bearing tasks over the window
   `[now - grace, now]`, creates one `reminder_state` row per
   (occurrence, recipient), applies quiet hours, and drives the escalation ladder.
+  Reminder candidates and their recipient preferences are loaded in ordered batches
+  of 100 tasks. Each tick traverses every batch in the same fixed grace window;
+  batching bounds memory and query results, not total tick duration.
   It writes to the outbox; it never sends.
 - **Outbox worker** (runs on *every* replica, no leader). Claims queued rows with
   `FOR UPDATE SKIP LOCKED`, sends them, and writes the outcome back behind a
@@ -32,15 +35,14 @@ cannot stall the scan.
 ## Channel setup (ntfy)
 
 1. Settings -> Notifications -> ntfy.
-2. **Server URL** — your ntfy server, `http(s)` only. By default it must resolve
-   to a public address; see [private ntfy servers](#private-ntfy-servers).
+2. **Server URL** — your ntfy server. Public targets require HTTPS on port
+   80 or 443; see [private ntfy servers](#private-ntfy-servers).
 3. **Topic** — 1-64 characters, `A-Z a-z 0-9 _ -` only.
 4. **Token** — optional ntfy access token. Printable ASCII, no spaces, max 256
    characters. It is encrypted at rest and never returned to the browser; the
    form shows a masked placeholder instead.
 5. **Send test** — bounded to a burst of 5 with one refill per minute per user.
-   Failures are reported as one of three categories (unreachable, rejected,
-   timed out); the raw provider response is never shown, because it can contain
+   Failures identify unreachable, rejected, timed-out, or disallowed destinations; the raw provider response is never shown, because it can contain
    your URL or token.
 
 Pick a **high-entropy topic name** and set a token. An ntfy topic with no access
@@ -54,7 +56,10 @@ than queueing forever.
 
 The operator can allow specific private destinations with
 `DITERO_NOTIFY_ALLOWED_PRIVATE_CIDRS`. Use the narrowest CIDR for the intended
-server; it permits every instance user to send to that range. Loopback, link-local,
+server; it permits every instance user to send to that range, using HTTP or
+HTTPS and custom ports. This is an operator grant for self-hosted listeners;
+HTTP sends credentials without transport encryption. Every DNS answer must satisfy
+the transport and address policy, including mixed public/private answers. Loopback, link-local,
 metadata, and other never-allowed ranges remain blocked. See the
 [egress boundary](security.md#notification-egress-and-ntfy-topics).
 
@@ -75,8 +80,33 @@ use the test message's acknowledgement control to verify the return path too.
 
 Settings supplies the Discord and Slack interactions URLs for provider setup.
 App mode is refused without `DITERO_PUBLIC_URL` or a usable `BETTER_AUTH_URL`.
-Email configuration is refused when SMTP is unavailable. SMTP settings and secrets
+Discord and Slack webhook URLs require HTTPS on the default port.
+Enabling or testing email is refused when SMTP or the public base URL is unavailable; disabling or removing a stored channel remains available. SMTP settings and secrets
 are documented in [.env.example](../.env.example).
+
+Email channels remain pending after saving. Use **Send test**, then open the link
+in the delivered message to confirm the destination. SMTP acceptance is shown as
+sent; recipient confirmation is required before reminders, escalations or events
+can be queued or delivered. Previously queued mail is discarded if its address
+is still unconfirmed when the worker processes it; confirming later does not
+recover those discarded messages. Changing the address
+clears that proof and invalidates outstanding verification links. Existing email
+channels without recipient confirmation must complete this step too. Startup logs
+the number of affected enabled channels; Settings and reminder warnings explain
+how to confirm the address, even if another channel is working.
+
+Verification and scheduled email share a persistent per-user budget: a burst of
+20 sends, refilling one per minute. The separate test-send budget still applies.
+Changing addresses or restarting a replica does not reset it. Failed SMTP sends do
+not consume this budget. Sends for one owner are serialized across replicas, and
+charges commit only after SMTP acceptance. A depleted budget defers queued mail
+for 60 seconds without consuming a delivery attempt; provider failures still use
+the normal retry ladder. Test sends report the exhausted mail budget before
+changing the stored destination or creating a verification link.
+
+The stricter HTTPS/port policy above applies to notification channels. Native
+UnifiedPush endpoints and the operator-configured relay retain their existing
+HTTPS and address policies, including HTTPS listeners on nonstandard ports.
 
 ## Native system notices
 
@@ -329,3 +359,24 @@ phone in do-not-disturb, or the drop paths above will each cost you reminders.
 Do not use Ditero as the only thing standing between someone and a missed dose.
 Use a dedicated pill dispenser, a pharmacy service, or a device intended for the
 purpose, and treat Ditero as a convenience on top.
+
+## Upgrading channel delivery safeguards
+
+Apply migration `0097` with the migration role before starting the updated app.
+It follows landed migrations 0092 through 0096 without changing their SQL or
+ledger entries. It adds the `email_unconfirmed` and `email_budget` channel error categories. Deploy
+the updated server and web UI together, and reload open browser and native web
+views so they recognize the new categories and confirmation warnings.
+
+The enum additions can remain during rollback. Before starting an older UI, clear
+these new health codes with the migration role:
+
+```sql
+UPDATE notification_channel
+SET last_error_code = NULL, last_error_at = NULL
+WHERE last_error_code::text IN ('email_unconfirmed', 'email_budget');
+```
+
+For encrypted channel credentials, also follow the rollback instructions in
+[Encryption Operations](runbooks/encryption.md); older versions pass v2 envelopes
+through as plaintext rather than decrypting them.

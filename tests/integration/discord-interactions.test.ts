@@ -315,6 +315,7 @@ beforeAll(async () => {
 					channelId: CHANNEL_A,
 				},
 				ring,
+				id,
 			),
 		})),
 		// A SECOND Discord app on its own channel: without it, "signed by the
@@ -332,6 +333,7 @@ beforeAll(async () => {
 					channelId: CHANNEL_B,
 				},
 				ring,
+				OTHER,
 			),
 		},
 		// Webhook mode carries no public key and dispatches no interaction; it
@@ -347,6 +349,7 @@ beforeAll(async () => {
 					webhookUrl: "https://discord.com/api/webhooks/1/abcdefabcdefabcdef",
 				},
 				ring,
+				WEBHOOK_USER,
 			),
 		},
 	]);

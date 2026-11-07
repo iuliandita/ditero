@@ -42,10 +42,13 @@ import {
 	ackToken,
 	hashAckToken,
 } from "./capability.ts";
+import { EmailBudgetExhausted, withEmailBudget } from "./email-budget.ts";
 import { createNativeDelivery } from "./native-delivery.ts";
 import type { OutboxRow, SendFn } from "./worker.ts";
 
 type Database = NodePgDatabase<typeof tables>;
+type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
+type ChannelDatabase = Database | Transaction;
 
 // The `kind` literal is what is load-bearing: unknown payloads fail closed as
 // permanently undeliverable rather than rendering an empty notification.
@@ -172,9 +175,12 @@ async function loadChannelConfig(
 	userId: string,
 	kind: ChannelKind,
 	ring: FieldKeyRing | null,
-): Promise<{ config: unknown } | null> {
+): Promise<{ config: unknown; confirmed: boolean } | null> {
 	const rows = await database
-		.select({ config: tables.notificationChannel.config })
+		.select({
+			config: tables.notificationChannel.config,
+			ackVerifiedAt: tables.notificationChannel.ackVerifiedAt,
+		})
 		.from(tables.notificationChannel)
 		.where(
 			and(
@@ -188,10 +194,12 @@ async function loadChannelConfig(
 	// Single decrypt point for the send path: the adapters receive cleartext and
 	// nothing else in the pipeline reads this column.
 	return {
+		confirmed: kind !== "email" || rows[0].ackVerifiedAt !== null,
 		config: decryptChannelConfig(
 			kind,
 			rows[0].config as Record<string, unknown>,
 			ring,
+			userId,
 		),
 	};
 }
@@ -202,7 +210,7 @@ async function loadChannelConfig(
 // valid until expiry, which is harmless because every one of them is bound to
 // the same reminder, recipient and action, so any of them acking is correct.
 async function mintAckUrl(
-	database: Database,
+	database: ChannelDatabase,
 	row: OutboxRow,
 	ackBaseUrl: string | null,
 ): Promise<string | null> {
@@ -271,18 +279,37 @@ export function createSendFn(deps: DispatchDeps): SendFn {
 					`dispatch: ${row.channelKind} channel is not configured or is disabled`,
 				);
 			}
-			const ackUrl = await mintAckUrl(deps.database, row, deps.ackBaseUrl);
-			return await adapter.send(
-				channel.config,
-				{ ...payload, ackUrl },
-				{
-					allowedPrivateCIDRs: deps.allowedPrivateCIDRs,
-					deadlineMs: deps.deadlineMs,
-					signal,
-					fetch: deps.fetch,
-				},
-			);
+			if (!channel.confirmed)
+				return {
+					ok: false,
+					status: 409,
+					errorCode: "email_unconfirmed",
+					error:
+						"email: recipient confirmation required; queued mail discarded",
+				};
+			const send = async (database: ChannelDatabase) => {
+				const ackUrl = await mintAckUrl(database, row, deps.ackBaseUrl);
+				return await adapter.send(
+					channel.config,
+					{ ...payload, ackUrl },
+					{
+						allowedPrivateCIDRs: deps.allowedPrivateCIDRs,
+						deadlineMs: deps.deadlineMs,
+						signal,
+						fetch: deps.fetch,
+					},
+				);
+			};
+			return row.channelKind === "email"
+				? await withEmailBudget(deps.database, row.recipientUserId, send)
+				: await send(deps.database);
 		} catch (error) {
+			if (error instanceof EmailBudgetExhausted)
+				return {
+					ok: false,
+					errorCode: "email_budget",
+					error: "email: notification mail budget exhausted",
+				};
 			// An adapter that breaks its never-throw contract, or a failed
 			// capability insert, must not strand the row in `sending` until its
 			// lease expires.

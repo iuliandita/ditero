@@ -306,3 +306,26 @@ work and revoke departed members' webhooks before accepting traffic.
 
 Client versions: existing browser and native clients can use the updated server.
 Guardians must remove their managed accounts from a workspace before departing.
+
+## Notification channel safeguards upgrade
+
+Before upgrade, keep the coordinated PostgreSQL backup, original encryption keys,
+and channel credentials. Apply migration `0097` with the migration role before
+starting the updated server, and deploy its web UI at the same time. Reload
+browser clients and native web views so they recognize the new email health codes.
+Apply it after the landed role, attachment and membership migrations 0092 through
+0096; do not renumber or replace their SQL, snapshots or journal entries. The
+migration adds enum values; it does not rewrite encrypted credentials.
+
+Startup counts enabled unconfirmed email channels and legacy unbound channel rows.
+Users must confirm email through Send test. Previously queued unconfirmed mail is
+discarded; budget-limited mail waits without consuming attempts. Run the verified
+channel backfill before retiring any old encryption key or format.
+
+For rollback, retain the additive enum values and clear the new email health codes
+before starting an older UI, using the statement in
+[Notifications](../notifications.md#upgrading-channel-delivery-safeguards).
+Older applications pass v2 channel ciphertext through as plaintext credentials.
+Restore matching application/database backups with their original keys, or re-save
+affected channels with their original plaintext credentials after downgrade and
+verify delivery. Restoring a pre-upgrade backup discards later changes.

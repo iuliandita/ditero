@@ -67,7 +67,7 @@ export function ReminderChip({ task }: { task: Task }) {
 	const { pref } = useUserPref();
 	const { current } = useReminderStates(task.id);
 	const activation = useTaskImportActivation(task.id);
-	const { allUnverified } = useChannelDeliveryStatus();
+	const { allUnverified, unconfirmedEmail } = useChannelDeliveryStatus();
 	const [error, setError] = useState<string | null>(null);
 
 	// Completion is the terminal state that matters: an acked chip on a done
@@ -118,12 +118,14 @@ export function ReminderChip({ task }: { task: Task }) {
 			>
 				{m.reminder_ack_chip({ status: text })}
 			</button>
-			{allUnverified && (
+			{(allUnverified || unconfirmedEmail) && (
 				<span
 					data-testid="reminder-unverified-note"
 					className="text-xs text-muted-foreground"
 				>
-					{m.reminder_channel_unverified()}
+					{unconfirmedEmail
+						? m.channel_email_verification_required()
+						: m.reminder_channel_unverified()}
 				</span>
 			)}
 			{error && (

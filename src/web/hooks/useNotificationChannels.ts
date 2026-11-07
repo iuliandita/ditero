@@ -5,6 +5,7 @@ import { m } from "../../paraglide/messages.js";
 import { queries } from "../../zero/queries.ts";
 import {
 	type ChannelCapabilities,
+	channelDeliveryStatus,
 	DEFAULT_CAPABILITIES,
 	type InteractionsUrls,
 } from "../components/settings/channel-form.ts";
@@ -32,21 +33,19 @@ export type ChannelView = {
 export type TestResult =
 	| { state: "untested" }
 	| { state: "verified"; at: number }
+	| { state: "sent"; at: number }
 	| { state: "failed"; reason: string };
 
 // Delivery readiness, read straight off the synced notification_channel rows
 // (config is omitted at the drizzle-zero layer, enabled/verified_at are not).
 // Deliberately not the API hook above: the reminder chip renders per task row
 // and must not fire an HTTP request each time.
-export function useChannelDeliveryStatus(): { allUnverified: boolean } {
+export function useChannelDeliveryStatus(): {
+	allUnverified: boolean;
+	unconfirmedEmail: boolean;
+} {
 	const [rows] = useQuery(queries.notificationChannels.mine());
-	return useMemo(() => {
-		const enabled = rows.filter((r) => r.enabled);
-		return {
-			allUnverified:
-				enabled.length > 0 && enabled.every((r) => r.verifiedAt == null),
-		};
-	}, [rows]);
+	return useMemo(() => channelDeliveryStatus(rows), [rows]);
 }
 
 async function post(path: string, body: unknown): Promise<Response> {
@@ -139,12 +138,20 @@ export function useNotificationChannels(): {
 				return { state: "failed", reason };
 			}
 			const data = (await res.json()) as
-				| { ok: true; verifiedAt: number }
+				| { ok: true; verifiedAt: number | null; sentAt: number }
 				| { ok: false; reason: string };
 			await reload();
 			return data.ok
-				? { state: "verified", at: data.verifiedAt }
-				: { state: "failed", reason: data.reason };
+				? data.verifiedAt === null
+					? { state: "sent", at: data.sentAt }
+					: { state: "verified", at: data.verifiedAt }
+				: {
+						state: "failed",
+						reason:
+							data.reason === "outbound_url_policy"
+								? channelSaveErrorMessage(data.reason)
+								: data.reason,
+					};
 		},
 		[reload],
 	);

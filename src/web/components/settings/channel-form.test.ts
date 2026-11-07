@@ -539,3 +539,38 @@ describe("field-level repair guidance", () => {
 		expect(rowUnavailable("ntfy", caps({ available: ["ntfy"] }))).toBeNull();
 	});
 });
+
+describe("email verification health", () => {
+	it("SMTP acceptance does not establish recipient verification", () => {
+		const row = stored("email", { address: "recipient@example.test" }, T0);
+		expect(channelHealth(row, null)).toEqual({ state: "untested" });
+		expect(channelHealth({ ...row, ackVerifiedAt: T0 + 1 }, null)).toEqual({
+			state: "verified",
+			at: T0 + 1,
+			ackProven: true,
+		});
+	});
+});
+
+describe("email upgrade repair", () => {
+	it("warns about any unconfirmed email even when another channel works", async () => {
+		const { channelDeliveryStatus } = await import("./channel-form.ts");
+		const pending = stored("email", { address: "recipient@example.test" }, T0);
+		const working = stored("ntfy", { topic: "alerts" }, T0);
+		expect(channelDeliveryStatus([pending, working])).toEqual({
+			allUnverified: false,
+			unconfirmedEmail: true,
+		});
+		expect(
+			channelDeliveryStatus([{ ...pending, enabled: false }, working])
+				.unconfirmedEmail,
+		).toBe(false);
+	});
+	it("names a missing public URL and keeps the stored row editable", () => {
+		const row = stored("email", { address: "recipient@example.test" });
+		const unavailable = rowUnavailable("email", caps({ ackBaseUrl: false }));
+		expect(unavailable).toBe("email_public_url_missing");
+		expect(rowWarnings("email", caps({ ackBaseUrl: false }), row)).toEqual([]);
+		expect(rowFrozen(unavailable, row)).toBe(false);
+	});
+});

@@ -8,6 +8,7 @@ import { Cron } from "croner";
 import {
 	and,
 	eq,
+	gt,
 	gte,
 	inArray,
 	isNotNull,
@@ -150,6 +151,8 @@ type TaskRow = {
 // reminderTime, so only tasks anchored near the window can produce one. A
 // recurring task's dueAt is the series anchor and can sit years back, so it is
 // never bounded here. The pad exceeds reminder-window's own widening.
+export const REMINDER_SCAN_BATCH_SIZE = 100;
+
 const ANCHOR_PAD_MS = 3 * 24 * 3_600_000;
 
 // Payload shape is deliberately minimal; Task 12's adapters own rendering.
@@ -324,6 +327,7 @@ async function loadTasks(
 	database: Database | Transaction,
 	from: Date,
 	to: Date,
+	after: string | undefined,
 ): Promise<TaskRow[]> {
 	return await database
 		.select({
@@ -350,6 +354,7 @@ async function loadTasks(
 		.where(
 			and(
 				producerVisible,
+				after === undefined ? undefined : gt(tables.task.id, after),
 				isNotNull(tables.task.reminderTime),
 				or(
 					isNotNull(tables.task.dueAt),
@@ -364,7 +369,9 @@ async function loadTasks(
 					),
 				),
 			),
-		);
+		)
+		.orderBy(tables.task.id)
+		.limit(REMINDER_SCAN_BATCH_SIZE);
 }
 
 async function createDueReminders(
@@ -375,13 +382,36 @@ async function createDueReminders(
 	summary: TickSummary,
 	options: TickOptions,
 ): Promise<void> {
-	const taskRows = await database.transaction((tx) =>
-		withDrizzleProducerActivationScan(tx, (scoped) =>
-			loadTasks(scoped, from, now),
-		),
-	);
-	if (taskRows.length === 0) return;
+	let after: string | undefined;
+	for (;;) {
+		const taskRows = await database.transaction((tx) =>
+			withDrizzleProducerActivationScan(tx, (scoped) =>
+				loadTasks(scoped, from, now, after),
+			),
+		);
+		if (taskRows.length === 0) return;
+		after = taskRows[taskRows.length - 1].id;
+		await createDueReminderBatch(
+			database,
+			taskRows,
+			now,
+			from,
+			timing,
+			summary,
+			options,
+		);
+	}
+}
 
+async function createDueReminderBatch(
+	database: Database,
+	taskRows: TaskRow[],
+	now: Date,
+	from: Date,
+	timing: SchedulerTiming,
+	summary: TickSummary,
+	options: TickOptions,
+): Promise<void> {
 	const assignees = await database
 		.select({
 			taskId: tables.taskAssignee.taskId,
