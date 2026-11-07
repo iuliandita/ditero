@@ -3,6 +3,7 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { PoolClient, QueryResultRow } from "pg";
 import * as tables from "../db/schema.ts";
 import { UserContextError } from "../db/user-context.ts";
+import { canIssueInvite } from "../domain/invite.ts";
 import {
 	type TaskActivationClient,
 	type TaskActivationLookup,
@@ -10,6 +11,7 @@ import {
 } from "../server/notifications/task-activation.ts";
 import { taskActivationClientFromDrizzle } from "../server/notifications/task-activation-drizzle.ts";
 import { reconcileActiveTaskRecipients } from "../zero/task-activation-transition.ts";
+import { memberInvitePolicy } from "./membership-role.ts";
 
 type Database = NodePgDatabase<typeof tables>;
 type DrizzleTransaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -19,6 +21,25 @@ export type InviteQuery = (
 	values: unknown[],
 ) => Promise<Row[]>;
 type Evidence = { rows: number; bytes: number };
+
+async function requireInviteCreator(
+	query: InviteQuery,
+	members: Row[],
+	inviterId: string,
+	role: string,
+): Promise<void> {
+	const creator = members.find((member) => member.user_id === inviterId);
+	const live = await query(
+		`select u.id from "user" u where u.id=$1 and u.deleted_at is null
+		and not exists (select 1 from managed_account a where a.user_id=u.id and a.restricted)`,
+		[inviterId],
+	);
+	if (
+		live.length !== 1 ||
+		!canIssueInvite(creator?.role, role, memberInvitePolicy(process.env))
+	)
+		throw new InviteTaskUnavailable("missing");
+}
 
 const MAX_EVIDENCE_ROWS = 50_000;
 const MAX_EVIDENCE_BYTES = 64 * 1024 * 1024;
@@ -248,6 +269,8 @@ export async function lockInviteMembership(
 	)
 		throw new InviteAuthorityChanged();
 	if (input.insert)
+		await requireInviteCreator(query, members, input.inviterId, input.role);
+	if (input.insert)
 		await query(
 			"insert into membership (id,user_id,workspace_id,role) values ($1,$2,$3,$4) on conflict (user_id,workspace_id) do nothing",
 			[
@@ -375,6 +398,13 @@ export async function lockInviteTask(
 	)
 		throw new InviteAuthorityChanged();
 	if (input.inviteeId && input.membershipRole) {
+		if (!input.inviterId) throw new InviteTaskUnavailable("missing");
+		await requireInviteCreator(
+			query,
+			observedMembers,
+			input.inviterId,
+			input.membershipRole,
+		);
 		await query(
 			`insert into membership (id, user_id, workspace_id, role)
 			 values ($1,$2,$3,$4) on conflict (user_id, workspace_id) do nothing`,

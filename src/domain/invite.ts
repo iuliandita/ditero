@@ -48,3 +48,22 @@ export function canRedeem(inv: InviteRow, now: number): boolean {
 export function newInviteToken(): string {
 	return randomId();
 }
+
+export function canIssueInvite(
+	creatorRole: unknown,
+	inviteRole: string,
+	policy: "allow" | "admin",
+): boolean {
+	const admin = creatorRole === "owner" || creatorRole === "admin";
+	switch (inviteRole) {
+		case "owner":
+			return creatorRole === "owner";
+		case "admin":
+			return admin;
+		case "member":
+		case "viewer":
+			return admin || (policy === "allow" && creatorRole === "member");
+		default:
+			return false;
+	}
+}

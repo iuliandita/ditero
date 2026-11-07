@@ -204,7 +204,8 @@ export async function claimFastInvite(
 					actorId: userId,
 					inviteeId: userId,
 					inviterId: observed.created_by,
-					membershipRole: observed.role,
+					membershipRole:
+						observed.claimed_by === userId ? undefined : observed.role,
 				});
 				await lockInviteEvidence(query, lockedTask);
 			} catch (error) {
@@ -223,7 +224,7 @@ export async function claimFastInvite(
 					actorId: userId,
 					inviterId: observed.created_by,
 					role: observed.role,
-					insert: true,
+					insert: observed.claimed_by !== userId,
 				});
 			} catch (error) {
 				if (error instanceof InviteTaskUnavailable)
@@ -465,6 +466,11 @@ export async function finalizeFastInvite(
 			}
 		}
 		const invite = await lockedInvite(client, token);
+		const member = await client.query(
+			"select id from membership where user_id=$1 and workspace_id=$2",
+			[userId, invite.workspace_id],
+		);
+		if (member.rowCount !== 1) throw new FastInviteError("not_found");
 		if (!sameAttachment(observed, invite))
 			throw new FastInviteError("conflict");
 		if (
