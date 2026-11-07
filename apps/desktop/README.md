@@ -1,5 +1,8 @@
 # Desktop development
 
+The [beta.5 downloads](https://github.com/iuliandita/ditero/releases/tag/v0.1.0-beta.5),
+published November 7, 2026, include experimental desktop installers.
+
 This is the work-in-progress Tauri 2 desktop core for #346. It bundles the Android
 application's shared React entry and scoped sync/encryption runtime. The desktop
 adapter provides the same closed native message protocol through Tauri commands

@@ -7,6 +7,15 @@ Back up your database and attachments before upgrading, and retain the original
 encryption keys and service secrets. Breaking changes remain possible throughout
 the `0.x` prereleases.
 
+## 0.1.0-beta.5 - 2026-11-07
+
+- Improves invitation and workspace membership rules, attachment lifecycle and
+  recovery, notification delivery, and authentication boundaries.
+- Hardens container packaging and release inputs. The Debian app image remains
+  excluded from this release ([#1267](https://github.com/iuliandita/ditero/issues/1267)).
+- Native device qualification, trusted desktop signing, notarization, general deep
+  links and automatic updates remain incomplete.
+
 ## 0.1.0-beta.4 - 2026-11-05
 
 The `v0.1.0-beta.3` tag never published: its Debian app image failed the image

@@ -6,7 +6,7 @@ It replaces the earlier single-container supervisor candidate. Existing ordinary
 Compose and Helm deployments are unchanged. This source candidate is not published
 or runtime-qualified; earlier single-container results do not qualify this topology.
 
-The first beta remains a `0.x` prerelease. Its preparation does not qualify this
+The current beta remains a `0.x` prerelease. Its publication does not qualify this
 optional bundle or include it in the standard release assets.
 
 ## Build and image selection

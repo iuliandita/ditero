@@ -24,7 +24,7 @@ are included, with no subscriptions or paid feature unlocks.
 [Website](https://ditero.app/) | [Quick start](#run-it-docker-compose) | [Features](#available-on-develop) | [Documentation](#documentation) | [Roadmap](docs/ROADMAP.md) | [Changelog](CHANGELOG.md) | [Brand assets](assets/brand/README.md)
 
 > **Beta.** The latest published prerelease is
-> [`v0.1.0-beta.4`](https://github.com/iuliandita/ditero/releases/tag/v0.1.0-beta.4),
+> [`v0.1.0-beta.5`](https://github.com/iuliandita/ditero/releases/tag/v0.1.0-beta.5),
 > a `0.x` prerelease with breaking changes possible before `v1.0.0`. It is not
 > stable. The [changelog](CHANGELOG.md) describes it and earlier releases.
 > The native desktop archive-import entry remains unavailable pending transfer
@@ -197,10 +197,9 @@ Bundled raw password variables support URL delimiters such as `@:/%#?`; the app
 and Zero entrypoints percent-encode them when building DSNs. Explicit DSNs must
 already percent-encode credentials. Do not print DSNs in diagnostic reports.
 
-That pulls `ghcr.io/iuliandita/ditero:nightly` and `:nightly-zero`. Add `--build`
-to build from this checkout instead. Set `DITERO_IMAGE_TAG=0.1.0-beta.4`
-to run the latest published prerelease with matching app and Zero tags. Without it
-the Compose file pulls nightly. Commit-specific nightly tags use different suffix ordering for app and
+That pulls the published `0.1.0-beta.5` app and matching Zero images by default.
+Add `--build` to build from this checkout instead, or set
+`DITERO_IMAGE_TAG=nightly` to use development images. Commit-specific nightly tags use different suffix ordering for app and
 Zero, so pin those two service images separately in a Compose override; see [image tags](RELEASING.md#channels).
 
 To reach it from anything other than the machine it runs on, set

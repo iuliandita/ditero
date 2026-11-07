@@ -188,9 +188,12 @@ Those runtime checks remain part of #346.
 
 ## Signed release APK and app bundle
 
+The [beta.5 downloads](https://github.com/iuliandita/ditero/releases/tag/v0.1.0-beta.5)
+include the signed independent APK and AAB, published November 7, 2026.
+
 The tagged beta pipeline builds the independent signed APK and AAB from the
 validated release commit and publishes versioned downloads with checksums. It
-requires a retained signing identity in repository Actions secrets. The desktop
+requires a retained signing identity in Actions secrets. The desktop
 platform matrix does not change Android flavors, artifacts or signing identity. See
 [Releasing](../../RELEASING.md) for the secret names and artifact limits.
 
