@@ -4,6 +4,7 @@ import {
 	PortableExportValidationError,
 	parseBoundedPortableJson,
 	parsePortableExportV1,
+	validatePortableExportV1Value,
 } from "./validate.ts";
 
 const stamp = "2026-09-16T10:00:00.000Z";
@@ -749,4 +750,49 @@ describe("parseBoundedPortableJson nesting", () => {
 			`${"[".repeat(500)}"{`,
 		]);
 	});
+});
+
+test.each([
+	"conditions",
+	"panels",
+])("bounds aggregate %s before shape validation and honors checkpoints", (kind) => {
+	const value = fixture();
+	const view = value.data.views[0];
+	const dashboard = value.data.dashboards[0];
+	if (!view || !dashboard) throw new Error("Missing fixture rows");
+	if (kind === "conditions")
+		value.data.views = Array.from({ length: 201 }, (_, index) => ({
+			...view,
+			id: `view-${index}`,
+			filter: {
+				op: "and",
+				conditions: Array.from({ length: 50 }, () => ({
+					field: "done",
+					operator: "is",
+					value: false,
+				})),
+			},
+		}));
+	else
+		value.data.dashboards = Array.from({ length: 51 }, (_, index) => ({
+			...dashboard,
+			id: `dashboard-${index}`,
+			panels: Array.from({ length: 20 }, (_, panel) => ({
+				id: `panel-${panel}`,
+				type: "focus",
+				size: "s",
+			})),
+		}));
+	expect(() => validatePortableExportV1Value(value)).toThrow(
+		expect.objectContaining({
+			code: kind === "conditions" ? "condition-limit" : "panel-limit",
+		}),
+	);
+	const checkpoint = vi.fn(() => {
+		throw new Error("checkpoint stopped");
+	});
+	expect(() => validatePortableExportV1Value(fixture(), checkpoint)).toThrow(
+		"checkpoint stopped",
+	);
+	expect(checkpoint).toHaveBeenCalledTimes(1);
 });

@@ -10,6 +10,7 @@ import {
 	portableTimestamp,
 	templateKindMatches,
 	unchanged,
+	validatePortableComplexity,
 } from "./validate.ts";
 
 const string = z.string();
@@ -152,9 +153,12 @@ export function parsePortableExportV2(input: string): PortableExportV2 {
 
 export function validatePortableExportV2Value(
 	parsed: unknown,
+	checkpoint: () => void = () => {},
 ): PortableExportV2 {
+	validatePortableComplexity(parsed, checkpoint);
 	const validated = documentSchema.safeParse(parsed);
 	if (!validated.success || !unchanged(parsed, validated.data))
 		throw new PortableExportValidationError("invalid-export");
+	checkpoint();
 	return validated.data;
 }

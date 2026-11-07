@@ -4,10 +4,7 @@ import { z } from "zod";
 import { attachmentStorageConfig } from "../../config/attachment-storage.ts";
 import { e2eEnabled } from "../../config/e2e.ts";
 import { UserContextError } from "../../db/user-context.ts";
-import {
-	parseImportDocument,
-	UnsupportedImportVersionError,
-} from "../../domain/portability/import-document.ts";
+import { UnsupportedImportVersionError } from "../../domain/portability/import-document.ts";
 import {
 	type ImportMappings,
 	ImportPlanError,
@@ -20,6 +17,12 @@ import {
 import { PortableExportValidationError } from "../../domain/portability/validate.ts";
 import { AttachmentQuotaError } from "../attachments/quota.ts";
 import type { Guards } from "../guards.ts";
+import { serverErrorResponse } from "../server-error.ts";
+import {
+	PORTABILITY_CONCURRENCY,
+	portabilityAdmission,
+	takePlanCreationToken,
+} from "./admission.ts";
 import { getAttachmentMigrationParents } from "./attachment-migration-parents.ts";
 import {
 	type AttachmentMigrationLimits,
@@ -35,6 +38,8 @@ import { V4ApplyConflict } from "./import-activation.ts";
 import { importActivationRoutes } from "./import-activation-routes.ts";
 import { applyImportBatch, getImportRunStatus } from "./import-apply-store.ts";
 import { prepareAnchoredProviderImport } from "./import-content-anchor.ts";
+import { parseImportInWorker } from "./import-parser.ts";
+import { ImportParsingError } from "./import-parser-protocol.ts";
 import {
 	discardImportPlan,
 	discardImportSource,
@@ -213,6 +218,7 @@ async function handled(run: () => Promise<Response>): Promise<Response> {
 			return Response.json(error.refusal, { status: 409, headers });
 		if (
 			error instanceof ImportRequestError ||
+			error instanceof ImportParsingError ||
 			error instanceof ImportPlanStoreError
 		)
 			return response({ code: error.code }, error.status);
@@ -243,8 +249,7 @@ async function handled(run: () => Promise<Response>): Promise<Response> {
 			);
 		if (error instanceof ImportPlanError)
 			return response({ code: error.code }, 400);
-		console.error("import plan request failed", { category: "unexpected" });
-		return response({ code: "import-plan-failed" }, 500);
+		return serverErrorResponse(error, "import-plan-failed");
 	}
 }
 
@@ -301,7 +306,8 @@ function reservationOrdinal(request: Request): number {
 	return ordinal;
 }
 
-export function createImportAdmission(): Set<string> {
+export function createImportAdmission(pool?: Pool): Set<string> {
+	if (pool) return portabilityAdmission(pool);
 	return new Set();
 }
 
@@ -329,7 +335,7 @@ function migrationJson(text: string, strict: boolean): unknown {
 
 export function createAttachmentMigrationHandlers(
 	pool: Pool,
-	activeUsers = createImportAdmission(),
+	activeUsers = createImportAdmission(pool),
 	strictNative = false,
 	limits: AttachmentMigrationLimits = {
 		quotaBytes: attachmentStorageConfig(process.env).quotaBytes,
@@ -368,7 +374,10 @@ export function createAttachmentMigrationHandlers(
 				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
 				if (strictNative && new URL(request.url).search)
 					throw new ImportRequestError("invalid-migration-query", 400);
-				if (activeUsers.size >= 2 || activeUsers.has(ownerId))
+				if (
+					activeUsers.size >= PORTABILITY_CONCURRENCY ||
+					activeUsers.has(ownerId)
+				)
 					return Response.json(
 						{ code: "import-busy" },
 						{ status: 429, headers: { ...headers, "retry-after": "5" } },
@@ -418,7 +427,10 @@ export function createAttachmentMigrationHandlers(
 				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
 				if (strictNative && new URL(request.url).search)
 					throw new ImportRequestError("invalid-migration-query", 400);
-				if (activeUsers.size >= 2 || activeUsers.has(ownerId))
+				if (
+					activeUsers.size >= PORTABILITY_CONCURRENCY ||
+					activeUsers.has(ownerId)
+				)
 					return Response.json(
 						{ code: "import-busy" },
 						{ status: 429, headers: { ...headers, "retry-after": "5" } },
@@ -480,7 +492,7 @@ export function createAttachmentMigrationHandlers(
 export function importPlanRoutes(
 	pool: Pool,
 	guards: Guards,
-	activeUsers = createImportAdmission(),
+	activeUsers = createImportAdmission(pool),
 	limits?: AttachmentMigrationLimits,
 ) {
 	const migration = createAttachmentMigrationHandlers(
@@ -540,7 +552,10 @@ export function importPlanRoutes(
 			"/api/portability/import/plans/:id/apply",
 			guards.guardedPost((request, session) =>
 				handled(async () => {
-					if (activeUsers.size >= 2 || activeUsers.has(session.user.id))
+					if (
+						activeUsers.size >= PORTABILITY_CONCURRENCY ||
+						activeUsers.has(session.user.id)
+					)
 						return Response.json(
 							{ code: "import-busy" },
 							{ status: 429, headers: { ...headers, "retry-after": "5" } },
@@ -593,7 +608,10 @@ export function importPlanRoutes(
 			"/api/portability/import/plans",
 			guards.guardedPost((request, session) =>
 				handled(async () => {
-					if (activeUsers.size >= 2 || activeUsers.has(session.user.id))
+					if (
+						activeUsers.size >= PORTABILITY_CONCURRENCY ||
+						activeUsers.has(session.user.id)
+					)
 						return Response.json(
 							{ code: "import-busy" },
 							{ status: 429, headers: { ...headers, "retry-after": "5" } },
@@ -601,6 +619,11 @@ export function importPlanRoutes(
 					activeUsers.add(session.user.id);
 					const deadline = performance.now() + 45_000;
 					try {
+						if (!takePlanCreationToken(activeUsers, session.user.id))
+							return Response.json(
+								{ code: "import-busy" },
+								{ status: 429, headers: { ...headers, "retry-after": "15" } },
+							);
 						if (
 							(request.headers.get("content-type") ?? "")
 								.split(";")[0]
@@ -613,9 +636,16 @@ export function importPlanRoutes(
 						try {
 							const received = await readRequest(request);
 							receivedBytes = received.bytes;
-							raw = JSON.parse(received.text);
+							raw = await parseImportInWorker(
+								{ kind: "envelope", text: received.text },
+								{ signal: request.signal, deadline },
+							);
 						} catch (error) {
-							if (error instanceof ImportRequestError) throw error;
+							if (
+								error instanceof ImportRequestError ||
+								error instanceof ImportParsingError
+							)
+								throw error;
 							throw new ImportRequestError("invalid-request", 400);
 						}
 						if (
@@ -658,13 +688,23 @@ export function importPlanRoutes(
 										signal: request.signal,
 										deadline,
 									},
+									(value, options) =>
+										parseImportInWorker(
+											{
+												kind: "provider",
+												value,
+												exportedAt: options.exportedAt,
+											},
+											options,
+										),
 								)
 							: null;
 						const document =
 							provider?.conversion.document ??
-							parseImportDocument(raw.document as string, {
-								historyPreview: true,
-							});
+							(await parseImportInWorker(
+								{ kind: "document", text: raw.document as string },
+								{ signal: request.signal, deadline },
+							));
 						if (request.signal.aborted)
 							throw new ImportRequestError("request-cancelled", 408);
 						return response(

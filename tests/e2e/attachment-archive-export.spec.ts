@@ -24,6 +24,7 @@ import {
 	uniqueEmail,
 	waitWorkspaceReady,
 } from "./helpers.ts";
+import { fetchPortabilityRead } from "./portability-reads.ts";
 
 const ACCOUNT_SECRET = "correct horse battery staple";
 const ARCHIVE_SECRET = "separate fictional archive secret";
@@ -479,7 +480,7 @@ test("archive export: locked desktop keys and two authenticated explicit downloa
 		async (route: Route) => {
 			try {
 				expect(route.request().method()).toBe("GET");
-				const actual = await route.fetch({ timeout: 15_000, maxRetries: 0 });
+				const actual = await fetchPortabilityRead(route);
 				expect(actual.status()).toBe(200);
 				const body = await actual.text();
 				await route.fulfill({ response: actual });
@@ -560,7 +561,7 @@ test("archive export: coarse mobile dark selection, geometry and authenticated p
 			async (route: Route) => {
 				try {
 					expect(route.request().method()).toBe("GET");
-					const actual = await route.fetch({ timeout: 15_000, maxRetries: 0 });
+					const actual = await fetchPortabilityRead(route);
 					expect(actual.status()).toBe(200);
 					const body = await actual.text();
 					await route.fulfill({ response: actual });
@@ -736,7 +737,7 @@ test("archive export: accepted writes wait and closing cancels a real content re
 		reached = resolve;
 	});
 	await page.route("**/api/portability/export?version=2", async (route) => {
-		const actual = await route.fetch();
+		const actual = await fetchPortabilityRead(route);
 		expect(actual.ok()).toBe(true);
 		reached();
 		await barrier;

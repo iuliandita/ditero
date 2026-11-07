@@ -13,6 +13,10 @@ import type {
 } from "../../domain/portability/v1.ts";
 import type { PortableExportV2 } from "../../domain/portability/v2.ts";
 import {
+	PortableExportValidationError,
+	validatePortableComplexity,
+} from "../../domain/portability/validate.ts";
+import {
 	type ImportedCompletionEvent,
 	type NativeCompletionEvent,
 	v2Comment,
@@ -754,6 +758,13 @@ async function exportPortableJsonVersion(
 			[...principalIds],
 		]);
 		check();
+		try {
+			validatePortableComplexity(snapshot, check);
+		} catch (error) {
+			if (error instanceof PortableExportValidationError)
+				throw new ExportLimitError();
+			throw error;
+		}
 		const serialized = JSON.stringify(snapshot);
 		check();
 		if (Buffer.byteLength(serialized) > maxBytes) throw new ExportLimitError();

@@ -8,6 +8,20 @@ import { AttachmentQuotaError } from "../attachments/quota.ts";
 import { makeGuards, type Session } from "../guards.ts";
 import { V4ApplyConflict } from "./import-activation.ts";
 
+vi.mock("./import-parser.ts", async () => {
+	const { performImportParse } = await import("./import-parser-work.ts");
+	const { ImportParsingError } = await import("./import-parser-protocol.ts");
+	return {
+		parseImportInWorker: async (
+			job: import("./import-parser-protocol.ts").ImportParseJob,
+		) => {
+			const reply = await performImportParse(job, 15_000);
+			if (!reply.ok) throw new ImportParsingError(reply.code, reply.status);
+			return reply.value;
+		},
+	};
+});
+
 const store = vi.hoisted(() => ({
 	save: vi.fn(),
 	list: vi.fn(),
@@ -317,35 +331,44 @@ describe("native import plan transport", () => {
 		const api = app();
 		const first = api.handle(request());
 		await vi.waitFor(() => expect(store.save).toHaveBeenCalledTimes(1));
-		const second = await api.handle(request());
-		expect(second.status).toBe(429);
-		expect(second.headers.get("retry-after")).toBe("5");
+		for (let attempt = 0; attempt < 4; attempt++) {
+			const second = await api.handle(request());
+			expect(second.status).toBe(429);
+			expect(second.headers.get("retry-after")).toBe("5");
+		}
 		finish?.({ id: "saved" });
 		expect((await first).status).toBe(200);
 		expect((await api.handle(request())).status).toBe(200);
 	});
-	test("admits another account while keeping the global cap bounded", async () => {
+	test("admits three distinct accounts, including a third, while bounding the global cap", async () => {
 		const finish: ((value: unknown) => void)[] = [];
 		store.save.mockImplementation(
 			() => new Promise((resolve) => finish.push(resolve)),
 		);
 		const api = app();
-		const first = api.handle(request());
-		const second = api.handle(
-			request(JSON.stringify(payload()), { "x-user": "second" }),
+		const pending = Array.from({ length: 3 }, (_, index) =>
+			api.handle(
+				request(JSON.stringify(payload()), { "x-user": `user-${index}` }),
+			),
 		);
-		await vi.waitFor(() => expect(store.save).toHaveBeenCalledTimes(2));
-		expect(
-			(
-				await api.handle(
-					request(JSON.stringify(payload()), { "x-user": "third" }),
-				)
-			).status,
-		).toBe(429);
-		for (const resolve of finish) resolve({ id: "saved" });
-		expect((await first).status).toBe(200);
-		expect((await second).status).toBe(200);
+		try {
+			await vi.waitFor(() => expect(store.save).toHaveBeenCalledTimes(3));
+			store.save.mockResolvedValueOnce({ id: "saved" });
+			expect(
+				(
+					await api.handle(
+						request(JSON.stringify(payload()), { "x-user": "fourth" }),
+					)
+				).status,
+			).toBe(429);
+		} finally {
+			for (const resolve of finish) resolve({ id: "saved" });
+			expect((await Promise.all(pending)).map((reply) => reply.status)).toEqual(
+				Array(3).fill(200),
+			);
+		}
 	});
+
 	test("cancels a stalled upload and releases admission", async () => {
 		const api = app();
 		const controller = new AbortController();
@@ -917,30 +940,29 @@ describe("attachment reservation transport", () => {
 	});
 });
 
-test("reservation limits two distinct owners", async () => {
+test("reservation admits a third distinct owner and bounds three owners", async () => {
 	const releases: ((v: unknown) => void)[] = [];
 	reservations.reserve.mockImplementation(
-		() =>
-			new Promise((resolve) => {
-				releases.push(resolve);
-			}),
+		() => new Promise((resolve) => releases.push(resolve)),
 	);
 	const api = app();
-	const first = api.handle(reserveRequest());
-	for (let i = 0; i < 100 && releases.length < 1; i++) await Promise.resolve();
-	const second = api.handle(reserveRequest(undefined, { "x-user": "second" }));
-	for (let i = 0; i < 100 && releases.length < 2; i++) await Promise.resolve();
+	const pending = Array.from({ length: 3 }, (_, index) =>
+		api.handle(reserveRequest(undefined, { "x-user": `user-${index}` })),
+	);
 	try {
-		expect(releases).toHaveLength(2);
+		await vi.waitFor(() => expect(releases).toHaveLength(3));
 		expect(
-			(await api.handle(reserveRequest(undefined, { "x-user": "third" })))
+			(await api.handle(reserveRequest(undefined, { "x-user": "fourth" })))
 				.status,
 		).toBe(429);
 	} finally {
 		for (const release of releases) release({ revision: 1 });
-		await Promise.all([first, second]);
+		expect((await Promise.all(pending)).map((reply) => reply.status)).toEqual(
+			Array(3).fill(200),
+		);
 	}
 });
+
 test("reservation refuses declared overflow and unsafe envelopes", async () => {
 	const api = app();
 	expect(
@@ -998,10 +1020,17 @@ test("status transports handled error and fails loud without leaked exception", 
 		reservations.status.mockRejectedValueOnce(new Error("private-details"));
 		const response = await api.handle(get());
 		expect(response.status).toBe(500);
-		expect(await response.json()).toEqual({ code: "import-plan-failed" });
-		expect(log).toHaveBeenCalledWith("import plan request failed", {
-			category: "unexpected",
+		const body = await response.json();
+		expect(body).toEqual({
+			code: "import-plan-failed",
+			message: "An unexpected error occurred",
+			correlationId: expect.any(String),
 		});
+		expect(log).toHaveBeenCalledWith("HTTP request failed", {
+			correlationId: body.correlationId,
+			errorClass: "Error",
+		});
+		expect(JSON.stringify(log.mock.calls)).not.toContain("private-details");
 	} finally {
 		log.mockRestore();
 	}

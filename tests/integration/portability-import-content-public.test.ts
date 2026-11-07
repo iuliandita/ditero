@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Elysia } from "elysia";
 import { escapeLiteral, Pool } from "pg";
-import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
+import { afterAll, beforeAll, beforeEach, expect, test, vi } from "vitest";
 import * as tables from "../../src/db/schema.ts";
 import { parseContentProvider } from "../../src/domain/portability/providers/content.ts";
 import type { ContentProvider } from "../../src/domain/portability/providers/content-common.ts";
@@ -11,6 +11,22 @@ import { contentBinding } from "../../src/domain/portability/providers/content-i
 import { makeGuards, type Session } from "../../src/server/guards.ts";
 import { overdueSweep } from "../../src/server/notifications/events.ts";
 import { importPlanRoutes } from "../../src/server/portability/import-routes.ts";
+
+// Import semantics run with requests spaced beyond the per-account refill interval.
+vi.mock("../../src/server/portability/admission.ts", async (importOriginal) => {
+	const actual =
+		await importOriginal<
+			typeof import("../../src/server/portability/admission.ts")
+		>();
+	let now = 0;
+	return {
+		...actual,
+		takePlanCreationToken: (admission: Set<string>, userId: string) => {
+			now += 15_000;
+			return actual.takePlanCreationToken(admission, userId, now);
+		},
+	};
+});
 
 const url = process.env.DATABASE_URL;
 if (!url) throw new Error("DATABASE_URL is required");

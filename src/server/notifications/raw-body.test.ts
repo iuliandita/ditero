@@ -391,7 +391,7 @@ describe("parseSignedBody", () => {
 // runs a real Bun server, where the default parser consumes the body outright,
 // so the claim is re-proved on that runtime rather than assumed to carry over.
 describe("raw-body seam under Bun", () => {
-	it("receives unmodified bytes from a real Bun server", async () => {
+	it("keeps signed and bounded auth bytes readable on a real Bun server", async () => {
 		const child = spawn(
 			"bun",
 			["run", join(import.meta.dirname, "raw-body.bun-server.ts")],
@@ -423,6 +423,61 @@ describe("raw-body seam under Bun", () => {
 				body: RAW,
 			});
 			expect(await response.text()).toBe(Buffer.from(RAW).toString("hex"));
+			for (const path of [
+				"slack/interactions",
+				"discord/interactions",
+				"telegram/webhook",
+			]) {
+				for (const chunked of [false, true]) {
+					const body = chunked
+						? new ReadableStream<Uint8Array>({
+								start(controller) {
+									controller.enqueue(RAW.slice(0, 7));
+									controller.enqueue(RAW.slice(7));
+									controller.close();
+								},
+							})
+						: RAW;
+					const signed = await fetch(
+						`http://localhost:${port}/api/notifications/${path}`,
+						{
+							method: "POST",
+							headers: signedHeaders(RAW),
+							body,
+							duplex: "half",
+						} as RequestInit,
+					);
+					expect(signed.status, `${path}, chunked=${chunked}`).toBe(200);
+					expect(await signed.text()).toBe(Buffer.from(RAW).toString("hex"));
+				}
+			}
+			for (const chunked of [false, true]) {
+				const response = await fetch(
+					`http://localhost:${port}/api/auth/sign-up/email`,
+					{
+						method: "POST",
+						headers: { "content-type": "application/json" },
+						body: chunked
+							? new ReadableStream<Uint8Array>({
+									start(controller) {
+										controller.enqueue(RAW.slice(0, 7));
+										controller.enqueue(RAW.slice(7));
+										controller.close();
+									},
+								})
+							: RAW,
+						duplex: "half",
+						signal: AbortSignal.timeout(5000),
+					} as RequestInit,
+				);
+				expect(response.status, `auth, chunked=${chunked}`).toBe(200);
+				expect(await response.json()).toEqual({
+					body: JSON.parse(NON_CANONICAL),
+					peer: expect.stringMatching(
+						/^(?:127\.0\.0\.1|::1|::ffff:127\.0\.0\.1)$/,
+					),
+				});
+			}
 		} finally {
 			child.kill("SIGKILL");
 		}

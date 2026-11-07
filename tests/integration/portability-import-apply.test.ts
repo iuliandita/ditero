@@ -277,7 +277,17 @@ test("legacy jobs and incorrect digest or excluded counts write no content or pr
 
 test("lost-response retries and concurrent requests converge to one copy", async () => {
 	const job = await save();
-	const [a, b] = await Promise.all([apply(job), apply(job)]);
+	const attempts = await Promise.allSettled([apply(job), apply(job)]);
+	const admitted = attempts.find((attempt) => attempt.status === "fulfilled");
+	if (admitted?.status !== "fulfilled") throw new Error("No import admitted");
+	expect(attempts.filter((attempt) => attempt.status === "rejected")).toEqual([
+		{
+			status: "rejected",
+			reason: expect.objectContaining({ code: "import-busy", status: 429 }),
+		},
+	]);
+	const a = admitted.value;
+	const b = await apply(job);
 	expect(await apply(job)).toEqual(a);
 	expect(a).toEqual(b);
 	expect(a.state).toBe("completed");

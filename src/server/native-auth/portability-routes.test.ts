@@ -2,6 +2,7 @@ import { Elysia } from "elysia";
 import type { Pool, PoolClient } from "pg";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { UserContextError } from "../../db/user-context.ts";
+import { AttachmentQuotaError } from "../attachments/quota.ts";
 import { makeGuards, type Session } from "../guards.ts";
 import {
 	ExportInterruptedError,
@@ -207,7 +208,7 @@ describe("native portability export", () => {
 		await vi.waitFor(() => expect(releaseB).toBeDefined());
 		expect(
 			(await app.handle(request("/api/portability/export", "c"))).status,
-		).toBe(429);
+		).toBe(200);
 		releaseA("{}");
 		releaseB("{}");
 		expect((await a).status).toBe(200);
@@ -240,7 +241,16 @@ describe("native portability export", () => {
 				request("/api/native/portability/export"),
 			);
 			expect(failed.status).toBe(500);
-			expect(await failed.json()).toEqual({ code: "export-failed" });
+			const body = await failed.json();
+			expect(body).toEqual({
+				code: "export-failed",
+				message: "An unexpected error occurred",
+				correlationId: expect.any(String),
+			});
+			expect(log).toHaveBeenCalledWith("HTTP request failed", {
+				correlationId: body.correlationId,
+				errorClass: "Error",
+			});
 			expect(JSON.stringify(log.mock.calls)).not.toContain(
 				"private database payload",
 			);
@@ -248,7 +258,7 @@ describe("native portability export", () => {
 			log.mockRestore();
 		}
 	});
-	it("does not share admission between separately constructed exporters", async () => {
+	it("shares admission between separately constructed exporters", async () => {
 		let release!: (body: string) => void;
 		mocks.v2.mockImplementationOnce(
 			() =>
@@ -260,7 +270,7 @@ describe("native portability export", () => {
 		await vi.waitFor(() => expect(release).toBeDefined());
 		expect(
 			(await createPortabilityExporter(pool)(request("/"), "a", 2)).status,
-		).toBe(200);
+		).toBe(429);
 		release("{}");
 		await first;
 	});
@@ -304,6 +314,92 @@ const migrationRequest = (
 		},
 	);
 describe("native attachment migration", () => {
+	it.each([
+		"attachment-reservations",
+		"attachment-recoveries",
+	])("preserves quota details, redacts unexpected %s errors and releases admission", async (action) => {
+		const { app } = setup({ quotaBytes: 49 });
+		const operation =
+			action === "attachment-reservations" ? mocks.reserve : mocks.recover;
+		const body =
+			action === "attachment-reservations"
+				? migrationBody
+				: {
+						ordinal: 0,
+						sourceFingerprint: migrationBody.sourceFingerprint,
+						previous: {
+							associationId: "11111111-1111-4111-8111-111111111111",
+							attemptId: "22222222-2222-4222-8222-222222222222",
+							targetAttachmentId:
+								"migration_33333333-3333-4333-8333-333333333333",
+							revision: 1,
+						},
+						prepared: migrationBody.prepared,
+						retireLive: true,
+					};
+		const refusal = {
+			code: "quota-retained-deleted" as const,
+			retainedDeletedBytes: 400,
+			restoreWindowEndsAt: "2026-12-01T12:00:00.000Z",
+			gcPending: false,
+		};
+		const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+		try {
+			for (const native of [true, false]) {
+				const call = () =>
+					app.handle(
+						new Request(
+							`http://localhost/api/${native ? "native/" : ""}portability/import/plans/${jobId}/${action}`,
+							{
+								method: "POST",
+								headers: {
+									authorization: "Bearer a",
+									...(native ? {} : { origin: "http://localhost" }),
+									"content-type": "application/json",
+								},
+								body: JSON.stringify(body),
+							},
+						),
+					);
+				operation.mockRejectedValueOnce(new AttachmentQuotaError(refusal));
+				const quota = await call();
+				expect(quota.status).toBe(409);
+				expect(await quota.json()).toEqual(refusal);
+				expect(quota.headers.get("cache-control")).toBe("no-store");
+				operation.mockRejectedValueOnce(
+					Object.assign(new Error("private database payload"), {
+						code: "23505",
+					}),
+				);
+				const failed = await call();
+				expect(failed.status).toBe(500);
+				const error = await failed.json();
+				expect(error).toEqual({
+					code: "import-plan-failed",
+					message: "An unexpected error occurred",
+					correlationId: expect.any(String),
+				});
+				expect(failed.headers.get("x-correlation-id")).toBe(
+					error.correlationId,
+				);
+				expect(logged.mock.calls.at(-1)).toEqual([
+					"HTTP request failed",
+					{
+						correlationId: error.correlationId,
+						errorClass: "Error",
+						sqlState: "23505",
+					},
+				]);
+				expect(JSON.stringify(error)).not.toContain("private database payload");
+				expect(JSON.stringify(logged.mock.calls)).not.toContain(
+					"private database payload",
+				);
+				expect((await call()).status).toBe(200);
+			}
+		} finally {
+			logged.mockRestore();
+		}
+	});
 	it("uses native session owner and configured storage limits in both transports", async () => {
 		const limits = { quotaBytes: 49, maxFileBytes: 40 };
 		const { app } = setup(limits);

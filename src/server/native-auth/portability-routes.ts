@@ -39,7 +39,7 @@ export function nativePortabilityRoutes(deps: {
 		);
 	const migration = createAttachmentMigrationHandlers(
 		deps.pool,
-		deps.admission ?? createImportAdmission(),
+		deps.admission ?? createImportAdmission(deps.pool),
 		true,
 		deps.attachmentLimits,
 	);

@@ -164,7 +164,7 @@ test("timed-out acquisitions bound abandoned waiters and release late clients", 
 	// list/status operations have no request signal; exercise save's shared acquisition
 	// through a query deadline here. Abandoned waiters must still remain bounded.
 	vi.useFakeTimers();
-	for (let index = 0; index < 2; index++) {
+	for (let index = 0; index < 1; index++) {
 		const pending = listImportSources(pool, "caller");
 		const rejected = expect(pending).rejects.toMatchObject({
 			code: "import-timeout",
@@ -177,7 +177,11 @@ test("timed-out acquisitions bound abandoned waiters and release late clients", 
 		code: "import-busy",
 		status: 429,
 	});
-	expect(connect).toHaveBeenCalledTimes(2);
+	expect(connect).toHaveBeenCalledTimes(1);
+	connect.mockRejectedValueOnce(new Error("other owner admitted"));
+	await expect(listImportSources(pool, "other-owner")).rejects.toThrow(
+		"other owner admitted",
+	);
 	for (const arrive of arrivals) {
 		const release = vi.fn();
 		arrive({ release } as unknown as PoolClient);

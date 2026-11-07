@@ -20,6 +20,7 @@ import { m } from "../../../paraglide/messages.js";
 import { getLocale } from "../../../paraglide/runtime.js";
 import { queries } from "../../../zero/queries.ts";
 import type { schema } from "../../../zero/schema.gen.ts";
+import { readPortabilityMetadata } from "../../lib/portability-read.ts";
 import { isZeroClientOwnerActive } from "../../lib/zero-lifecycle.ts";
 import { Button } from "../ui/button.tsx";
 import { useConfirm } from "../ui/confirm.tsx";
@@ -253,13 +254,10 @@ export function ImportPlanPanel() {
 			controller.abort();
 		}, 15_000);
 		try {
-			const response = await fetch("/api/portability/import/sources", {
-				signal: controller.signal,
-				credentials: "same-origin",
-				cache: "no-store",
-			});
-			if (!response.ok) throw new Error("Sources unavailable");
-			const body = (await response.json()) as { sources: Source[] };
+			const body = await readPortabilityMetadata<{ sources: Source[] }>(
+				"/api/portability/import/sources",
+				controller.signal,
+			);
 			if (owns() && !controller.signal.aborted) setSources(body.sources);
 		} catch {
 			if (owns() && (timedOut || !controller.signal.aborted))

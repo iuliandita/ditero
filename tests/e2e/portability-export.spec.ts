@@ -14,6 +14,7 @@ import {
 	uniqueEmail,
 	waitWorkspaceReady,
 } from "./helpers.ts";
+import { fetchPortabilityRead } from "./portability-reads.ts";
 
 test("downloads a versioned account export with explicit limits", async ({
 	page,
@@ -222,7 +223,7 @@ test("waits for a held real mutation before downloading its saved task", async (
 	await page.route(
 		"**/api/portability/export?version=2",
 		async (route) => {
-			const response = await route.fetch();
+			const response = await fetchPortabilityRead(route);
 			expect(response.ok()).toBe(true);
 			await heldResponse;
 			await route.fulfill({ response });

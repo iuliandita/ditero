@@ -34,6 +34,7 @@ import {
 import type { PortableExportV1 } from "../../domain/portability/v1.ts";
 import type { PortableExportV2 } from "../../domain/portability/v2.ts";
 import { type Role, WRITE_ROLES } from "../../domain/role.ts";
+import { acquirePortabilityConnection } from "./admission.ts";
 import {
 	discoverV4Authority,
 	ImportActivationLimitError,
@@ -100,9 +101,6 @@ const sourceSchema = z.discriminatedUnion("mode", [
 	z.object({ mode: z.literal("existing"), id: z.uuid() }).strict(),
 ]);
 
-// Pool acquisition cannot be removed from pg's queue after cancellation.
-const pendingAcquisitions = new WeakMap<Pool, number>();
-
 export async function importTransaction<T>(
 	pool: Pool,
 	ownerId: string,
@@ -114,19 +112,22 @@ export async function importTransaction<T>(
 	const acquisitionBudget = Math.ceil(deadline - performance.now());
 	if (signal?.aborted) fail("import-cancelled", 408);
 	if (acquisitionBudget <= 0) fail("import-timeout", 503);
-	if ((pendingAcquisitions.get(pool) ?? 0) >= 2) fail("import-busy", 429);
-	pendingAcquisitions.set(pool, (pendingAcquisitions.get(pool) ?? 0) + 1);
+	// Retain this lease for an abandoned pool waiter until its connection arrives.
+	const releaseConnection = acquirePortabilityConnection(pool, ownerId);
+	if (!releaseConnection) fail("import-busy", 429);
 	let expired = false;
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	let cancelAcquisition: (() => void) | undefined;
 	const acquisition = pool.connect().then(
 		(client) => {
-			pendingAcquisitions.set(pool, (pendingAcquisitions.get(pool) ?? 1) - 1);
-			if (expired) client.release();
+			if (expired) {
+				client.release();
+				releaseConnection();
+			}
 			return client;
 		},
 		(error: unknown) => {
-			pendingAcquisitions.set(pool, (pendingAcquisitions.get(pool) ?? 1) - 1);
+			releaseConnection();
 			throw error;
 		},
 	);
@@ -244,6 +245,7 @@ export async function importTransaction<T>(
 		clearTimeout(transactionTimer);
 		signal?.removeEventListener("abort", cancelTransaction);
 		if (!released) client.release(broken);
+		releaseConnection();
 	}
 }
 

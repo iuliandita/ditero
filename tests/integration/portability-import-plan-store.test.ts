@@ -168,7 +168,17 @@ test("concurrent duplicate saves return one immutable plan and no content writes
 	const before = await pool.query(
 		"select (select count(*) from task) as tasks, (select count(*) from membership) as memberships",
 	);
-	const [a, b] = await Promise.all([save(), save()]);
+	const attempts = await Promise.allSettled([save(), save()]);
+	const admitted = attempts.find((attempt) => attempt.status === "fulfilled");
+	if (admitted?.status !== "fulfilled") throw new Error("No import admitted");
+	expect(attempts.filter((attempt) => attempt.status === "rejected")).toEqual([
+		{
+			status: "rejected",
+			reason: expect.objectContaining({ code: "import-busy", status: 429 }),
+		},
+	]);
+	const a = admitted.value;
+	const b = await save();
 	expect(a).toEqual(b);
 	expect(a).not.toHaveProperty("items");
 	expect(a).not.toHaveProperty("payload");

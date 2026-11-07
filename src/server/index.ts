@@ -50,6 +50,7 @@ import { withZeroUserContext } from "../zero/task-activation.ts";
 import { accountDeletionRoutes } from "./account-deletion.ts";
 import { attachmentRoutes } from "./attachments/routes.ts";
 import { startAttachmentSweep } from "./attachments/sweep.ts";
+import { admittedAuthRequest, enforceRequestBodyLimit } from "./body-limit.ts";
 import { resolveClientRateKey, trustedProxyCIDRsFromEnv } from "./client-ip.ts";
 import { ctxFromAuthHeader } from "./ctx.ts";
 import { lookupUsers } from "./discovery.ts";
@@ -107,6 +108,7 @@ import {
 	publicApiRoutes,
 } from "./public-api/routes.ts";
 import { publicConfig } from "./public-config.ts";
+import { handleServerError } from "./server-error.ts";
 import { createShutdown } from "./shutdown.ts";
 import { taskHistoryRoutes } from "./task-history.ts";
 import { nativeZeroPayload } from "./zero-auth.ts";
@@ -129,7 +131,7 @@ const { guardedPost, guardedGet, foreignOrigin } = makeGuards(
 	(headers) => auth.api.getSession({ headers }),
 );
 const portabilityExporter = createPortabilityExporter(pool);
-const importAdmission = createImportAdmission();
+const importAdmission = createImportAdmission(pool);
 const attachmentConfig = attachmentStorageConfig(process.env);
 const attachmentStore = await createAttachmentBlobStore(attachmentConfig);
 const nativeTrustedProxies = trustedProxyCIDRsFromEnv(
@@ -189,7 +191,9 @@ async function channelWrite(
 	}
 }
 
-const routes = new Elysia()
+const routes = new Elysia({ serve: { maxRequestBodySize: 128 * 1024 * 1024 } })
+	.onRequest(enforceRequestBodyLimit)
+	.onError(handleServerError)
 	.use(
 		calendarFeedRoutes(
 			pool,
@@ -336,7 +340,10 @@ const routes = new Elysia()
 	.get("/api/config", () => publicConfig(process.env, ssoProviders()))
 	// Better Auth catch-all: serves JWKS (GET) and all auth POSTs.
 	.all("/api/auth/*", ({ request, server }) =>
-		handleAuthRequest(request, server?.requestIP(request)?.address),
+		handleAuthRequest(
+			admittedAuthRequest(request),
+			server?.requestIP(request)?.address,
+		),
 	)
 	.post(
 		"/api/bootstrap",

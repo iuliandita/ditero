@@ -427,6 +427,35 @@ and 32 MiB. A conservative preflight also bounds the memory needed to serialize 
 fields, accounting for compression and JSON escaping; it can refuse some exports below
 the output limit. A limit refusal returns HTTP 413 without a partial file. Each export has
 a 15-second total deadline, including database connection acquisition. Cancellation
-releases its database connection and locks. At most two exports run per app process,
-with one per user; extra requests receive HTTP 429 and a retry delay. Interrupted or
-failed requests do not alter your content.
+releases its database connection and locks. At most three portability operations run
+per app process, shared by imports and exports, with one operation per user. Extra
+requests receive HTTP 429 and a retry delay. Interrupted or failed requests do not
+alter your content.
+
+Admission is local to each app process and its shared database pool. Separate
+replicas can accept work for the same account concurrently; database row locks
+serialize those transactions and idempotent retries return the stored result.
+A busy refusal preserves the saved plan or prepared attachment reservation for
+an explicit retry after the active operation finishes. Clients do not automatically
+replay refused mutations.
+
+Browser and native requests share these slots. Database-holding import and export
+work also shares a three-connection budget, leaving seven connections in the default
+10-connection pool for other requests. Abandoned pool waiters retain their slot until
+their connection arrives. Plan creation allows a burst of four admitted requests per
+account, then refills one request every 15 seconds. HTTP 429 responses
+include a retry delay. Provider envelopes are limited to 32 MiB before JSON parsing;
+native document envelopes retain their separate escaping allowance. Parsing runs in
+one worker at a time, with at most two waiting parsers. Workers terminate on
+cancellation or after at most 15 seconds. Native documents
+allow at most 10,000 filter conditions and 1,000 dashboard panels in total, across all
+views and dashboards on both import and export; exceeding either budget returns
+HTTP 413.
+
+Workers request a 128 MiB old-generation heap limit. Bun currently ignores worker
+`resourceLimits`, so this is not a hard memory bound under Bun. Keep a process or
+container memory limit in production (the Helm default is 1 GiB). Three maximum-size
+native envelopes can retain about 198 MiB before parsed trees and structured-clone
+copies; serialized parsing avoids three simultaneous worker heaps. Smaller memory
+limits require smaller input limits or more headroom. Node integration tests parse
+inline through the test transform; production parsing requires Bun.

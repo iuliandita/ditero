@@ -18,6 +18,7 @@ import { queries } from "../../../zero/queries.ts";
 import type { schema, Task } from "../../../zero/schema.gen.ts";
 import { NameList } from "../../lib/bidi.tsx";
 import { copyText } from "../../lib/clipboard.ts";
+import { httpErrorMessage } from "../../lib/http-error.ts";
 import { formatList } from "../../lib/intl-format.ts";
 import { isRtl } from "../../lib/locale.ts";
 import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
@@ -138,8 +139,10 @@ export function AssigneePicker({
 			});
 			if (!res.ok) {
 				setError(
-					(await res.text()).trim() ||
+					await httpErrorMessage(
+						res,
 						m.invite_create_failed_status({ status: res.status }),
+					),
 				);
 				return;
 			}

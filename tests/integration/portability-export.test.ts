@@ -1035,6 +1035,55 @@ describe("portable export", () => {
 		expect(validateImportGraphV2(document).errors).toEqual([]);
 	});
 
+	test.each([
+		"conditions",
+		"panels",
+	])("rejects aggregate %s that would prevent re-import in both versions", async (kind) => {
+		if (kind === "conditions") {
+			const filter = {
+				op: "and",
+				conditions: Array.from({ length: 50 }, () => ({
+					field: "done",
+					operator: "is",
+					value: false,
+				})),
+			};
+			await pool.query(
+				`insert into view (id, owner_id, scope, name, filter, display, sort_key)
+				select 'budget-view-' || n, 'alice', 'personal', 'Budget', $1::jsonb, display, 'a' from view cross join generate_series(1,201) n where id = 'own'`,
+				[JSON.stringify(filter)],
+			);
+		} else {
+			const panels = Array.from({ length: 20 }, (_, index) => ({
+				id: `panel-${index}`,
+				type: "tasks",
+				title: "Tasks",
+				size: "m",
+				source: {
+					kind: "inline",
+					filter: { op: "and", conditions: [] },
+					sort: { field: "sortKey", dir: "asc" },
+					workspaceScope: { mode: "all" },
+				},
+			}));
+			await pool.query(
+				`insert into dashboard (id, owner_id, scope, name, panels, sort_key)
+				select 'budget-dashboard-' || n, 'alice', 'personal', 'Budget', $1::jsonb, 'a' from generate_series(1,51) n`,
+				[JSON.stringify(panels)],
+			);
+		}
+		for (const version of [1, 2]) {
+			const response = await request(
+				{},
+				"alice",
+				undefined,
+				`?version=${version}`,
+			);
+			expect(response.status).toBe(413);
+			expect(await response.json()).toEqual({ code: "export-limit-exceeded" });
+		}
+	});
+
 	test("produces a file accepted by native format and graph validation", async () => {
 		const response = await request();
 		expect(response.status).toBe(200);
@@ -1227,10 +1276,11 @@ describe("portable export", () => {
 		}
 	});
 
-	test("cancels blocked requests and limits exports to two users and one per user", async () => {
+	test("cancels blocked requests while allowing a third user and limiting each user", async () => {
 		const blocker = await pool.connect();
 		const first = new AbortController();
 		const second = new AbortController();
+		const third = new AbortController();
 		const app = new Elysia().use(portabilityRoutes(pool, guards));
 		const pending: Promise<Response>[] = [];
 		try {
@@ -1244,7 +1294,9 @@ describe("portable export", () => {
 			expect(await duplicate.json()).toEqual({ code: "export-busy" });
 			pending.push(app.handle(exportRequest("bob", second.signal)));
 			await expect.poll(waitingExports).toBe(2);
-			expect((await app.handle(exportRequest("outsider"))).status).toBe(429);
+			pending.push(app.handle(exportRequest("outsider", third.signal)));
+			await expect.poll(waitingExports).toBe(3);
+			third.abort();
 			first.abort();
 			second.abort();
 			for (const response of await Promise.all(pending)) {
@@ -1257,6 +1309,7 @@ describe("portable export", () => {
 		} finally {
 			first.abort();
 			second.abort();
+			third.abort();
 			await blocker.query("rollback");
 			await Promise.all(pending);
 			blocker.release();
