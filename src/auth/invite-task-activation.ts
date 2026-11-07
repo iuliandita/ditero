@@ -11,6 +11,7 @@ import {
 } from "../server/notifications/task-activation.ts";
 import { taskActivationClientFromDrizzle } from "../server/notifications/task-activation-drizzle.ts";
 import { reconcileActiveTaskRecipients } from "../zero/task-activation-transition.ts";
+import { assertInviteMailbox } from "./invite-mailbox.ts";
 import { memberInvitePolicy } from "./membership-role.ts";
 
 type Database = NodePgDatabase<typeof tables>;
@@ -206,6 +207,7 @@ export async function lockInviteMembership(
 		inviterId: string;
 		role: string;
 		insert: boolean;
+		inviteEmail?: string | null;
 	},
 ): Promise<void> {
 	const workspace = await query(
@@ -269,6 +271,8 @@ export async function lockInviteMembership(
 	)
 		throw new InviteAuthorityChanged();
 	if (input.insert)
+		await assertInviteMailbox(query, input.actorId, input.inviteEmail);
+	if (input.insert)
 		await requireInviteCreator(query, members, input.inviterId, input.role);
 	if (input.insert)
 		await query(
@@ -292,6 +296,7 @@ export async function lockInviteTask(
 		inviteeId?: string;
 		inviterId?: string;
 		membershipRole?: string;
+		inviteEmail?: string | null;
 	},
 ): Promise<InviteTaskLock> {
 	const evidence: Evidence = { rows: 0, bytes: 0 };
@@ -399,6 +404,7 @@ export async function lockInviteTask(
 		throw new InviteAuthorityChanged();
 	if (input.inviteeId && input.membershipRole) {
 		if (!input.inviterId) throw new InviteTaskUnavailable("missing");
+		await assertInviteMailbox(query, input.inviteeId, input.inviteEmail);
 		await requireInviteCreator(
 			query,
 			observedMembers,

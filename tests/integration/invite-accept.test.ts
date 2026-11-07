@@ -647,7 +647,7 @@ describe("acceptInvite", () => {
 });
 
 describe("previewInvite", () => {
-	test("valid pending invite returns only {valid, workspaceName, email}", async () => {
+	test("valid pending invite returns only {valid, workspaceName, maskedEmail}", async () => {
 		await db.insert(tables.invite).values({
 			id: "prev",
 			workspaceId: "shared",
@@ -661,11 +661,11 @@ describe("previewInvite", () => {
 		expect(res).toEqual({
 			valid: true,
 			workspaceName: "Shared",
-			email: "who@test.invalid",
+			maskedEmail: "w***@test.invalid",
 		});
 		// no token, role, id, or workspaceId leaked
 		expect(Object.keys(res).sort()).toEqual([
-			"email",
+			"maskedEmail",
 			"valid",
 			"workspaceName",
 		]);

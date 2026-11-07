@@ -56,7 +56,7 @@ export function publicAuthLink(
 	if (base === null) return rawUrl;
 	try {
 		const target = new URL(rawUrl);
-		return `${new URL(base).href.replace(/\/+$/, "")}${target.pathname}${target.search}`;
+		return `${new URL(base).href.replace(/\/+$/, "")}${target.pathname}${target.search}${target.hash}`;
 	} catch {
 		return rawUrl;
 	}

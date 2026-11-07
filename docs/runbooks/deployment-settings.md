@@ -60,3 +60,16 @@ suppresses mail without changing the uniform successful response for known and
 unknown addresses. Origin, body and per-IP checks run before charging it. Budget
 checks and mail delivery remain detached from the request; recipient keys are
 normalized and hashed.
+
+## Email invitation confirmation
+
+Configure `DITERO_SMTP_HOST` and a public URL before requiring mailbox confirmation
+for email-bound invitations. A configured but broken SMTP service blocks unverified
+invitees from joining; repair delivery and check auth-mail logs. Account sign-in
+and global optional email verification remain unchanged.
+
+Without SMTP, an invitation token plus a matching account address grants the role.
+The server cannot prove mailbox ownership, so a leaked invitation link can grant
+its role to someone who registers that address. Share links privately. See the
+[invitation procedure](native-authentication.md#email-invitation-confirmation) for
+confirmation links, expiry, resend limits, and Android/desktop browser handling.
