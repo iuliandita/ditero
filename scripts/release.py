@@ -481,6 +481,8 @@ def publish(output: Path) -> None:
     prerelease = version.startswith("0.") or "-" in version
     notes = f"""Ditero {version} is an experimental prerelease for self-hosted testing. Back up your database and attachments before upgrading.
 
+This release improves invitation and workspace membership rules, attachment lifecycle and recovery, notification delivery, authentication boundaries, and container packaging.
+
 Server: multi-architecture amd64/arm64 Alpine app and Zero images at `ghcr.io/{repo}:{version}` and `:{version}-zero`. See the image digest files and SPDX SBOMs. Images are signed with keyless cosign; verify the release workflow identity before deployment.
 
 There is no Debian app image (`:{version}-debian`) in this release. Its distroless Debian 13 base carries zlib CVE-2026-76844 (HIGH), which Debian has not fixed for trixie yet, and the image security gate does not allow exceptions. Use the Alpine image; the Debian image returns once a fixed zlib is available (https://github.com/{repo}/issues/1267).

@@ -7,19 +7,19 @@
 			"note": "Preserve Arabic dir=auto on typed text and rendered notes/comments, isolation of names/titles/chips inside translations, and increased link underline offset. Existing behavior, permissions, data and keyboard shortcuts stay unchanged. All six locales explain retained deleted attachment quota and restore windows; writable uploaders retain own-file deletion. Member avatars reject foreign URLs and use initials. Browser refresh rejects absent or mismatched token subjects and requires sign-in without reconnecting another account. Invitation, managed-account, assignment-invitation and mention-invitation dialogs show localized 5xx fallbacks; intended 4xx handling is unchanged. HTTP logs retain only correlation ID, class and SQLSTATE; body limits preserve offline sync and signed callbacks. Import source/status reads retry temporary admission refusals twice within 15 seconds, honor short Retry-After and cancel on teardown; persistent failures retain explicit recovery. Apply mutations and three-global/one-account admission stay unchanged. Email setup distinguishes recipient confirmation, SMTP, public URL and mail capacity. Every enabled unconfirmed email channel warns, even with working alternatives. Queued unconfirmed mail is discarded; exhausted capacity defers without spending attempts. Typography guidance stays applicable. Invite previews mask addresses and carry matching tokens into registration. Mailbox confirmation is verify-only, supports same-account sign-in and directs browser/native invitees back to the original tab before joining; reload never exposes Join. All six locales explain this continuation. Account mailbox proof and notification channel acknowledgement remain separate."
 		},
 		"release": {
-			"sourceDigest": "83c6448fa523a5c2cbb2ea05231458f67224d471154caf509d3762567dbf2e66",
+			"sourceDigest": "00657b4b3aab1670d4bcc276e44aee63e7faddf6d791cd7de667602a49930135",
 			"docs": ["RELEASING.md"],
-			"note": "Document environment secrets, the Compose release default and the version synchronization command."
+			"note": "Document environment secrets, the Compose release default and the version synchronization command. Prepare beta.5 with Android code 17 and retain prerelease publication limits."
 		},
 		"configuration": {
-			"sourceDigest": "ef96609890d04dfd810856781f0d5e1e50bc1f7547ff6f177d0dcd38148f4b1e",
-			"docs": ["docs/runbooks/deployment-settings.md"],
-			"note": "Document the released Compose image default and the explicit nightly selection. The auth and all-in-one URL settings accept HTTP(S) origins without credentials, paths, queries or fragments and normalize trailing slashes. Empty auth settings fall back to the public URL. Other settings retain their meanings."
+			"sourceDigest": "a7b439a5d57845ac446b980f563f20be5333410cdeefa3cc81d487a6573ded20",
+			"docs": ["deploy/helm/ditero/README.md", "deploy/kustomize/README.md"],
+			"note": "Document the beta.5 Compose image default and explicit nightly selection, and align the packaged Helm and Kustomize image examples. The auth and all-in-one URL settings accept HTTP(S) origins without credentials, paths, queries or fragments and normalize trailing slashes. Empty auth settings fall back to the public URL. Other settings retain their meanings."
 		},
 		"deployment": {
-			"sourceDigest": "6e0418799009b04d7d4a35fb7d8c954c8e1c7f751edacdf3e8b1552fd854677d",
-			"docs": ["deploy/docker/aio/README.md"],
-			"note": "Record the deployed Compose image tag for recovery; the default now follows the released version and image packages, including musl, are pinned. The all-in-one wrapper validates public URLs as origins and normalizes trailing slashes. Remove paths, queries and fragments before upgrading. No image topology, credential format or storage migration changes."
+			"sourceDigest": "1cfb5f2d1bd3b74e4635548ba0e0c969dd4cc98f5909f6f203bd6ba1735cecbc",
+			"docs": ["deploy/helm/ditero/README.md", "deploy/kustomize/README.md"],
+			"note": "Record the deployed Compose image tag for recovery; the default now follows beta.5, and the packaged Helm and Kustomize guides match their image tags. Image packages, including musl, are pinned. The all-in-one wrapper validates public URLs as origins and normalizes trailing slashes. Remove paths, queries and fragments before upgrading. No image topology, credential format or storage migration changes."
 		},
 		"native": {
 			"sourceDigest": "f10b7a1f6b78e982452c03fd61b44d3ffdcf243ab523364b7d2b86f58a195d4c",
