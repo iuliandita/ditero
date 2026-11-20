@@ -85,7 +85,7 @@ jobs:
           python3 -c 'import json, os, re; v = os.environ["DITERO_RELEASE_VERSION"]; assert re.fullmatch(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?", v), "invalid release version"; print(json.dumps({"version": v}))' > "$RUNNER_TEMP/desktop-release-config.json"
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          bun-version: 1.4.4
+          bun-version: 1.4.5
       - name: Install Linux build dependencies
         if: runner.os == 'Linux'
         run: |
@@ -204,7 +204,7 @@ jobs:
           python3 -c 'import os, re; v = os.environ["DITERO_RELEASE_VERSION"]; c = os.environ["DITERO_ANDROID_VERSION_CODE"]; assert re.fullmatch(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?", v), "invalid release version"; assert re.fullmatch(r"[1-9][0-9]*", c) and int(c) <= 2100000000, "invalid Android version code"'
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          bun-version: 1.4.4
+          bun-version: 1.4.5
       - name: Select Java 21 and Android SDK
         run: |
           set -euo pipefail
