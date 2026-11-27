@@ -131,7 +131,7 @@ services:
 
   upstream-db:
     profiles: ["bundled"]
-    image: postgres:18@sha256:4aabea78cf39b90e834caf3af7d602a18565f6fe2508705c8d01aa63245c2e20
+    image: postgres:18@sha256:64c8b0d31e4ab6ea665e8426ea406a94bf52de3c05b3a4a8bf713704eefa9328
     environment:
       POSTGRES_DB: ditero
       POSTGRES_USER: postgres
